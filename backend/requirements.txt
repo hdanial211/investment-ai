@@ -1,0 +1,22 @@
+# Backend Dependencies
+luno-python>=0.1.0
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+apscheduler>=3.10.4
+python-dotenv>=1.0.0
+pandas>=2.2.0
+pandas-ta>=0.3.14b
+python-telegram-bot>=21.0
+sqlalchemy>=2.0.0
+aiohttp>=3.9.0
+httpx>=0.27.0
+pydantic>=2.6.0
+pydantic-settings>=2.2.0
+
+# MCP Server
+mcp>=1.0.0
+
+# Utilities
+pytz>=2024.1
+rich>=13.7.0
+loguru>=0.7.2
