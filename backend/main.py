@@ -137,9 +137,8 @@ def get_portfolio(db: Session = Depends(get_db)):
         btc_value_myr = btc_balance * current_price
         total_value = myr_balance + btc_value_myr
 
-        # Kira P&L dari snapshot pertama (modal awal)
-        first_snap = db.query(Portfolio).order_by(Portfolio.id.asc()).first()
-        initial_capital = first_snap.total_value if first_snap else settings.max_capital_myr
+        # Kira P&L dari Modal Asas yang ditetapkan user
+        initial_capital = settings.max_capital_myr
         total_pnl = total_value - initial_capital
         pnl_pct = (total_pnl / initial_capital * 100) if initial_capital > 0 else 0.0
 
@@ -188,12 +187,16 @@ def get_portfolio_history(days: int = 30, db: Session = Depends(get_db)):
     snapshots = db.query(Portfolio).filter(
         Portfolio.snapshot_at >= since
     ).order_by(Portfolio.snapshot_at.asc()).all()
+    
+    settings = db.query(BotSettings).filter(BotSettings.id == 1).first()
+    capital = settings.max_capital_myr if settings else 100.0
+
     return [{
         "date": s.snapshot_at.isoformat(),
         "total_value": s.total_value,
         "btc_price": s.btc_price,
-        "pnl": s.total_pnl,
-        "pnl_pct": s.pnl_pct
+        "pnl": s.total_value - capital,
+        "pnl_pct": ((s.total_value - capital) / capital * 100) if capital > 0 else 0
     } for s in snapshots]
 
 

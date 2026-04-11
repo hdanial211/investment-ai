@@ -70,25 +70,28 @@ export default function Dashboard() {
   const [signal, setSignal] = useState<Signal | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
   const fetchAll = useCallback(async () => {
-    const [portfolioData, statusData, signalData, tradesData, statsData] =
+    const [portfolioData, statusData, signalData, tradesData, statsData, settingsData] =
       await Promise.all([
         fetchJSON(`${API}/portfolio`),
         fetchJSON(`${API}/status`),
         fetchJSON(`${API}/signal`),
         fetchJSON(`${API}/trades?limit=5`),
         fetchJSON(`${API}/trades/stats`),
+        fetchJSON(`${API}/settings`),
       ]);
     if (portfolioData) setPortfolio(portfolioData);
     if (statusData) setStatus(statusData);
     if (signalData) setSignal(signalData);
     if (tradesData) setTrades(tradesData);
     if (statsData) setStats(statsData);
+    if (settingsData) setSettings(settingsData);
     setLastUpdate(new Date());
     setLoading(false);
   }, []);
@@ -135,7 +138,7 @@ export default function Dashboard() {
             {/* Live indicator */}
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ background: "rgba(0,212,170,0.1)", border: "1px solid rgba(0,212,170,0.2)" }}>
               <div className="w-2 h-2 rounded-full pulse-dot" style={{ background: "#00d4aa" }} />
-              <span className="text-xs font-medium" style={{ color: "#00d4aa" }}>
+              <span className="text-xs font-medium" suppressHydrationWarning style={{ color: "#00d4aa" }}>
                 Update: {lastUpdate.toLocaleTimeString("ms-MY")}
               </span>
             </div>
@@ -212,6 +215,22 @@ export default function Dashboard() {
               </span>
               <span className="text-xs" style={{ color: "#64748b" }}>dari semalam</span>
             </div>
+            
+            {/* Base Price Grid Tracking */}
+            {settings && settings.base_price_myr > 0 && (
+              <div className="mt-4 p-3 rounded-lg" style={{ background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.2)" }}>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium" style={{ color: "#c084fc" }}>Target Harga Rujukan (Base)</span>
+                  <span className="text-sm font-bold" style={{ color: "#f1f5f9" }}>
+                    RM {settings.base_price_myr.toLocaleString("ms-MY", { maximumFractionDigits: 0 })}
+                  </span>
+                </div>
+                <div className="flex justify-between text-[10px] mt-1" style={{ color: "#94a3b8" }}>
+                  <span>↓ Beli di RM {(settings.base_price_myr * (1 - settings.rebalance_margin_pct / 100)).toLocaleString("ms-MY", { maximumFractionDigits: 0 })}</span>
+                  <span>Jual di RM {(settings.base_price_myr * (1 + settings.rebalance_margin_pct / 100)).toLocaleString("ms-MY", { maximumFractionDigits: 0 })} ↑</span>
+                </div>
+              </div>
+            )}
             {signal && (
               <div className="mt-3 flex gap-4 text-xs" style={{ color: "#64748b" }}>
                 <span>RSI: <strong style={{ color: signal.rsi && signal.rsi < 30 ? "#00d4aa" : signal.rsi && signal.rsi > 70 ? "#ff4757" : "#94a3b8" }}>{signal.rsi ?? "N/A"}</strong></span>
