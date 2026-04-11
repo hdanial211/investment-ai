@@ -154,7 +154,8 @@ class DecisionMaker:
             return {"action": "HOLD", "execute": False, "reason": "Bot disabled"}
 
         target_base = bot_settings.target_baseline_myr
-        margin = bot_settings.rebalance_margin_myr
+        margin_pct = bot_settings.rebalance_margin_pct
+        margin = target_base * (margin_pct / 100.0)
         
         btc_balance = real_balances.get("XBT", 0.0)
         current_btc_value_myr = btc_balance * current_price

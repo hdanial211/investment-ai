@@ -57,8 +57,8 @@ class BotSettings(Base):
     bot_enabled       = Column(Boolean, default=True)
     
     # New fast rebalance parameters
-    target_baseline_myr  = Column(Float, default=100.0)  # Cth: RM 100 baseline
-    rebalance_margin_myr = Column(Float, default=5.0)    # Cth: RM 5 margin (Sell at 105, Buy at 95)
+    target_baseline_myr  = Column(Float, default=100.0)  # Modal sasaran asasi
+    rebalance_margin_pct = Column(Float, default=5.0)    # Jual jika naik > 5%, Beli jika turun < 5%
     
     updated_at        = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
