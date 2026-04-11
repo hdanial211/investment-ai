@@ -15,6 +15,8 @@ export default function SettingsPage() {
     schedule_time: "08:00",
     max_capital_myr: 100.0,
     bot_enabled: true,
+    target_baseline_myr: 100.0,
+    rebalance_margin_pct: 2.0,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -137,6 +139,35 @@ export default function SettingsPage() {
                   <div className="flex justify-between text-xs mt-1" style={{ color: "#64748b" }}>
                     <span>0.5% (Agresif)</span><span>7.5% (Sederhana)</span><span>15% (Konservatif)</span>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Rebalance Settings (Fast Polling) */}
+            <div className="glass-card p-5">
+              <h3 className="font-semibold mb-4" style={{ color: "#f1f5f9" }}>⚡ Auto-Rebalance (Check 3-Minit)</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm mb-2" style={{ color: "#94a3b8" }}>Target Baseline Portfolio (RM)</label>
+                  <input type="number" min="10" step="10"
+                    value={settings.target_baseline_myr}
+                    onChange={e => setSettings(s => ({ ...s, target_baseline_myr: parseFloat(e.target.value) }))}
+                    className={inputClass}
+                    style={{ ...inputStyle, border: "1px solid rgba(168,85,247,0.3)" }} />
+                  <p className="text-xs mt-1" style={{ color: "#64748b" }}>Nilai asasi sasaran pegangan BTC anda.</p>
+                </div>
+                <div>
+                  <label className="block text-sm mb-2" style={{ color: "#94a3b8" }}>
+                    Rebalance Margin (%) — Semasa: {settings.rebalance_margin_pct}%
+                  </label>
+                  <input type="range" min="0.5" max="10" step="0.5"
+                    value={settings.rebalance_margin_pct}
+                    onChange={e => setSettings(s => ({ ...s, rebalance_margin_pct: parseFloat(e.target.value) }))}
+                    className="w-full" />
+                  <div className="flex justify-between text-xs mt-1" style={{ color: "#64748b" }}>
+                    <span>0.5%</span><span>5%</span><span>10%</span>
+                  </div>
+                  <p className="text-xs mt-2" style={{ color: "#64748b" }}>Bot akan auto SELL/BUY jika nilai BTC naik/jatuh {settings.rebalance_margin_pct}% dari target atas.</p>
                 </div>
               </div>
             </div>

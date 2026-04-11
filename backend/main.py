@@ -45,6 +45,8 @@ class SettingsUpdate(BaseModel):
     schedule_time: Optional[str] = None
     max_capital_myr: Optional[float] = None
     bot_enabled: Optional[bool] = None
+    target_baseline_myr: Optional[float] = None
+    rebalance_margin_pct: Optional[float] = None
 
 
 # ─── Startup / Shutdown ──────────────────────────────────────────────
@@ -302,6 +304,8 @@ def get_settings(db: Session = Depends(get_db)):
         "rsi_overbought": s.rsi_overbought,
         "schedule_time": s.schedule_time,
         "max_capital_myr": s.max_capital_myr,
+        "target_baseline_myr": s.target_baseline_myr,
+        "rebalance_margin_pct": s.rebalance_margin_pct,
         "bot_enabled": s.bot_enabled
     }
 

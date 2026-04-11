@@ -321,7 +321,8 @@ class BotScheduler:
         """Get next scheduled run time"""
         job = self.scheduler.get_job("daily_trading_job")
         if job and job.next_run_time:
-            return job.next_run_time.strftime("%d %b %Y, %I:%M %p KLT")
+            daily_run = job.next_run_time.strftime("%d %b, %I:%M %p")
+            return f"Setiap 3-minit (Rebalance) & Harian {daily_run}"
         return "N/A"
 
 
