@@ -115,8 +115,6 @@ export default function Dashboard() {
     setTimeout(() => { fetchAll(); setTriggering(false); }, 3000);
   };
 
-  const signalColor = signal?.action === "BUY" ? "#00d4aa" : signal?.action === "SELL" ? "#ff4757" : "#fbbf24";
-  const signalBg = signal?.action === "BUY" ? "rgba(0,212,170,0.1)" : signal?.action === "SELL" ? "rgba(255,71,87,0.1)" : "rgba(251,191,36,0.1)";
   const pnlPositive = (portfolio?.total_pnl ?? 0) >= 0;
 
   return (
@@ -152,8 +150,8 @@ export default function Dashboard() {
 
       <main className="max-w-7xl mx-auto px-6 py-8">
 
-        {/* Top Row — Status + Signal + Price */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+        {/* Top Row — Status + Price */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
 
           {/* Bot Status Card */}
           <div className="glass-card p-5 slide-up" style={{ animationDelay: "0ms" }}>
@@ -169,8 +167,8 @@ export default function Dashboard() {
               </span>
             </div>
             <div className="flex items-center gap-2 mb-4" style={{ color: "#64748b" }}>
-              <Clock size={14} />
-              <span className="text-xs">Run seterusnya: {status?.next_run || "..."}</span>
+              <Zap size={14} style={{ color: "#fbbf24" }} />
+              <span className="text-xs">Beroperasi Aktif 24/7 (Grid Trading)</span>
             </div>
             <div className="flex gap-2">
               <button
@@ -231,34 +229,6 @@ export default function Dashboard() {
                 </div>
               </div>
             )}
-            {signal && (
-              <div className="mt-3 flex gap-4 text-xs" style={{ color: "#64748b" }}>
-                <span>RSI: <strong style={{ color: signal.rsi && signal.rsi < 30 ? "#00d4aa" : signal.rsi && signal.rsi > 70 ? "#ff4757" : "#94a3b8" }}>{signal.rsi ?? "N/A"}</strong></span>
-                <span>EMA20: <strong style={{ color: "#94a3b8" }}>RM {signal.ema_20?.toLocaleString("ms-MY", { maximumFractionDigits: 0 }) ?? "N/A"}</strong></span>
-              </div>
-            )}
-          </div>
-
-          {/* Signal Card */}
-          <div className="glass-card p-5 slide-up" style={{ animationDelay: "200ms", background: signalBg, border: `1px solid ${signalColor}30` }}>
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-sm font-medium" style={{ color: "#94a3b8" }}>Signal Semasa</span>
-              <BarChart2 size={16} style={{ color: "#94a3b8" }} />
-            </div>
-            <div className="text-4xl font-black mb-2" style={{ color: signalColor }}>
-              {signal?.action === "BUY" ? "🟢 BELI" : signal?.action === "SELL" ? "🔴 JUAL" : "💤 TAHAN"}
-            </div>
-            <div className="mb-3">
-              <div className="flex items-center justify-between text-xs mb-1">
-                <span style={{ color: "#64748b" }}>Keyakinan</span>
-                <span style={{ color: signalColor }}>{((signal?.confidence ?? 0) * 100).toFixed(0)}%</span>
-              </div>
-              <div className="h-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.1)" }}>
-                <div className="h-full rounded-full transition-all"
-                  style={{ width: `${(signal?.confidence ?? 0) * 100}%`, background: signalColor }} />
-              </div>
-            </div>
-            <p className="text-xs leading-relaxed" style={{ color: "#94a3b8" }}>{signal?.reason || "Memuat..."}</p>
           </div>
         </div>
 
