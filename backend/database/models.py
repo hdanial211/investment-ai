@@ -57,8 +57,12 @@ class BotSettings(Base):
     bot_enabled       = Column(Boolean, default=True)
     
     # New fast rebalance parameters
-    target_baseline_myr  = Column(Float, default=100.0)  # Modal sasaran asasi
+    target_baseline_myr  = Column(Float, default=100.0)  # Modal sasaran asasi (Legacy/Not actively used in Price Grid)
     rebalance_margin_pct = Column(Float, default=2.0)    # Jual jika naik > 2%, Beli jika turun < 2%
+    
+    # Grid Trading via Price Step parameters
+    base_price_myr = Column(Float, default=0.0)          # Harga sasaran tetap pasaran (0 = uninitialized, auto lock)
+    trade_size_myr = Column(Float, default=30.0)         # Modal dilontarkan tepat RM 30 setiap kali ayunan tercapai
     
     updated_at        = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

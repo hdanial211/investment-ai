@@ -52,7 +52,7 @@ class DecisionMaker:
         total_btc = sum(t.amount_btc for t in buys)
         return total_myr / total_btc if total_btc > 0 else 0.0
 
-    def can_buy(self, amount_myr: float) -> tuple[bool, str]:
+    def can_buy(self, amount_myr: float, live_myr: float = None) -> tuple[bool, str]:
         """
         Check sama ada boleh beli atau tidak
         Returns: (boleh_beli, sebab_tidak_boleh)
@@ -70,13 +70,15 @@ class DecisionMaker:
 
         # Check total capital limit
         portfolio = self.get_portfolio()
-        total_invested = settings.max_capital_myr - portfolio["myr"]
+        current_myr = live_myr if live_myr is not None else portfolio["myr"]
+        total_invested = settings.max_capital_myr - current_myr
+        
         if total_invested + amount_myr > settings.max_capital_myr:
             return False, f"Modal habis: sudah invest RM {total_invested:.2f} dari RM {settings.max_capital_myr:.2f}"
 
         # Check minimum MYR balance
-        if portfolio["myr"] < amount_myr:
-            return False, f"Baki tidak mencukupi: RM {portfolio['myr']:.2f} < RM {amount_myr:.2f}"
+        if current_myr < amount_myr:
+            return False, f"Baki tunai (MYR) tidak mencukupi: RM {current_myr:.2f} < RM {amount_myr:.2f}"
 
         return True, ""
 
@@ -145,64 +147,72 @@ class DecisionMaker:
 
     def decide_rebalance(self, real_balances: dict, current_price: float) -> dict:
         """
-        Fast 3-minute Rebalance Check:
-        Beli RM 5 jika baki BTC jatuh RM 5 dari target.
-        Jual RM 5 jika baki BTC naik RM 5 dari target.
+        Fast 3-minute Rebalance (Price-Step Grid):
+        Tracks actual BTC price changes independently of user's MYR/BTC equity to bypass
+        small portfolio constraints while avoiding Luno Minimum Trade Volume blocks.
         """
         bot_settings = self.db.query(BotSettings).filter(BotSettings.id == 1).first()
         if not bot_settings or not bot_settings.bot_enabled:
             return {"action": "HOLD", "execute": False, "reason": "Bot disabled"}
 
-        target_base = bot_settings.target_baseline_myr
+        # Initialize Base Price if 0.0 or None
+        if not bot_settings.base_price_myr or bot_settings.base_price_myr == 0.0:
+            bot_settings.base_price_myr = current_price
+            self.db.commit()
+            logger.info(f"🔒 Base Price dikunci pada RM {current_price:,.2f}")
+
+        base_price = bot_settings.base_price_myr
         margin_pct = bot_settings.rebalance_margin_pct
-        margin = target_base * (margin_pct / 100.0)
+        trade_size = bot_settings.trade_size_myr
+
+        req_upper = base_price * (1 + margin_pct / 100.0)
+        req_lower = base_price * (1 - margin_pct / 100.0)
         
-        btc_balance = real_balances.get("XBT", 0.0)
-        current_btc_value_myr = btc_balance * current_price
+        price_change_pct = ((current_price - base_price) / base_price) * 100
 
         result = {
             "action": "HOLD",
             "execute": False,
             "amount_myr": 0.0,
             "amount_btc": 0.0,
-            "reason": f"BTC Value RM {current_btc_value_myr:.2f} within baseline RM {target_base:.2f}",
+            "reason": f"Harga RM {current_price:,.2f} masih dalam grid (Base: RM {base_price:,.2f})",
         }
 
         # Scenario 1: Naik (Take profit)
-        if current_btc_value_myr >= target_base + margin:
-            profit_to_take_myr = current_btc_value_myr - target_base
-            btc_to_sell = profit_to_take_myr / current_price
+        if current_price >= req_upper:
+            # Sell fixed Trade Size worth of BTC
+            btc_to_sell = trade_size / current_price
             can_sell, blocked = self.can_sell(btc_to_sell)
             
             if can_sell:
+                # Update Base Price to new execution price
+                bot_settings.base_price_myr = current_price
+                self.db.commit()
+                
                 result.update({
                     "action": "SELL",
                     "execute": True,
                     "amount_btc": btc_to_sell,
-                    "amount_myr": profit_to_take_myr,
-                    "reason": f"Rebalance: Naik untung. Value RM {current_btc_value_myr:.2f} > RM {target_base:.2f}. Untung RM {profit_to_take_myr:.2f}"
+                    "amount_myr": trade_size,
+                    "reason": f"Grid Sell: Harga naik {price_change_pct:.2f}% (> RM {req_upper:,.2f}). Jual RM {trade_size:.2f}"
                 })
-                logger.success(f"✅ REBALANCE DECISION: SELL RM {profit_to_take_myr:.2f} (Profit)")
+                logger.success(f"✅ GRID DECISION: SELL RM {trade_size:.2f} di harga RM {current_price:,.2f}")
 
-        # Scenario 2: Turun (Buy the dip / Top up)
-        elif current_btc_value_myr <= target_base - margin:
-            dip_to_buy_myr = target_base - current_btc_value_myr
-            can_buy, blocked = self.can_buy(dip_to_buy_myr)
-            
-            # Kita paksa limit kepada 'margin' jika nak DCA perlahan-lahan. 
-            # Tapi arahan user: kalau 100 turun 95 awak topup 5 ringgit.
-            if dip_to_buy_myr > margin * 2:
-                # Elak topup gedabak kalau harga flash crash drastik (safety limit)
-                dip_to_buy_myr = margin
+        # Scenario 2: Turun (Buy the dip)
+        elif current_price <= req_lower:
+            can_buy, blocked = self.can_buy(trade_size, live_myr=real_balances.get("MYR", 0.0))
                 
             if can_buy:
+                bot_settings.base_price_myr = current_price
+                self.db.commit()
+                
                 result.update({
                     "action": "BUY",
                     "execute": True,
-                    "amount_myr": dip_to_buy_myr,
-                    "reason": f"Rebalance: Harga diskaun. Value RM {current_btc_value_myr:.2f} < RM {target_base:.2f}. Beli RM {dip_to_buy_myr:.2f}"
+                    "amount_myr": trade_size,
+                    "reason": f"Grid Buy: Harga jatuh {price_change_pct:.2f}% (< RM {req_lower:,.2f}). Beli RM {trade_size:.2f}"
                 })
-                logger.success(f"✅ REBALANCE DECISION: BUY RM {dip_to_buy_myr:.2f} (Top Up)")
+                logger.success(f"✅ GRID DECISION: BUY RM {trade_size:.2f} di harga RM {current_price:,.2f}")
 
         return result
 

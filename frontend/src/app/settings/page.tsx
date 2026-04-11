@@ -17,6 +17,8 @@ export default function SettingsPage() {
     bot_enabled: true,
     target_baseline_myr: 100.0,
     rebalance_margin_pct: 2.0,
+    base_price_myr: 0.0,
+    trade_size_myr: 30.0,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -143,32 +145,43 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* Rebalance Settings (Fast Polling) */}
+            {/* Rebalance Settings (Price-Step Grid) */}
             <div className="glass-card p-5">
-              <h3 className="font-semibold mb-4" style={{ color: "#f1f5f9" }}>⚡ Auto-Rebalance (Check 3-Minit)</h3>
+              <h3 className="font-semibold mb-4" style={{ color: "#f1f5f9" }}>⚡ Grid Trading (Check 3-Minit)</h3>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm mb-2" style={{ color: "#94a3b8" }}>Target Baseline Portfolio (RM)</label>
-                  <input type="number" min="10" step="10"
-                    value={settings.target_baseline_myr}
-                    onChange={e => setSettings(s => ({ ...s, target_baseline_myr: parseFloat(e.target.value) }))}
+                  <label className="block text-sm mb-2" style={{ color: "#94a3b8" }}>Harga Semasa Rujukan (Base Price) RM</label>
+                  <input type="number" step="0.01"
+                    value={settings.base_price_myr || 0}
+                    onChange={e => setSettings(s => ({ ...s, base_price_myr: parseFloat(e.target.value) || 0 }))}
                     className={inputClass}
                     style={{ ...inputStyle, border: "1px solid rgba(168,85,247,0.3)" }} />
-                  <p className="text-xs mt-1" style={{ color: "#64748b" }}>Nilai asasi sasaran pegangan BTC anda.</p>
+                  <p className="text-xs mt-1" style={{ color: "#64748b" }}>Biarkan '0' jika ingin bot auto-kunci (lock) harga pasaran secara terus.</p>
                 </div>
-                <div>
-                  <label className="block text-sm mb-2" style={{ color: "#94a3b8" }}>
-                    Rebalance Margin (%) — Semasa: {settings.rebalance_margin_pct}%
-                  </label>
-                  <input type="range" min="0.5" max="10" step="0.5"
-                    value={settings.rebalance_margin_pct}
-                    onChange={e => setSettings(s => ({ ...s, rebalance_margin_pct: parseFloat(e.target.value) }))}
-                    className="w-full" />
-                  <div className="flex justify-between text-xs mt-1" style={{ color: "#64748b" }}>
-                    <span>0.5%</span><span>5%</span><span>10%</span>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm mb-2" style={{ color: "#94a3b8" }}>Saiz Tembakan Trade (RM)</label>
+                    <input type="number" min="30" step="5"
+                      value={settings.trade_size_myr}
+                      onChange={e => setSettings(s => ({ ...s, trade_size_myr: parseFloat(e.target.value) }))}
+                      className={inputClass} style={inputStyle} />
+                    <p className="text-xs mt-1" style={{ color: "#64748b" }}>Minima Luno: ~RM 30</p>
                   </div>
-                  <p className="text-xs mt-2" style={{ color: "#64748b" }}>Bot akan auto SELL/BUY jika nilai BTC naik/jatuh {settings.rebalance_margin_pct}% dari target atas.</p>
+                  <div>
+                    <label className="block text-sm mb-2" style={{ color: "#94a3b8" }}>Margin Naik/Turun (%)</label>
+                    <input type="number" min="0.5" max="10" step="0.5"
+                      value={settings.rebalance_margin_pct}
+                      onChange={e => setSettings(s => ({ ...s, rebalance_margin_pct: parseFloat(e.target.value) }))}
+                      className={inputClass} style={inputStyle} />
+                    <p className="text-xs mt-1" style={{ color: "#64748b" }}>Contoh: 1.5 atau 2.0</p>
+                  </div>
                 </div>
+                
+                <p className="text-xs mt-2 p-3 rounded" style={{ background: "rgba(168,85,247,0.1)", color: "#c084fc", border: "1px solid rgba(168,85,247,0.2)" }}>
+                  Info: Bot akan sentiasa melontar <strong>RM {settings.trade_size_myr}</strong> 
+                  apabila harga pasaran BTC berubah sebanyak <strong>{settings.rebalance_margin_pct}%</strong> dari Harga Rujukan. Harga Rujukan akan berpindah ikut harga terbaru.
+                </p>
               </div>
             </div>
 

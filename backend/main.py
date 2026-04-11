@@ -47,6 +47,8 @@ class SettingsUpdate(BaseModel):
     bot_enabled: Optional[bool] = None
     target_baseline_myr: Optional[float] = None
     rebalance_margin_pct: Optional[float] = None
+    base_price_myr: Optional[float] = None
+    trade_size_myr: Optional[float] = None
 
 
 # ─── Startup / Shutdown ──────────────────────────────────────────────
@@ -306,6 +308,8 @@ def get_settings(db: Session = Depends(get_db)):
         "max_capital_myr": s.max_capital_myr,
         "target_baseline_myr": s.target_baseline_myr,
         "rebalance_margin_pct": s.rebalance_margin_pct,
+        "base_price_myr": s.base_price_myr,
+        "trade_size_myr": s.trade_size_myr,
         "bot_enabled": s.bot_enabled
     }
 
