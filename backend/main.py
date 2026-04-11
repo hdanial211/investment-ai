@@ -27,7 +27,8 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000",
+                   "http://localhost:3001", "http://127.0.0.1:3001"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -121,26 +122,59 @@ def get_balance():
 
 @app.get("/api/portfolio")
 def get_portfolio(db: Session = Depends(get_db)):
-    """Get latest portfolio snapshot"""
-    snapshot = db.query(Portfolio).order_by(Portfolio.id.desc()).first()
-    if not snapshot:
+    """Get live portfolio — gabung Luno balance + DB history"""
+    try:
+        # Ambil live data dari Luno
+        balances = luno_client.get_balances()
+        price_data = luno_client.get_btc_price()
+        current_price = price_data["last_trade"]
+        btc_balance = balances["XBT"]
+        myr_balance = balances["MYR"]
+        btc_value_myr = btc_balance * current_price
+        total_value = myr_balance + btc_value_myr
+
+        # Kira P&L dari snapshot pertama (modal awal)
+        first_snap = db.query(Portfolio).order_by(Portfolio.id.asc()).first()
+        initial_capital = first_snap.total_value if first_snap else settings.max_capital_myr
+        total_pnl = total_value - initial_capital
+        pnl_pct = (total_pnl / initial_capital * 100) if initial_capital > 0 else 0.0
+
         return {
-            "btc_balance": 0.0,
-            "myr_balance": settings.max_capital_myr,
-            "btc_price": 0.0,
-            "total_value": settings.max_capital_myr,
-            "total_pnl": 0.0,
-            "pnl_pct": 0.0
+            "btc_balance": btc_balance,
+            "myr_balance": myr_balance,
+            "btc_price": current_price,
+            "btc_value_myr": btc_value_myr,
+            "total_value": round(total_value, 2),
+            "total_pnl": round(total_pnl, 2),
+            "pnl_pct": round(pnl_pct, 2),
+            "updated_at": datetime.now().isoformat(),
+            "source": "live"
         }
-    return {
-        "btc_balance": snapshot.btc_balance,
-        "myr_balance": snapshot.myr_balance,
-        "btc_price": snapshot.btc_price,
-        "total_value": snapshot.total_value,
-        "total_pnl": snapshot.total_pnl,
-        "pnl_pct": snapshot.pnl_pct,
-        "updated_at": snapshot.snapshot_at.isoformat()
-    }
+    except Exception as e:
+        logger.warning(f"⚠️ Cannot get live portfolio, fallback to DB: {e}")
+        snapshot = db.query(Portfolio).order_by(Portfolio.id.desc()).first()
+        if not snapshot:
+            return {
+                "btc_balance": 0.0,
+                "myr_balance": settings.max_capital_myr,
+                "btc_price": 0.0,
+                "btc_value_myr": 0.0,
+                "total_value": settings.max_capital_myr,
+                "total_pnl": 0.0,
+                "pnl_pct": 0.0,
+                "source": "default"
+            }
+        return {
+            "btc_balance": snapshot.btc_balance,
+            "myr_balance": snapshot.myr_balance,
+            "btc_price": snapshot.btc_price,
+            "btc_value_myr": snapshot.btc_balance * snapshot.btc_price,
+            "total_value": snapshot.total_value,
+            "total_pnl": snapshot.total_pnl,
+            "pnl_pct": snapshot.pnl_pct,
+            "updated_at": snapshot.snapshot_at.isoformat(),
+            "source": "db"
+        }
 
 
 @app.get("/api/portfolio/history")

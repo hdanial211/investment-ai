@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 from datetime import datetime, timedelta
 import sys, os
+import requests
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import settings
@@ -44,6 +45,26 @@ class SignalEngine:
     def __init__(self):
         self.price_history: List[float] = []
         self.timestamps: List[datetime] = []
+        self._bootstrap_historical_data()
+
+    def _bootstrap_historical_data(self):
+        """Ambil data harga 30 hari lepas dari CoinGecko (percuma) untuk bootstrap RSI"""
+        try:
+            logger.info("⏳ Memuat turun historical BTC prices dari CoinGecko...")
+            url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=myr&days=30&interval=daily"
+            resp = requests.get(url, timeout=10)
+            if resp.status_code == 200:
+                prices = resp.json().get("prices", [])
+                for item in prices:
+                    # item[0] = timestamp (ms), item[1] = price
+                    dt = datetime.fromtimestamp(item[0] / 1000.0)
+                    self.price_history.append(float(item[1]))
+                    self.timestamps.append(dt)
+                logger.success(f"✅ Berjaya bootstrap {len(self.price_history)} hari historical prices.")
+            else:
+                logger.warning(f"⚠️ Gagal fetch historical data dari CoinGecko: {resp.status_code}")
+        except Exception as e:
+            logger.error(f"❌ Error bootstrapping historical data: {e}")
 
     def add_price(self, price: float, timestamp: Optional[datetime] = None):
         """Add harga baru ke historical data"""
