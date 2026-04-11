@@ -115,7 +115,8 @@ def get_balance():
         balances = luno_client.get_balances()
         return {"success": True, "data": balances}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.warning(f"⚠️ Cannot get balances: {e}")
+        return {"success": False, "data": {"MYR": 0.0, "XBT": 0.0}, "error": str(e)}
 
 
 @app.get("/api/portfolio")
@@ -205,7 +206,14 @@ def get_current_signal(db: Session = Depends(get_db)):
     try:
         price_data = luno_client.get_btc_price()
         current_price = price_data["last_trade"]
-        balances = luno_client.get_balances()
+
+        # Try to get balances — may fail if API key invalid
+        has_btc = False
+        try:
+            balances = luno_client.get_balances()
+            has_btc = balances["XBT"] > 0.000001
+        except Exception:
+            logger.warning("⚠️ Cannot get balances (API key issue?) — assuming no BTC held")
 
         last = db.query(Portfolio).order_by(Portfolio.id.desc()).first()
         prev_price = last.btc_price if last else current_price
@@ -213,7 +221,7 @@ def get_current_signal(db: Session = Depends(get_db)):
         signal = signal_engine.generate_signal(
             current_price=current_price,
             prev_price=prev_price,
-            has_btc=balances["XBT"] > 0.000001
+            has_btc=has_btc
         )
         return {
             "action": signal.action,

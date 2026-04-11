@@ -44,8 +44,17 @@ class TelegramNotifier:
             logger.error(f"❌ Telegram error: {e}")
 
     def send(self, message: str):
-        """Synchronous wrapper"""
-        asyncio.run(self._send(message))
+        """Synchronous wrapper — works both inside and outside async event loops"""
+        if not self.enabled:
+            logger.debug(f"[Telegram DISABLED] {message[:100]}...")
+            return
+        try:
+            loop = asyncio.get_running_loop()
+            # We're inside an async event loop — schedule as a task
+            loop.create_task(self._send(message))
+        except RuntimeError:
+            # No running loop — safe to use asyncio.run()
+            asyncio.run(self._send(message))
 
     def notify_buy(self, amount_myr: float, amount_btc: float, price: float, reason: str, pnl: float = 0):
         """Notifikasi bila bot BELI BTC"""

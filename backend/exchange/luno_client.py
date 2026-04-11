@@ -1,28 +1,50 @@
 """
 exchange/luno_client.py — Luno Malaysia API wrapper
-Handles all buy/sell/balance operations
+Handles all buy/sell/balance operations via direct HTTP (requests)
 """
-import luno_python.client as luno
-import asyncio
+import requests
 from loguru import logger
 from typing import Optional
 import sys, os
+from dotenv import dotenv_values
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import settings
+# Cari .env dari root project
+_env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), '.env')
+_cfg = dotenv_values(_env_path)
 
 
 class LunoClient:
     """Wrapper untuk Luno Malaysia API"""
 
     PAIR = "XBTMYR"  # BTC/MYR pair di Luno
+    BASE_URL = "https://api.luno.com/api/1"
 
     def __init__(self):
-        self.client = luno.Client(
-            api_key_id=settings.luno_api_key,
-            api_key_secret=settings.luno_api_secret
-        )
+        self.api_key = _cfg.get('LUNO_API_KEY', '').strip()
+        self.api_secret = _cfg.get('LUNO_API_SECRET', '').strip()
+        self.session = requests.Session()
+        self.session.auth = (self.api_key, self.api_secret)
         logger.info("✅ Luno client initialized")
+
+    def _get(self, endpoint: str, params: dict = None) -> dict:
+        """Helper: GET request ke Luno API"""
+        url = f"{self.BASE_URL}{endpoint}"
+        resp = self.session.get(url, params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        if "error" in data:
+            raise Exception(f"Luno API Error: {data['error']}")
+        return data
+
+    def _post(self, endpoint: str, data: dict = None) -> dict:
+        """Helper: POST request ke Luno API"""
+        url = f"{self.BASE_URL}{endpoint}"
+        resp = self.session.post(url, data=data, timeout=10)
+        resp.raise_for_status()
+        result = resp.json()
+        if "error" in result:
+            raise Exception(f"Luno API Error: {result['error']}")
+        return result
 
     def get_btc_price(self) -> dict:
         """
@@ -30,11 +52,11 @@ class LunoClient:
         Returns: {"bid": float, "ask": float, "last_trade": float, "timestamp": int}
         """
         try:
-            ticker = self.client.get_ticker(pair=self.PAIR)
+            ticker = self._get("/ticker", params={"pair": self.PAIR})
             result = {
-                "bid": float(ticker["bid"]),          # harga terbaik pembeli
-                "ask": float(ticker["ask"]),          # harga terbaik penjual
-                "last_trade": float(ticker["last_trade"]),  # last traded price
+                "bid": float(ticker["bid"]),
+                "ask": float(ticker["ask"]),
+                "last_trade": float(ticker["last_trade"]),
                 "timestamp": ticker["timestamp"]
             }
             logger.info(f"📊 BTC Price: RM {result['last_trade']:,.2f}")
@@ -49,16 +71,15 @@ class LunoClient:
         Returns: {"MYR": float, "XBT": float}
         """
         try:
-            balances_resp = self.client.get_balances()
+            data = self._get("/balance")
             balances = {}
-            for b in balances_resp.get("balance", []):
-                currency = b["asset"]
-                # Luno stores balance as string, convert to float
+            for b in data.get("balance", []):
+                asset = b["asset"]
                 available = float(b["balance"]) - float(b["reserved"])
-                balances[currency] = available
+                balances[asset] = available
             result = {
                 "MYR": balances.get("MYR", 0.0),
-                "XBT": balances.get("XBT", 0.0)   # BTC = XBT di Luno
+                "XBT": balances.get("XBT", 0.0)  # BTC = XBT di Luno
             }
             logger.info(f"💰 Balances — RM: {result['MYR']:.2f} | BTC: {result['XBT']:.8f}")
             return result
@@ -72,29 +93,22 @@ class LunoClient:
         (maker fee = 0% — PERCUMA!)
         """
         try:
-            # Dapatkan harga semasa
             price_data = self.get_btc_price()
             bid_price = price_data["bid"]
 
-            # Kira berapa BTC boleh dibeli
-            # Luno min order: ~RM 2
             if amount_myr < 2.0:
                 raise ValueError(f"Jumlah terlalu kecil: RM {amount_myr} (min: RM 2)")
 
-            # Kira BTC volume (round down untuk elak insufficient funds)
-            btc_volume = amount_myr / bid_price
-            # Round to 8 decimal places (satoshi precision)
-            btc_volume = round(btc_volume, 8)
+            btc_volume = round(amount_myr / bid_price, 8)
 
             logger.info(f"🛒 Placing BUY order: RM {amount_myr:.2f} @ RM {bid_price:,.2f} = {btc_volume:.8f} BTC")
 
-            # Place limit buy order
-            order = self.client.post_limit_order(
-                pair=self.PAIR,
-                type="BID",                          # BID = beli
-                volume=str(btc_volume),
-                price=str(int(bid_price))            # price dalam sen/unit
-            )
+            order = self._post("/postorder", data={
+                "pair": self.PAIR,
+                "type": "BID",
+                "volume": str(btc_volume),
+                "price": str(int(bid_price))
+            })
 
             result = {
                 "order_id": order.get("order_id", ""),
@@ -120,19 +134,18 @@ class LunoClient:
             price_data = self.get_btc_price()
             sell_price = target_price if target_price else price_data["ask"]
 
-            # Minimum volume check
             myr_value = btc_volume * sell_price
             if myr_value < 2.0:
                 raise ValueError(f"Nilai terlalu kecil: RM {myr_value:.2f} (min: RM 2)")
 
             logger.info(f"💸 Placing SELL order: {btc_volume:.8f} BTC @ RM {sell_price:,.2f}")
 
-            order = self.client.post_limit_order(
-                pair=self.PAIR,
-                type="ASK",                          # ASK = jual
-                volume=str(round(btc_volume, 8)),
-                price=str(int(sell_price))
-            )
+            order = self._post("/postorder", data={
+                "pair": self.PAIR,
+                "type": "ASK",
+                "volume": str(round(btc_volume, 8)),
+                "price": str(int(sell_price))
+            })
 
             result = {
                 "order_id": order.get("order_id", ""),
@@ -151,10 +164,10 @@ class LunoClient:
     def get_order_status(self, order_id: str) -> dict:
         """Check status sesuatu order"""
         try:
-            order = self.client.get_order(id=order_id)
+            order = self._get(f"/orders/{order_id}")
             return {
                 "order_id": order_id,
-                "state": order.get("state", "UNKNOWN"),  # PENDING/COMPLETE/CANCELLED
+                "state": order.get("state", "UNKNOWN"),
                 "type": order.get("type", ""),
                 "volume_filled": float(order.get("base", 0)),
                 "price": float(order.get("limit_price", 0))
@@ -166,8 +179,8 @@ class LunoClient:
     def get_recent_trades(self, limit: int = 20) -> list:
         """Dapatkan history trades terkini dari Luno"""
         try:
-            trades = self.client.list_trades(pair=self.PAIR)
-            return trades.get("trades", [])[:limit]
+            data = self._get("/listtrades", params={"pair": self.PAIR})
+            return data.get("trades", [])[:limit]
         except Exception as e:
             logger.error(f"❌ Error getting trades: {e}")
             return []
@@ -175,10 +188,10 @@ class LunoClient:
     def get_order_book(self) -> dict:
         """Dapatkan order book (bid/ask levels)"""
         try:
-            ob = self.client.get_order_book(pair=self.PAIR)
+            ob = self._get("/orderbook", params={"pair": self.PAIR})
             return {
-                "asks": ob.get("asks", [])[:5],  # top 5 sell orders
-                "bids": ob.get("bids", [])[:5],  # top 5 buy orders
+                "asks": ob.get("asks", [])[:5],
+                "bids": ob.get("bids", [])[:5],
             }
         except Exception as e:
             logger.error(f"❌ Error getting order book: {e}")
@@ -190,10 +203,10 @@ class LunoClient:
         duration: dalam saat (86400 = 24 jam, 604800 = 7 hari)
         """
         try:
-            candles = self.client.get_candles(pair=self.PAIR, duration=duration)
-            return candles.get("candles", [])
+            data = self._get("/candles", params={"pair": self.PAIR, "duration": duration})
+            return data.get("candles", [])
         except Exception as e:
-            logger.warning(f"⚠️ Cannot get candles (API may not support): {e}")
+            logger.warning(f"⚠️ Cannot get candles: {e}")
             return []
 
 
