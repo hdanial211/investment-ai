@@ -4,6 +4,7 @@ Runs at 08:00 AM every day to execute trading strategy
 """
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from loguru import logger
 from datetime import datetime, date
 import pytz
@@ -167,6 +168,75 @@ def run_daily_job():
         db.close()
 
 
+def run_rebalance_job():
+    """
+    Fast Rebalance Job — runs every 3 minutes
+    1. Fetch real balances & current price
+    2. Check decide_rebalance
+    3. Execute if necessary
+    """
+    db = SessionLocal()
+    try:
+        current_price = luno_client.get_btc_price()["last_trade"]
+        balances = luno_client.get_balances()
+        
+        decision_maker = DecisionMaker(db)
+        decision = decision_maker.decide_rebalance(balances, current_price)
+        
+        if decision["execute"]:
+            logger.info("=" * 60)
+            logger.info(f"⚡ REBALANCE TRIGGERED — {datetime.now(KL_TZ).strftime('%H:%M:%S')}")
+            
+            trade_result = None
+            if decision["action"] == "BUY":
+                trade_result = luno_client.place_buy_order(decision["amount_myr"])
+                trade = Trade(
+                    trade_type="BUY",
+                    amount_myr=trade_result["amount_myr"],
+                    amount_btc=trade_result["amount_btc"],
+                    price_myr=trade_result["price"],
+                    signal=decision["reason"],
+                    order_id=trade_result.get("order_id"),
+                    status="COMPLETED"
+                )
+                db.add(trade)
+                db.commit()
+                telegram.notify_buy(
+                    amount_myr=trade_result["amount_myr"],
+                    amount_btc=trade_result["amount_btc"],
+                    price=trade_result["price"],
+                    reason=decision["reason"]
+                )
+
+            elif decision["action"] == "SELL":
+                # Only sell the profit portion
+                trade_result = luno_client.place_sell_order(decision["amount_btc"])
+                # PnL for taking profit simply equals the fiat value of sell minus baseline cost.
+                # Actually, pnl_myr here is precisely the `profit_to_take_myr`.
+                trade = Trade(
+                    trade_type="SELL",
+                    amount_myr=trade_result["amount_myr"],
+                    amount_btc=trade_result["amount_btc"],
+                    price_myr=trade_result["price"],
+                    signal=decision["reason"],
+                    pnl_myr=decision["amount_myr"], # Profit that we extracted
+                    order_id=trade_result.get("order_id"),
+                    status="COMPLETED"
+                )
+                db.add(trade)
+                db.commit()
+                telegram.notify_sell(
+                    amount_btc=trade_result["amount_btc"],
+                    amount_myr=trade_result["amount_myr"],
+                    price=trade_result["price"],
+                    reason=decision["reason"],
+                    pnl=decision["amount_myr"]
+                )
+    except Exception as e:
+        logger.error(f"❌ REBALANCE JOB ERROR: {e}")
+    finally:
+        db.close()
+
 def run_evening_summary():
     """Evening summary job — runs at 9:00 PM"""
     logger.info("📊 Running evening summary...")
@@ -222,6 +292,17 @@ class BotScheduler:
             replace_existing=True
         )
         logger.info("📊 Evening summary scheduled: every day at 9:00 PM KLT")
+        
+        # Fast Rebalance — Every 3 Minutes
+        self.scheduler.add_job(
+            func=run_rebalance_job,
+            trigger=IntervalTrigger(minutes=3, timezone=KL_TZ),
+            id="fast_rebalance_job",
+            name="Fast Rebalance (Every 3 Min)",
+            replace_existing=True,
+            misfire_grace_time=60
+        )
+        logger.info("⚡ Fast rebalance scheduled: every 3 minutes")
 
     def start(self):
         self.scheduler.start()

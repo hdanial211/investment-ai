@@ -55,6 +55,11 @@ class BotSettings(Base):
     schedule_time     = Column(String, default="08:00")
     max_capital_myr   = Column(Float, default=100.0)
     bot_enabled       = Column(Boolean, default=True)
+    
+    # New fast rebalance parameters
+    target_baseline_myr  = Column(Float, default=100.0)  # Cth: RM 100 baseline
+    rebalance_margin_myr = Column(Float, default=5.0)    # Cth: RM 5 margin (Sell at 105, Buy at 95)
+    
     updated_at        = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 

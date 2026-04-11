@@ -143,6 +143,68 @@ class DecisionMaker:
 
         return result
 
+    def decide_rebalance(self, real_balances: dict, current_price: float) -> dict:
+        """
+        Fast 3-minute Rebalance Check:
+        Beli RM 5 jika baki BTC jatuh RM 5 dari target.
+        Jual RM 5 jika baki BTC naik RM 5 dari target.
+        """
+        bot_settings = self.db.query(BotSettings).filter(BotSettings.id == 1).first()
+        if not bot_settings or not bot_settings.bot_enabled:
+            return {"action": "HOLD", "execute": False, "reason": "Bot disabled"}
+
+        target_base = bot_settings.target_baseline_myr
+        margin = bot_settings.rebalance_margin_myr
+        
+        btc_balance = real_balances.get("XBT", 0.0)
+        current_btc_value_myr = btc_balance * current_price
+
+        result = {
+            "action": "HOLD",
+            "execute": False,
+            "amount_myr": 0.0,
+            "amount_btc": 0.0,
+            "reason": f"BTC Value RM {current_btc_value_myr:.2f} within baseline RM {target_base:.2f}",
+        }
+
+        # Scenario 1: Naik (Take profit)
+        if current_btc_value_myr >= target_base + margin:
+            profit_to_take_myr = current_btc_value_myr - target_base
+            btc_to_sell = profit_to_take_myr / current_price
+            can_sell, blocked = self.can_sell(btc_to_sell)
+            
+            if can_sell:
+                result.update({
+                    "action": "SELL",
+                    "execute": True,
+                    "amount_btc": btc_to_sell,
+                    "amount_myr": profit_to_take_myr,
+                    "reason": f"Rebalance: Naik untung. Value RM {current_btc_value_myr:.2f} > RM {target_base:.2f}. Untung RM {profit_to_take_myr:.2f}"
+                })
+                logger.success(f"✅ REBALANCE DECISION: SELL RM {profit_to_take_myr:.2f} (Profit)")
+
+        # Scenario 2: Turun (Buy the dip / Top up)
+        elif current_btc_value_myr <= target_base - margin:
+            dip_to_buy_myr = target_base - current_btc_value_myr
+            can_buy, blocked = self.can_buy(dip_to_buy_myr)
+            
+            # Kita paksa limit kepada 'margin' jika nak DCA perlahan-lahan. 
+            # Tapi arahan user: kalau 100 turun 95 awak topup 5 ringgit.
+            if dip_to_buy_myr > margin * 2:
+                # Elak topup gedabak kalau harga flash crash drastik (safety limit)
+                dip_to_buy_myr = margin
+                
+            if can_buy:
+                result.update({
+                    "action": "BUY",
+                    "execute": True,
+                    "amount_myr": dip_to_buy_myr,
+                    "reason": f"Rebalance: Harga diskaun. Value RM {current_btc_value_myr:.2f} < RM {target_base:.2f}. Beli RM {dip_to_buy_myr:.2f}"
+                })
+                logger.success(f"✅ REBALANCE DECISION: BUY RM {dip_to_buy_myr:.2f} (Top Up)")
+
+        return result
+
     def log_daily_action(self, decision: dict, signal: Signal):
         """Log daily action ke database"""
         log = DailyLog(
