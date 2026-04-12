@@ -143,73 +143,38 @@ class SignalEngine:
         """)
 
         # =====================
-        # SELL CONDITIONS
+        # DAILY TREND FLIPPER 
+        # (Execute Buy/Sell blindly based on simple trend)
         # =====================
-        if has_btc:
-            # Jual jika harga naik melebihi threshold
-            if price_change_pct >= settings.sell_threshold_pct:
-                # Confirm dengan RSI
-                if rsi is None or rsi > 50:
-                    return Signal(
-                        action="SELL",
-                        reason=f"Harga naik {price_change_pct:+.2f}% (threshold: +{settings.sell_threshold_pct}%) | RSI: {rsi}",
-                        confidence=0.85,
-                        current_price=current_price,
-                        price_change_pct=price_change_pct,
-                        rsi=rsi,
-                        ema_20=ema_20
-                    )
-
-            # Jual jika RSI sangat overbought
-            if rsi is not None and rsi >= settings.rsi_overbought and price_change_pct > 0:
-                return Signal(
-                    action="SELL",
-                    reason=f"RSI overbought: {rsi} (threshold: {settings.rsi_overbought}) | Harga: {price_change_pct:+.2f}%",
-                    confidence=0.80,
-                    current_price=current_price,
-                    price_change_pct=price_change_pct,
-                    rsi=rsi,
-                    ema_20=ema_20
-                )
-
-        # =====================
-        # BUY CONDITIONS
-        # =====================
-        reasons = []
-        confidence = 0.0
-
-        # Condition 1: Price drop
-        if price_change_pct <= -settings.buy_threshold_pct:
-            reasons.append(f"Harga jatuh {price_change_pct:+.2f}% (threshold: -{settings.buy_threshold_pct}%)")
-            confidence += 0.5
-
-        # Condition 2: RSI oversold
-        if rsi is not None and rsi <= settings.rsi_oversold:
-            reasons.append(f"RSI oversold: {rsi} (threshold: {settings.rsi_oversold})")
-            confidence += 0.4
-
-        # Condition 3: Price below EMA (dip below average)
-        if ema_20 is not None and current_price < ema_20 * 0.99:
-            reasons.append(f"Harga di bawah EMA20 (RM {current_price:,.0f} < RM {ema_20:,.0f})")
-            confidence += 0.1
-
-        if reasons:
+        
+        # Jika hari ini lebih tinggi atau sama dengan semalam -> SELL
+        if price_change_pct > 0:
             return Signal(
-                action="BUY",
-                reason=" | ".join(reasons),
-                confidence=min(confidence, 1.0),
+                action="SELL",
+                reason=f"Harga NAIK sebanyak {price_change_pct:+.2f}% dari semalam. Tembak Sell!",
+                confidence=1.0,
                 current_price=current_price,
                 price_change_pct=price_change_pct,
                 rsi=rsi,
                 ema_20=ema_20
             )
-
-        # =====================
-        # HOLD
-        # =====================
+            
+        # Jika hari ini lebih rendah dari semalam -> BUY
+        elif price_change_pct < 0:
+            return Signal(
+                action="BUY",
+                reason=f"Harga JATUH sebanyak {price_change_pct:+.2f}% dari semalam. Tembak Buy!",
+                confidence=1.0,
+                current_price=current_price,
+                price_change_pct=price_change_pct,
+                rsi=rsi,
+                ema_20=ema_20
+            )
+            
+        # Jika harga statik 0.00% (sangat jarang)
         return Signal(
             action="HOLD",
-            reason=f"Tiada signal kuat. Harga: {price_change_pct:+.2f}% | RSI: {rsi}",
+            reason=f"Harga statik 0%.",
             confidence=1.0,
             current_price=current_price,
             price_change_pct=price_change_pct,

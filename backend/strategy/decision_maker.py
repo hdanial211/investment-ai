@@ -93,11 +93,11 @@ class DecisionMaker:
 
     def decide(self, signal: Signal, real_balances: dict) -> dict:
         """
-        Final decision berdasarkan signal + real balance dari Luno
+        Final decision berdasarkan signal Momentum Harian + real balance dari Luno
         Returns decision dict
         """
-        daily_amount = settings.daily_amount_myr
-        portfolio = self.get_portfolio()
+        bot_settings = self.db.query(BotSettings).filter(BotSettings.id == 1).first()
+        trade_amount = bot_settings.trade_size_myr if bot_settings else 30.0
 
         result = {
             "action": "HOLD",
@@ -110,38 +110,37 @@ class DecisionMaker:
         }
 
         if signal.action == "BUY":
-            can_buy, blocked = self.can_buy(daily_amount)
+            can_buy, blocked = self.can_buy(trade_amount)
             if can_buy:
                 result.update({
                     "action": "BUY",
                     "execute": True,
-                    "amount_myr": daily_amount,
+                    "amount_myr": trade_amount,
                 })
-                logger.success(f"✅ DECISION: BUY RM{daily_amount:.2f} — {signal.reason}")
+                logger.success(f"✅ 8AM DECISION: BUY RM {trade_amount:.2f} — {signal.reason}")
             else:
                 result["blocked_reason"] = blocked
                 logger.warning(f"⛔ BUY blocked: {blocked}")
 
         elif signal.action == "SELL":
-            # Jual semua BTC yang ada
-            btc_to_sell = real_balances.get("XBT", 0.0)
-            if btc_to_sell > 0:
-                can_sell, blocked = self.can_sell(btc_to_sell)
-                if can_sell:
-                    result.update({
-                        "action": "SELL",
-                        "execute": True,
-                        "amount_btc": btc_to_sell,
-                    })
-                    logger.success(f"✅ DECISION: SELL {btc_to_sell:.8f} BTC — {signal.reason}")
-                else:
-                    result["blocked_reason"] = blocked
-                    logger.warning(f"⛔ SELL blocked: {blocked}")
+            # Jual sebahagian BTC bersamaan nilai Trade Amount (RM 30)
+            btc_to_sell = trade_amount / signal.current_price
+            
+            # Semak jika BTC cukup untuk mengelakkan ralat
+            can_sell, blocked = self.can_sell(btc_to_sell)
+            if can_sell:
+                result.update({
+                    "action": "SELL",
+                    "execute": True,
+                    "amount_btc": btc_to_sell,
+                    "amount_myr": trade_amount
+                })
+                logger.success(f"✅ 8AM DECISION: SELL RM {trade_amount:.2f} — {signal.reason}")
             else:
-                result["blocked_reason"] = "Tiada BTC untuk dijual"
-
+                result["blocked_reason"] = blocked
+                logger.warning(f"⛔ SELL blocked: {blocked}")
         else:
-            logger.info(f"💤 DECISION: HOLD — {signal.reason}")
+            logger.info(f"💤 8AM DECISION: HOLD — {signal.reason}")
 
         return result
 
