@@ -185,28 +185,6 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* RSI Settings */}
-            <div className="glass-card p-5">
-              <h3 className="font-semibold mb-4" style={{ color: "#f1f5f9" }}>🔬 RSI Settings</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm mb-2" style={{ color: "#94a3b8" }}>RSI Beli (Oversold)</label>
-                  <input type="number" min="10" max="50"
-                    value={settings.rsi_oversold}
-                    onChange={e => setSettings(s => ({ ...s, rsi_oversold: parseInt(e.target.value) }))}
-                    className={inputClass} style={inputStyle} />
-                  <p className="text-xs mt-1" style={{ color: "#64748b" }}>Default: 30</p>
-                </div>
-                <div>
-                  <label className="block text-sm mb-2" style={{ color: "#94a3b8" }}>RSI Jual (Overbought)</label>
-                  <input type="number" min="50" max="90"
-                    value={settings.rsi_overbought}
-                    onChange={e => setSettings(s => ({ ...s, rsi_overbought: parseInt(e.target.value) }))}
-                    className={inputClass} style={inputStyle} />
-                  <p className="text-xs mt-1" style={{ color: "#64748b" }}>Default: 70</p>
-                </div>
-              </div>
-            </div>
 
             {/* Schedule */}
             <div className="glass-card p-5">
