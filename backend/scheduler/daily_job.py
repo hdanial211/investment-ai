@@ -232,6 +232,10 @@ def run_rebalance_job():
                     reason=decision["reason"],
                     pnl=decision["amount_myr"]
                 )
+        else:
+            # Tidak laksanakan transaksi, log reason ke terminal supaya pengguna nampak
+            logger.info(f"💤 GRID CHECK: {decision.get('reason', 'HOLD')}")
+
     except Exception as e:
         logger.error(f"❌ REBALANCE JOB ERROR: {e}")
     finally:
