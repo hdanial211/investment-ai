@@ -142,6 +142,9 @@ def get_portfolio(db: Session = Depends(get_db)):
         total_pnl = total_value - initial_capital
         pnl_pct = (total_pnl / initial_capital * 100) if initial_capital > 0 else 0.0
 
+        # Cari harga belian terakhir dari DB
+        last_buy = db.query(Trade).filter(Trade.trade_type == "BUY").order_by(Trade.created_at.desc()).first()
+
         return {
             "btc_balance": btc_balance,
             "myr_balance": myr_balance,
@@ -150,6 +153,8 @@ def get_portfolio(db: Session = Depends(get_db)):
             "total_value": round(total_value, 2),
             "total_pnl": round(total_pnl, 2),
             "pnl_pct": round(pnl_pct, 2),
+            "last_buy_price": last_buy.price_myr if last_buy else None,
+            "last_buy_date": last_buy.created_at.isoformat() if last_buy else None,
             "updated_at": datetime.now().isoformat(),
             "source": "live"
         }

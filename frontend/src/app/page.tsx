@@ -16,6 +16,8 @@ interface Portfolio {
   total_value: number;
   total_pnl: number;
   pnl_pct: number;
+  last_buy_price: number | null;
+  last_buy_date: string | null;
 }
 
 interface BotStatus {
@@ -230,7 +232,7 @@ export default function Dashboard() {
             {settings && settings.base_price_myr > 0 && (
               <div className="mt-4 p-3 rounded-lg" style={{ background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.2)" }}>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium" style={{ color: "#c084fc" }}>Target Harga Rujukan (Base)</span>
+                  <span className="text-xs font-medium" style={{ color: "#c084fc" }}>Harga Rujukan Grid (Base)</span>
                   <span className="text-sm font-bold" style={{ color: "#f1f5f9" }}>
                     RM {settings.base_price_myr.toLocaleString("ms-MY", { maximumFractionDigits: 0 })}
                   </span>
@@ -239,6 +241,28 @@ export default function Dashboard() {
                   <span>↓ Beli di RM {(settings.base_price_myr * (1 - settings.rebalance_margin_pct / 100)).toLocaleString("ms-MY", { maximumFractionDigits: 0 })}</span>
                   <span>Jual di RM {(settings.base_price_myr * (1 + settings.rebalance_margin_pct / 100)).toLocaleString("ms-MY", { maximumFractionDigits: 0 })} ↑</span>
                 </div>
+              </div>
+            )}
+
+            {/* Last Buy Price — Harga Belian Terakhir */}
+            {portfolio?.last_buy_price && (
+              <div className="mt-3 p-3 rounded-lg" style={{ background: "rgba(0,212,170,0.08)", border: "1px solid rgba(0,212,170,0.25)" }}>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium" style={{ color: "#00d4aa" }}>📌 Harga Belian Terakhir</span>
+                  <span className="text-sm font-bold" style={{ color: "#00d4aa" }}>
+                    RM {portfolio.last_buy_price.toLocaleString("ms-MY", { maximumFractionDigits: 0 })}
+                  </span>
+                </div>
+                {portfolio.last_buy_date && (
+                  <div className="text-[10px] mt-1" style={{ color: "#64748b" }}>
+                    Dibeli pada: {new Date(portfolio.last_buy_date).toLocaleString("ms-MY", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </div>
+                )}
+                {signal?.current_price && portfolio.last_buy_price > 0 && (
+                  <div className="text-[10px] mt-1" style={{ color: signal.current_price >= portfolio.last_buy_price ? "#00d4aa" : "#ff4757" }}>
+                    {signal.current_price >= portfolio.last_buy_price ? "↑ Untung" : "↓ Rugi"}: {(((signal.current_price - portfolio.last_buy_price) / portfolio.last_buy_price) * 100).toFixed(2)}%
+                  </div>
+                )}
               </div>
             )}
           </div>
