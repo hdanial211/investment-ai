@@ -62,13 +62,7 @@ class DecisionMaker:
         if bot_settings and not bot_settings.bot_enabled:
             return False, "Bot disabled by user"
 
-        # Check daily spend limit
-        daily_spent = self.get_daily_spent()
-        daily_limit = bot_settings.daily_amount_myr if bot_settings else settings.daily_amount_myr
-        if daily_spent + amount_myr > daily_limit * 1.5:  # Allow 1.5x for strong signals
-            return False, f"Daily limit reached: dah belanja RM {daily_spent:.2f} hari ini"
 
-        # Check total capital limit
         portfolio = self.get_portfolio()
         current_myr = live_myr if live_myr is not None else portfolio["myr"]
         total_invested = settings.max_capital_myr - current_myr
@@ -196,6 +190,9 @@ class DecisionMaker:
                     "reason": f"Grid Sell: Harga naik {price_change_pct:.2f}% (> RM {req_upper:,.2f}). Jual RM {trade_size:.2f}"
                 })
                 logger.success(f"✅ GRID DECISION: SELL RM {trade_size:.2f} di harga RM {current_price:,.2f}")
+            else:
+                result["reason"] = f"Grid Sell Tersekat: {blocked}"
+                logger.warning(f"⛔ GRID SELL BLOCKED: {blocked}")
 
         # Scenario 2: Turun (Buy the dip)
         elif current_price <= req_lower:
@@ -212,6 +209,9 @@ class DecisionMaker:
                     "reason": f"Grid Buy: Harga jatuh {price_change_pct:.2f}% (< RM {req_lower:,.2f}). Beli RM {trade_size:.2f}"
                 })
                 logger.success(f"✅ GRID DECISION: BUY RM {trade_size:.2f} di harga RM {current_price:,.2f}")
+            else:
+                result["reason"] = f"Grid Buy Tersekat: {blocked}"
+                logger.warning(f"⛔ GRID BUY BLOCKED: {blocked}")
 
         return result
 
