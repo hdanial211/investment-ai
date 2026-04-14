@@ -155,8 +155,8 @@ def get_portfolio(db: Session = Depends(get_db)):
         total_pnl = total_sell_myr + bot_btc_value_myr - total_cost_myr - total_fees_myr
         pnl_pct   = (total_pnl / total_cost_myr * 100) if total_cost_myr > 0 else 0.0
 
-        # Cari harga belian terakhir dari DB
-        last_buy = db.query(Trade).filter(Trade.trade_type == "BUY").order_by(Trade.created_at.desc()).first()
+        # Ambil trade TERBARU — sama ada BUY atau SELL
+        last_trade = db.query(Trade).filter(Trade.status == "COMPLETED").order_by(Trade.created_at.desc()).first()
 
         return {
             "btc_balance": btc_balance,
@@ -166,10 +166,13 @@ def get_portfolio(db: Session = Depends(get_db)):
             "total_value": round(total_value, 2),
             "total_pnl": round(total_pnl, 2),
             "pnl_pct": round(pnl_pct, 2),
-            "last_buy_price": last_buy.price_myr if last_buy else None,
-            "last_buy_date": last_buy.created_at.isoformat() if last_buy else None,
+            # last trade info (buy atau sell, mana terbaru)
+            "last_buy_price": last_trade.price_myr if last_trade else None,
+            "last_buy_date":  last_trade.created_at.isoformat() if last_trade else None,
+            "last_trade_type": last_trade.trade_type if last_trade else None,
             "updated_at": datetime.now().isoformat(),
             "source": "live"
+
         }
     except Exception as e:
         logger.warning(f"⚠️ Cannot get live portfolio, fallback to DB: {e}")

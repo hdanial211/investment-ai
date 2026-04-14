@@ -235,10 +235,13 @@ export default function Dashboard() {
                   ? (((signal.current_price - portfolio.last_buy_price) / portfolio.last_buy_price) * 100)
                   : null;
                 const isUp = pct !== null && pct >= 0;
+                const isSell = portfolio.last_trade_type === "SELL";
+                const tradeColor = isSell ? "#ff4757" : "#00d4aa";
+                const tradeLabel = isSell ? "🔴 Last Jual" : "🟢 Last Beli";
                 return (
-                  <div className="p-3 rounded-lg" style={{ background: "rgba(0,212,170,0.08)", border: "1px solid rgba(0,212,170,0.2)" }}>
+                  <div className="p-3 rounded-lg" style={{ background: isSell ? "rgba(255,71,87,0.07)" : "rgba(0,212,170,0.08)", border: `1px solid ${isSell ? "rgba(255,71,87,0.2)" : "rgba(0,212,170,0.2)"}` }}>
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-[10px] font-medium" style={{ color: "#64748b" }}>📌 Last Beli/Jual</p>
+                      <p className="text-[10px] font-medium" style={{ color: tradeColor }}>{tradeLabel}</p>
                       <p className="text-[10px]" style={{ color: "#475569" }}>
                         {portfolio.last_buy_date ? new Date(portfolio.last_buy_date).toLocaleString("ms-MY", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}
                       </p>
@@ -260,7 +263,6 @@ export default function Dashboard() {
                   </div>
                 );
               })()}
-
 
               {/* Next Beli / Next Jual */}
               {settings && settings.base_price_myr > 0 && (
