@@ -23,8 +23,9 @@ class Trade(Base):
     amount_myr  = Column(Float, nullable=False)        # RM yang digunakan
     amount_btc  = Column(Float, nullable=False)        # BTC yang dibeli/dijual
     price_myr   = Column(Float, nullable=False)        # Harga BTC masa tu
+    fee_myr     = Column(Float, default=0.0)           # Fee Luno (MYR) — deducted from P&L
     signal      = Column(String, nullable=True)        # RSI_OVERSOLD / PRICE_DROP / PRICE_RISE
-    pnl_myr     = Column(Float, default=0.0)           # Profit/Loss (untuk SELL)
+    pnl_myr     = Column(Float, default=0.0)           # Profit/Loss selepas fee (untuk SELL)
     status      = Column(String, default="COMPLETED")  # COMPLETED / FAILED / PENDING
     order_id    = Column(String, nullable=True)        # Luno order ID
     created_at  = Column(DateTime, default=datetime.utcnow)

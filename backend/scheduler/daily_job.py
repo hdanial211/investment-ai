@@ -190,11 +190,22 @@ def run_rebalance_job():
             trade_result = None
             if decision["action"] == "BUY":
                 trade_result = luno_client.place_buy_order(decision["amount_myr"])
+                # Ambil fee sebenar dari Luno
+                fee_myr = 0.0
+                if trade_result.get("order_id"):
+                    import time; time.sleep(1)  # bagi masa order settle
+                    try:
+                        order_info = luno_client.get_order_status(trade_result["order_id"])
+                        fee_myr = order_info.get("fee_myr", 0.0)
+                        logger.info(f"Fee BUY: RM {fee_myr:.4f}")
+                    except Exception:
+                        pass
                 trade = Trade(
                     trade_type="BUY",
                     amount_myr=trade_result["amount_myr"],
                     amount_btc=trade_result["amount_btc"],
                     price_myr=trade_result["price"],
+                    fee_myr=fee_myr,
                     signal=decision["reason"],
                     order_id=trade_result.get("order_id"),
                     status="COMPLETED"
@@ -214,15 +225,27 @@ def run_rebalance_job():
                 )
 
             elif decision["action"] == "SELL":
-                # Only sell the profit portion
                 trade_result = luno_client.place_sell_order(decision["amount_btc"])
+                # Ambil fee sebenar dari Luno
+                fee_myr = 0.0
+                if trade_result.get("order_id"):
+                    import time; time.sleep(1)
+                    try:
+                        order_info = luno_client.get_order_status(trade_result["order_id"])
+                        fee_myr = order_info.get("fee_myr", 0.0)
+                        logger.info(f"Fee SELL: RM {fee_myr:.4f}")
+                    except Exception:
+                        pass
+                # P&L = jualan - fee (fee potong dari keuntungan)
+                pnl_after_fee = decision["amount_myr"] - fee_myr
                 trade = Trade(
                     trade_type="SELL",
                     amount_myr=trade_result["amount_myr"],
                     amount_btc=trade_result["amount_btc"],
                     price_myr=trade_result["price"],
+                    fee_myr=fee_myr,
                     signal=decision["reason"],
-                    pnl_myr=decision["amount_myr"],
+                    pnl_myr=pnl_after_fee,
                     order_id=trade_result.get("order_id"),
                     status="COMPLETED"
                 )
@@ -238,7 +261,7 @@ def run_rebalance_job():
                     amount_myr=trade_result["amount_myr"],
                     price=trade_result["price"],
                     reason=decision["reason"],
-                    pnl=decision["amount_myr"]
+                    pnl=pnl_after_fee
                 )
         else:
             # Tidak laksanakan transaksi, log reason ke terminal supaya pengguna nampak

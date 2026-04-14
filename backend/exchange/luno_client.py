@@ -188,15 +188,18 @@ class LunoClient:
             return []
 
     def get_order_status(self, order_id: str) -> dict:
-        """Check status sesuatu order"""
+        """Check status sesuatu order — termasuk fee sebenar dari Luno"""
         try:
             order = self._get(f"/orders/{order_id}")
+            # fee_base = fee dalam BTC, fee_counter = fee dalam MYR (dalam sen → bahagi 100)
+            fee_myr = float(order.get("fee_counter", 0)) / 100
             return {
                 "order_id": order_id,
                 "state": order.get("state", "UNKNOWN"),
                 "type": order.get("type", ""),
                 "volume_filled": float(order.get("base", 0)),
-                "price": float(order.get("limit_price", 0))
+                "price": float(order.get("limit_price", 0)),
+                "fee_myr": fee_myr,
             }
         except Exception as e:
             logger.error(f"❌ Error getting order status: {e}")
