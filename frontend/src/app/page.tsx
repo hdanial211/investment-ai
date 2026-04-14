@@ -230,26 +230,37 @@ export default function Dashboard() {
 
             <div className="flex flex-col gap-2">
               {/* Last Beli/Jual */}
-              {portfolio?.last_buy_price && (
-                <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: "rgba(0,212,170,0.08)", border: "1px solid rgba(0,212,170,0.2)" }}>
-                  <div>
-                    <p className="text-[10px] font-medium mb-0.5" style={{ color: "#00d4aa" }}>📌 Last Beli/Jual</p>
-                    <p className="text-[10px]" style={{ color: "#64748b" }}>
-                      {portfolio.last_buy_date ? new Date(portfolio.last_buy_date).toLocaleString("ms-MY", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-bold" style={{ color: "#00d4aa" }}>
-                      RM {portfolio.last_buy_price.toLocaleString("ms-MY", { maximumFractionDigits: 0 })}
-                    </p>
-                    {signal?.current_price && (
-                      <p className="text-[10px]" style={{ color: signal.current_price >= portfolio.last_buy_price ? "#00d4aa" : "#ff4757" }}>
-                        {signal.current_price >= portfolio.last_buy_price ? "▲" : "▼"} {(((signal.current_price - portfolio.last_buy_price) / portfolio.last_buy_price) * 100).toFixed(2)}%
+              {portfolio?.last_buy_price && (() => {
+                const pct = signal?.current_price
+                  ? (((signal.current_price - portfolio.last_buy_price) / portfolio.last_buy_price) * 100)
+                  : null;
+                const isUp = pct !== null && pct >= 0;
+                return (
+                  <div className="p-3 rounded-lg" style={{ background: "rgba(0,212,170,0.08)", border: "1px solid rgba(0,212,170,0.2)" }}>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[10px] font-medium" style={{ color: "#64748b" }}>📌 Last Beli/Jual</p>
+                      <p className="text-[10px]" style={{ color: "#475569" }}>
+                        {portfolio.last_buy_date ? new Date(portfolio.last_buy_date).toLocaleString("ms-MY", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}
                       </p>
-                    )}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-base font-bold" style={{ color: "#f1f5f9" }}>
+                        RM {portfolio.last_buy_price.toLocaleString("ms-MY", { maximumFractionDigits: 0 })}
+                      </p>
+                      {pct !== null && (
+                        <span className="text-sm font-bold px-2 py-0.5 rounded-full" style={{
+                          background: isUp ? "rgba(0,212,170,0.15)" : "rgba(255,71,87,0.15)",
+                          color: isUp ? "#00d4aa" : "#ff4757",
+                          border: `1px solid ${isUp ? "rgba(0,212,170,0.3)" : "rgba(255,71,87,0.3)"}`
+                        }}>
+                          {isUp ? "▲" : "▼"} {Math.abs(pct).toFixed(2)}%
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
+
 
               {/* Next Beli / Next Jual */}
               {settings && settings.base_price_myr > 0 && (
