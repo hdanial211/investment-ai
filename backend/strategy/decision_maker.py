@@ -176,25 +176,30 @@ class DecisionMaker:
             "reason": f"Harga RM {current_price:,.2f} masih dalam grid (Base: RM {base_price:,.2f})",
         }
 
-        # Scenario 1: Naik (Take profit)
+        # Scenario 1: Naik (Take profit) — Tiered Sell
         if current_price >= req_upper:
-            # Sell fixed Trade Size worth of BTC
-            btc_to_sell = trade_size / current_price
+            # Jika naik 2x margin (contoh 5% bila margin 2.5%) → jual 2x ganda
+            req_double = base_price * (1 + (margin_pct * 2) / 100.0)
+            is_double_trigger = current_price >= req_double
+            effective_size = trade_size * 2 if is_double_trigger else trade_size
+
+            btc_to_sell = effective_size / current_price
             can_sell, blocked = self.can_sell(btc_to_sell)
-            
+
             if can_sell:
                 # Update Base Price to new execution price
                 bot_settings.base_price_myr = current_price
                 self.db.commit()
-                
+
+                label = f"2× GANDA (naik {price_change_pct:.2f}%)" if is_double_trigger else f"naik {price_change_pct:.2f}%"
                 result.update({
                     "action": "SELL",
                     "execute": True,
                     "amount_btc": btc_to_sell,
-                    "amount_myr": trade_size,
-                    "reason": f"Grid Sell: Harga naik {price_change_pct:.2f}% (> RM {req_upper:,.2f}). Jual RM {trade_size:.2f}"
+                    "amount_myr": effective_size,
+                    "reason": f"Grid Sell {label} (> RM {req_upper:,.2f}). Jual RM {effective_size:.2f}"
                 })
-                logger.success(f"✅ GRID DECISION: SELL RM {trade_size:.2f} di harga RM {current_price:,.2f}")
+                logger.success(f"✅ GRID SELL {'2×' if is_double_trigger else '1×'} RM {effective_size:.2f} di harga RM {current_price:,.2f}")
             else:
                 result["reason"] = f"Grid Sell Tersekat: {blocked}"
                 logger.warning(f"⛔ GRID SELL BLOCKED: {blocked}")
