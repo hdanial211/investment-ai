@@ -350,20 +350,44 @@ export default function Dashboard() {
           {/* Stats */}
           <div className="glass-card p-5">
             <h3 className="font-semibold mb-4" style={{ color: "#f1f5f9" }}>📊 Statistik Trading</h3>
-            <div className="grid grid-cols-2 gap-4">
-              {[
-                { label: "Total Trade", value: stats?.total_trades ?? 0 },
-                { label: "Beli", value: stats?.total_buys ?? 0, prefix: "🟢 ", color: "#00d4aa" },
-                { label: "Jual", value: stats?.total_sells ?? 0, prefix: "🔴 ", color: "#ff4757" },
-                { label: "Win Rate", value: `${stats?.win_rate?.toFixed(1) ?? "0.0"}%`, color: "#fbbf24" },
-                { label: "Total Invest", value: `RM ${stats?.total_invested_myr?.toFixed(2) ?? "0.00"}` },
-                { label: "Total P&L", value: `RM ${stats?.total_pnl_myr?.toFixed(2) ?? "0.00"}`, color: (stats?.total_pnl_myr ?? 0) >= 0 ? "#00d4aa" : "#ff4757" },
-              ].map((s, i) => (
-                <div key={i} className="p-3 rounded-xl" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)" }}>
-                  <p className="text-xs mb-1" style={{ color: "#64748b" }}>{s.label}</p>
-                  <p className="font-bold" style={{ color: s.color ?? "#f1f5f9" }}>{s.prefix ?? ""}{s.value}</p>
+            <div className="flex flex-col gap-3">
+
+              {/* Row 1: Beli & Jual sebelah2 */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-xl" style={{ background: "rgba(0,212,170,0.06)", border: "1px solid rgba(0,212,170,0.15)" }}>
+                  <p className="text-xs mb-1" style={{ color: "#64748b" }}>Beli</p>
+                  <p className="font-bold text-lg" style={{ color: "#00d4aa" }}>🟢 {stats?.total_buys ?? 0}</p>
                 </div>
-              ))}
+                <div className="p-3 rounded-xl" style={{ background: "rgba(255,71,87,0.06)", border: "1px solid rgba(255,71,87,0.15)" }}>
+                  <p className="text-xs mb-1" style={{ color: "#64748b" }}>Jual</p>
+                  <p className="font-bold text-lg" style={{ color: "#ff4757" }}>🔴 {stats?.total_sells ?? 0}</p>
+                </div>
+              </div>
+
+              {/* Row 2: Total Trade & Win Rate */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-xl" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)" }}>
+                  <p className="text-xs mb-1" style={{ color: "#64748b" }}>Total Trade</p>
+                  <p className="font-bold" style={{ color: "#f1f5f9" }}>{stats?.total_trades ?? 0}</p>
+                </div>
+                <div className="p-3 rounded-xl" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)" }}>
+                  <p className="text-xs mb-1" style={{ color: "#64748b" }}>Win Rate</p>
+                  <p className="font-bold" style={{ color: "#fbbf24" }}>{stats?.win_rate?.toFixed(1) ?? "0.0"}%</p>
+                </div>
+              </div>
+
+              {/* Row 3: Total Invest & Total P&L */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-xl" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)" }}>
+                  <p className="text-xs mb-1" style={{ color: "#64748b" }}>Total Invest</p>
+                  <p className="font-bold" style={{ color: "#f1f5f9" }}>RM {stats?.total_invested_myr?.toFixed(2) ?? "0.00"}</p>
+                </div>
+                <div className="p-3 rounded-xl" style={{ background: (stats?.total_pnl_myr ?? 0) >= 0 ? "rgba(0,212,170,0.06)" : "rgba(255,71,87,0.06)", border: `1px solid ${(stats?.total_pnl_myr ?? 0) >= 0 ? "rgba(0,212,170,0.15)" : "rgba(255,71,87,0.15)"}` }}>
+                  <p className="text-xs mb-1" style={{ color: "#64748b" }}>Total P&L</p>
+                  <p className="font-bold" style={{ color: (stats?.total_pnl_myr ?? 0) >= 0 ? "#00d4aa" : "#ff4757" }}>RM {stats?.total_pnl_myr?.toFixed(2) ?? "0.00"}</p>
+                </div>
+              </div>
+
             </div>
           </div>
 
