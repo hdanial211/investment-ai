@@ -148,11 +148,16 @@ class DecisionMaker:
         if not bot_settings or not bot_settings.bot_enabled:
             return {"action": "HOLD", "execute": False, "reason": "Bot disabled"}
 
-        # Initialize Base Price if 0.0 or None
+        # Initialize Base Price from last actual trade, NOT current market price
         if not bot_settings.base_price_myr or bot_settings.base_price_myr == 0.0:
-            bot_settings.base_price_myr = current_price
+            last_trade = self.db.query(Trade).order_by(Trade.created_at.desc()).first()
+            if last_trade and last_trade.price_myr:
+                bot_settings.base_price_myr = last_trade.price_myr
+                logger.info(f"🔒 Base Price dikunci dari trade terakhir: RM {last_trade.price_myr:,.2f} ({last_trade.trade_type} pada {last_trade.created_at})")
+            else:
+                bot_settings.base_price_myr = current_price
+                logger.info(f"🔒 Base Price dikunci pada harga semasa (tiada rekod trade): RM {current_price:,.2f}")
             self.db.commit()
-            logger.info(f"🔒 Base Price dikunci pada RM {current_price:,.2f}")
 
         base_price = bot_settings.base_price_myr
         margin_pct = bot_settings.rebalance_margin_pct
