@@ -76,13 +76,14 @@ class DecisionMaker:
 
         return True, ""
 
-    def can_sell(self, btc_amount: float) -> tuple[bool, str]:
+    def can_sell(self, btc_amount: float, live_btc: float = None) -> tuple[bool, str]:
         """Check sama ada boleh jual atau tidak"""
-        portfolio = self.get_portfolio()
-        if portfolio["btc"] < btc_amount:
-            return False, f"BTC tidak mencukupi: {portfolio['btc']:.8f} < {btc_amount:.8f}"
-        if portfolio["btc"] == 0:
+        # Gunakan live balance dari Luno jika ada, fallback ke DB snapshot
+        btc_held = live_btc if live_btc is not None else self.get_portfolio()["btc"]
+        if btc_held == 0:
             return False, "Tiada BTC dalam portfolio untuk dijual"
+        if btc_held < btc_amount:
+            return False, f"BTC tidak mencukupi: {btc_held:.8f} < {btc_amount:.8f}"
         return True, ""
 
     def decide(self, signal: Signal, real_balances: dict) -> dict:
@@ -184,7 +185,7 @@ class DecisionMaker:
             effective_size = trade_size * 2 if is_double_trigger else trade_size
 
             btc_to_sell = effective_size / current_price
-            can_sell, blocked = self.can_sell(btc_to_sell)
+            can_sell, blocked = self.can_sell(btc_to_sell, live_btc=real_balances.get("XBT", 0.0))
 
             if can_sell:
                 # Update Base Price to new execution price
