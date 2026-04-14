@@ -12,7 +12,7 @@ import sys, os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import settings
-from database.models import get_db, Trade, Portfolio, SessionLocal
+from database.models import get_db, Trade, Portfolio, BotSettings, SessionLocal
 from exchange.luno_client import luno_client
 from strategy.signal_engine import signal_engine
 from strategy.decision_maker import DecisionMaker
@@ -200,6 +200,11 @@ def run_rebalance_job():
                     status="COMPLETED"
                 )
                 db.add(trade)
+                # Update base price SELEPAS order berjaya
+                if decision.get("new_base_price"):
+                    bot_s = db.query(BotSettings).filter(BotSettings.id == 1).first()
+                    if bot_s:
+                        bot_s.base_price_myr = decision["new_base_price"]
                 db.commit()
                 telegram.notify_buy(
                     amount_myr=trade_result["amount_myr"],
@@ -211,19 +216,22 @@ def run_rebalance_job():
             elif decision["action"] == "SELL":
                 # Only sell the profit portion
                 trade_result = luno_client.place_sell_order(decision["amount_btc"])
-                # PnL for taking profit simply equals the fiat value of sell minus baseline cost.
-                # Actually, pnl_myr here is precisely the `profit_to_take_myr`.
                 trade = Trade(
                     trade_type="SELL",
                     amount_myr=trade_result["amount_myr"],
                     amount_btc=trade_result["amount_btc"],
                     price_myr=trade_result["price"],
                     signal=decision["reason"],
-                    pnl_myr=decision["amount_myr"], # Profit that we extracted
+                    pnl_myr=decision["amount_myr"],
                     order_id=trade_result.get("order_id"),
                     status="COMPLETED"
                 )
                 db.add(trade)
+                # Update base price SELEPAS order berjaya
+                if decision.get("new_base_price"):
+                    bot_s = db.query(BotSettings).filter(BotSettings.id == 1).first()
+                    if bot_s:
+                        bot_s.base_price_myr = decision["new_base_price"]
                 db.commit()
                 telegram.notify_sell(
                     amount_btc=trade_result["amount_btc"],

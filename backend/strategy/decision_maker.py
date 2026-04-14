@@ -188,19 +188,22 @@ class DecisionMaker:
             can_sell, blocked = self.can_sell(btc_to_sell, live_btc=real_balances.get("XBT", 0.0))
 
             if can_sell:
-                # Update Base Price to new execution price
-                bot_settings.base_price_myr = current_price
-                self.db.commit()
-
-                label = f"2× GANDA (naik {price_change_pct:.2f}%)" if is_double_trigger else f"naik {price_change_pct:.2f}%"
-                result.update({
-                    "action": "SELL",
-                    "execute": True,
-                    "amount_btc": btc_to_sell,
-                    "amount_myr": effective_size,
-                    "reason": f"Grid Sell {label} (> RM {req_upper:,.2f}). Jual RM {effective_size:.2f}"
-                })
-                logger.success(f"✅ GRID SELL {'2×' if is_double_trigger else '1×'} RM {effective_size:.2f} di harga RM {current_price:,.2f}")
+                btc_min = 0.0001  # Luno minimum sell volume
+                if btc_to_sell < btc_min:
+                    result["reason"] = f"Grid Sell Tersekat: BTC terlalu kecil ({btc_to_sell:.8f} < {btc_min})"
+                    logger.warning(f"⛔ GRID SELL BLOCKED: BTC volume too small ({btc_to_sell:.8f})")
+                else:
+                    # PENTING: Commit base_price SELEPAS order berjaya
+                    label = f"2× GANDA (naik {price_change_pct:.2f}%)" if is_double_trigger else f"naik {price_change_pct:.2f}%"
+                    result.update({
+                        "action": "SELL",
+                        "execute": True,
+                        "amount_btc": btc_to_sell,
+                        "amount_myr": effective_size,
+                        "new_base_price": current_price,
+                        "reason": f"Grid Sell {label} (> RM {req_upper:,.2f}). Jual RM {effective_size:.2f}"
+                    })
+                    logger.success(f"✅ GRID SELL {'2×' if is_double_trigger else '1×'} RM {effective_size:.2f} di harga RM {current_price:,.2f}")
             else:
                 result["reason"] = f"Grid Sell Tersekat: {blocked}"
                 logger.warning(f"⛔ GRID SELL BLOCKED: {blocked}")
@@ -210,13 +213,11 @@ class DecisionMaker:
             can_buy, blocked = self.can_buy(trade_size, live_myr=real_balances.get("MYR", 0.0))
                 
             if can_buy:
-                bot_settings.base_price_myr = current_price
-                self.db.commit()
-                
                 result.update({
                     "action": "BUY",
                     "execute": True,
                     "amount_myr": trade_size,
+                    "new_base_price": current_price,
                     "reason": f"Grid Buy: Harga jatuh {price_change_pct:.2f}% (< RM {req_lower:,.2f}). Beli RM {trade_size:.2f}"
                 })
                 logger.success(f"✅ GRID DECISION: BUY RM {trade_size:.2f} di harga RM {current_price:,.2f}")
