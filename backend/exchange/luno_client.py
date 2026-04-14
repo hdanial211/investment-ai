@@ -132,24 +132,25 @@ class LunoClient:
 
     def place_sell_order(self, btc_volume: float, target_price: Optional[float] = None) -> dict:
         """
-        Jual BTC
-        btc_volume: berapa BTC nak jual
-        target_price: jika None, guna harga semasa (ask price)
+        Jual BTC — guna BID price supaya order fill SEGERA.
+        Limit sell pada harga bid akan terus dipadankan oleh Luno.
         """
         try:
             price_data = self.get_btc_price()
-            sell_price = target_price if target_price else price_data["ask"]
+            # PENTING: Guna BID bukan ASK — pastikan order fill segera tanpa tunggu
+            sell_price = target_price if target_price else price_data["bid"]
 
+            btc_volume = round(btc_volume, 6)  # Luno: max 6 decimal places
             myr_value = btc_volume * sell_price
             if myr_value < 2.0:
                 raise ValueError(f"Nilai terlalu kecil: RM {myr_value:.2f} (min: RM 2)")
 
-            logger.info(f"💸 Placing SELL order: {btc_volume:.8f} BTC @ RM {sell_price:,.2f}")
+            logger.info(f"💸 Placing SELL order: {btc_volume:.6f} BTC @ RM {sell_price:,.2f} (bid price)")
 
             order = self._post("/postorder", data={
                 "pair": self.PAIR,
                 "type": "ASK",
-                "volume": str(round(btc_volume, 6)),  # Luno: max 6 decimal places
+                "volume": str(btc_volume),
                 "price": str(int(sell_price))
             })
 
@@ -166,6 +167,25 @@ class LunoClient:
         except Exception as e:
             logger.error(f"❌ Error placing sell order: {e}")
             raise
+
+    def cancel_order(self, order_id: str) -> bool:
+        """Cancel open order"""
+        try:
+            self._post("/stoporder", data={"order_id": order_id})
+            logger.info(f"🚫 Order {order_id} cancelled")
+            return True
+        except Exception as e:
+            logger.error(f"❌ Error cancelling order {order_id}: {e}")
+            return False
+
+    def get_open_orders(self) -> list:
+        """Dapatkan semua open orders"""
+        try:
+            data = self._get("/listorders", params={"pair": self.PAIR, "state": "PENDING"})
+            return data.get("orders", [])
+        except Exception as e:
+            logger.error(f"❌ Error getting open orders: {e}")
+            return []
 
     def get_order_status(self, order_id: str) -> dict:
         """Check status sesuatu order"""
