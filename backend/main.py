@@ -138,16 +138,22 @@ def get_portfolio(db: Session = Depends(get_db)):
         total_value = myr_balance + btc_value_myr
 
         # Kira P&L berdasarkan kos belian sebenar dari rekod trade (Cost Basis)
-        all_buys = db.query(Trade).filter(Trade.trade_type == "BUY").all()
-        all_sells = db.query(Trade).filter(Trade.trade_type == "SELL").all()
-        total_cost_myr = sum(t.amount_myr for t in all_buys)   # Jumlah RM dibelanjakan beli BTC
-        total_returned_myr = sum(t.amount_myr for t in all_sells)  # Jumlah RM dapat balik dari jual
+        all_buys  = db.query(Trade).filter(Trade.trade_type == "BUY",  Trade.status == "COMPLETED").all()
+        all_sells = db.query(Trade).filter(Trade.trade_type == "SELL", Trade.status == "COMPLETED").all()
 
-        # Unrealized P&L = (Nilai BTC semasa) - (Kos BTC yang dibeli - RM yang dah dijual balik)
-        net_cost = total_cost_myr - total_returned_myr
-        unrealized_pnl = btc_value_myr - net_cost if net_cost > 0 else 0.0
-        pnl_pct = (unrealized_pnl / net_cost * 100) if net_cost > 0 else 0.0
-        total_pnl = unrealized_pnl
+        total_cost_myr      = sum(t.amount_myr for t in all_buys)    # Jumlah RM dibelanjakan beli
+        total_sell_myr      = sum(t.amount_myr for t in all_sells)   # Jumlah RM diterima dari jual
+        total_fees_myr      = sum(getattr(t, "fee_myr", 0.0) or 0.0 for t in all_buys + all_sells)
+
+        # Kira berapa BTC masih dipegang BOT (bukan semua BTC dalam wallet!)
+        total_btc_bought    = sum(t.amount_btc for t in all_buys)
+        total_btc_sold      = sum(t.amount_btc for t in all_sells)
+        bot_btc_remaining   = max(0.0, total_btc_bought - total_btc_sold)
+        bot_btc_value_myr   = bot_btc_remaining * current_price
+
+        # P&L = Wang dari jual + Nilai BTC bot yang masih ada - Kos beli - Fees
+        total_pnl = total_sell_myr + bot_btc_value_myr - total_cost_myr - total_fees_myr
+        pnl_pct   = (total_pnl / total_cost_myr * 100) if total_cost_myr > 0 else 0.0
 
         # Cari harga belian terakhir dari DB
         last_buy = db.query(Trade).filter(Trade.trade_type == "BUY").order_by(Trade.created_at.desc()).first()
