@@ -18,6 +18,7 @@ interface Portfolio {
   pnl_pct: number;
   last_buy_price: number | null;
   last_buy_date: string | null;
+  last_trade_type: string | null;
 }
 
 interface BotStatus {
@@ -77,6 +78,7 @@ export default function Dashboard() {
   const [triggering, setTriggering] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [countdown, setCountdown] = useState(30);
 
   const fetchAll = useCallback(async () => {
     const [portfolioData, statusData, signalData, tradesData, statsData, settingsData] =
@@ -100,9 +102,18 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchAll();
-    const interval = setInterval(fetchAll, 30000); // refresh every 30s
-    return () => clearInterval(interval);
+    const REFRESH_SEC = 30;
+    const interval = setInterval(() => {
+      fetchAll();
+      setCountdown(REFRESH_SEC);
+    }, REFRESH_SEC * 1000);
+    // Countdown ticker every second
+    const ticker = setInterval(() => {
+      setCountdown(prev => (prev <= 1 ? REFRESH_SEC : prev - 1));
+    }, 1000);
+    return () => { clearInterval(interval); clearInterval(ticker); };
   }, [fetchAll]);
+
 
   const toggleBot = async () => {
     setToggling(true);
@@ -135,13 +146,14 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Live indicator */}
+            {/* Auto-refresh countdown */}
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ background: "rgba(0,212,170,0.1)", border: "1px solid rgba(0,212,170,0.2)" }}>
               <div className="w-2 h-2 rounded-full pulse-dot" style={{ background: "#00d4aa" }} />
-              <span className="text-xs font-medium" suppressHydrationWarning style={{ color: "#00d4aa" }}>
-                Update: {lastUpdate.toLocaleTimeString("ms-MY")}
+              <span className="text-xs font-medium" style={{ color: "#00d4aa" }}>
+                Auto-refresh: {countdown}s
               </span>
             </div>
+
 
             <Link href="/settings" className="p-2 rounded-lg transition-colors" style={{ background: "rgba(255,255,255,0.05)" }}>
               <Settings size={18} style={{ color: "#94a3b8" }} />
