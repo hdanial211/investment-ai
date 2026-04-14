@@ -40,7 +40,13 @@ class LunoClient:
         """Helper: POST request ke Luno API"""
         url = f"{self.BASE_URL}{endpoint}"
         resp = self.session.post(url, data=data, timeout=10)
-        resp.raise_for_status()
+        if not resp.ok:
+            try:
+                err_body = resp.json()
+            except Exception:
+                err_body = resp.text
+            logger.error(f"Luno API {resp.status_code} — {err_body} | Payload: {data}")
+            resp.raise_for_status()
         result = resp.json()
         if "error" in result:
             raise Exception(f"Luno API Error: {result['error']}")
@@ -99,7 +105,7 @@ class LunoClient:
             if amount_myr < 2.0:
                 raise ValueError(f"Jumlah terlalu kecil: RM {amount_myr} (min: RM 2)")
 
-            btc_volume = round(amount_myr / bid_price, 8)
+            btc_volume = round(amount_myr / bid_price, 6)  # Luno: max 6 decimal places
 
             logger.info(f"🛒 Placing BUY order: RM {amount_myr:.2f} @ RM {bid_price:,.2f} = {btc_volume:.8f} BTC")
 
@@ -143,7 +149,7 @@ class LunoClient:
             order = self._post("/postorder", data={
                 "pair": self.PAIR,
                 "type": "ASK",
-                "volume": str(round(btc_volume, 8)),
+                "volume": str(round(btc_volume, 6)),  # Luno: max 6 decimal places
                 "price": str(int(sell_price))
             })
 
