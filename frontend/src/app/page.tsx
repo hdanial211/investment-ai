@@ -206,66 +206,71 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* BTC Price Card */}
+          {/* BTC Price Card — 3 maklumat penting sahaja */}
           <div className="glass-card p-5 slide-up glow-green" style={{ animationDelay: "100ms" }}>
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-3">
               <span className="text-sm font-medium" style={{ color: "#94a3b8" }}>Harga BTC/MYR</span>
               <Bitcoin size={16} style={{ color: "#f7931a" }} />
             </div>
-            <div className="number-glow">
-              <p className="text-3xl font-bold mb-1" style={{ color: "#f1f5f9" }}>
+
+            {/* Harga Sekarang */}
+            <div className="mb-4">
+              <p className="text-3xl font-bold number-glow" style={{ color: "#f1f5f9" }}>
                 RM {signal?.current_price ? signal.current_price.toLocaleString("ms-MY", { maximumFractionDigits: 0 }) : "---"}
               </p>
-            </div>
-            <div className="flex items-center gap-2">
-              {(signal?.price_change_pct ?? 0) >= 0
-                ? <ArrowUpRight size={16} style={{ color: "#00d4aa" }} />
-                : <ArrowDownRight size={16} style={{ color: "#ff4757" }} />}
-              <span className="text-sm font-medium"
-                style={{ color: (signal?.price_change_pct ?? 0) >= 0 ? "#00d4aa" : "#ff4757" }}>
-                {signal?.price_change_pct !== undefined ? `${signal.price_change_pct >= 0 ? "+" : ""}${signal.price_change_pct.toFixed(2)}%` : "---"}
-              </span>
-              <span className="text-xs" style={{ color: "#64748b" }}>dari semalam</span>
-            </div>
-            
-            {/* Base Price Grid Tracking */}
-            {settings && settings.base_price_myr > 0 && (
-              <div className="mt-4 p-3 rounded-lg" style={{ background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.2)" }}>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium" style={{ color: "#c084fc" }}>Harga Rujukan Grid (Base)</span>
-                  <span className="text-sm font-bold" style={{ color: "#f1f5f9" }}>
-                    RM {settings.base_price_myr.toLocaleString("ms-MY", { maximumFractionDigits: 0 })}
-                  </span>
-                </div>
-                <div className="flex justify-between text-[10px] mt-1" style={{ color: "#94a3b8" }}>
-                  <span>↓ Beli di RM {(settings.base_price_myr * (1 - settings.rebalance_margin_pct / 100)).toLocaleString("ms-MY", { maximumFractionDigits: 0 })}</span>
-                  <span>Jual di RM {(settings.base_price_myr * (1 + settings.rebalance_margin_pct / 100)).toLocaleString("ms-MY", { maximumFractionDigits: 0 })} ↑</span>
-                </div>
+              <div className="flex items-center gap-2 mt-1">
+                {(signal?.price_change_pct ?? 0) >= 0
+                  ? <ArrowUpRight size={14} style={{ color: "#00d4aa" }} />
+                  : <ArrowDownRight size={14} style={{ color: "#ff4757" }} />}
+                <span className="text-xs" style={{ color: (signal?.price_change_pct ?? 0) >= 0 ? "#00d4aa" : "#ff4757" }}>
+                  {signal?.price_change_pct !== undefined ? `${signal.price_change_pct >= 0 ? "+" : ""}${signal.price_change_pct.toFixed(2)}%` : "---"} dari semalam
+                </span>
               </div>
-            )}
+            </div>
 
-            {/* Last Buy Price — Harga Belian Terakhir */}
-            {portfolio?.last_buy_price && (
-              <div className="mt-3 p-3 rounded-lg" style={{ background: "rgba(0,212,170,0.08)", border: "1px solid rgba(0,212,170,0.25)" }}>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium" style={{ color: "#00d4aa" }}>📌 Harga Belian Terakhir</span>
-                  <span className="text-sm font-bold" style={{ color: "#00d4aa" }}>
-                    RM {portfolio.last_buy_price.toLocaleString("ms-MY", { maximumFractionDigits: 0 })}
-                  </span>
+            <div className="flex flex-col gap-2">
+              {/* Last Beli/Jual */}
+              {portfolio?.last_buy_price && (
+                <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: "rgba(0,212,170,0.08)", border: "1px solid rgba(0,212,170,0.2)" }}>
+                  <div>
+                    <p className="text-[10px] font-medium mb-0.5" style={{ color: "#00d4aa" }}>📌 Last Beli/Jual</p>
+                    <p className="text-[10px]" style={{ color: "#64748b" }}>
+                      {portfolio.last_buy_date ? new Date(portfolio.last_buy_date).toLocaleString("ms-MY", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold" style={{ color: "#00d4aa" }}>
+                      RM {portfolio.last_buy_price.toLocaleString("ms-MY", { maximumFractionDigits: 0 })}
+                    </p>
+                    {signal?.current_price && (
+                      <p className="text-[10px]" style={{ color: signal.current_price >= portfolio.last_buy_price ? "#00d4aa" : "#ff4757" }}>
+                        {signal.current_price >= portfolio.last_buy_price ? "▲" : "▼"} {(((signal.current_price - portfolio.last_buy_price) / portfolio.last_buy_price) * 100).toFixed(2)}%
+                      </p>
+                    )}
+                  </div>
                 </div>
-                {portfolio.last_buy_date && (
-                  <div className="text-[10px] mt-1" style={{ color: "#64748b" }}>
-                    Dibeli pada: {new Date(portfolio.last_buy_date).toLocaleString("ms-MY", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+              )}
+
+              {/* Next Beli / Next Jual */}
+              {settings && settings.base_price_myr > 0 && (
+                <div className="flex gap-2">
+                  <div className="flex-1 p-3 rounded-lg text-center" style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.2)" }}>
+                    <p className="text-[10px] font-medium mb-1" style={{ color: "#3b82f6" }}>⬇ Next Beli</p>
+                    <p className="text-sm font-bold" style={{ color: "#f1f5f9" }}>
+                      RM {(settings.base_price_myr * (1 - settings.rebalance_margin_pct / 100)).toLocaleString("ms-MY", { maximumFractionDigits: 0 })}
+                    </p>
                   </div>
-                )}
-                {signal?.current_price && portfolio.last_buy_price > 0 && (
-                  <div className="text-[10px] mt-1" style={{ color: signal.current_price >= portfolio.last_buy_price ? "#00d4aa" : "#ff4757" }}>
-                    {signal.current_price >= portfolio.last_buy_price ? "↑ Untung" : "↓ Rugi"}: {(((signal.current_price - portfolio.last_buy_price) / portfolio.last_buy_price) * 100).toFixed(2)}%
+                  <div className="flex-1 p-3 rounded-lg text-center" style={{ background: "rgba(0,212,170,0.08)", border: "1px solid rgba(0,212,170,0.2)" }}>
+                    <p className="text-[10px] font-medium mb-1" style={{ color: "#00d4aa" }}>⬆ Next Jual</p>
+                    <p className="text-sm font-bold" style={{ color: "#f1f5f9" }}>
+                      RM {(settings.base_price_myr * (1 + settings.rebalance_margin_pct / 100)).toLocaleString("ms-MY", { maximumFractionDigits: 0 })}
+                    </p>
                   </div>
-                )}
-              </div>
-            )}
+                </div>
+              )}
+            </div>
           </div>
+
         </div>
 
         {/* Portfolio Row */}
