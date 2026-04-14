@@ -137,10 +137,17 @@ def get_portfolio(db: Session = Depends(get_db)):
         btc_value_myr = btc_balance * current_price
         total_value = myr_balance + btc_value_myr
 
-        # Kira P&L dari Modal Asas yang ditetapkan user
-        initial_capital = settings.max_capital_myr
-        total_pnl = total_value - initial_capital
-        pnl_pct = (total_pnl / initial_capital * 100) if initial_capital > 0 else 0.0
+        # Kira P&L berdasarkan kos belian sebenar dari rekod trade (Cost Basis)
+        all_buys = db.query(Trade).filter(Trade.trade_type == "BUY").all()
+        all_sells = db.query(Trade).filter(Trade.trade_type == "SELL").all()
+        total_cost_myr = sum(t.amount_myr for t in all_buys)   # Jumlah RM dibelanjakan beli BTC
+        total_returned_myr = sum(t.amount_myr for t in all_sells)  # Jumlah RM dapat balik dari jual
+
+        # Unrealized P&L = (Nilai BTC semasa) - (Kos BTC yang dibeli - RM yang dah dijual balik)
+        net_cost = total_cost_myr - total_returned_myr
+        unrealized_pnl = btc_value_myr - net_cost if net_cost > 0 else 0.0
+        pnl_pct = (unrealized_pnl / net_cost * 100) if net_cost > 0 else 0.0
+        total_pnl = unrealized_pnl
 
         # Cari harga belian terakhir dari DB
         last_buy = db.query(Trade).filter(Trade.trade_type == "BUY").order_by(Trade.created_at.desc()).first()
