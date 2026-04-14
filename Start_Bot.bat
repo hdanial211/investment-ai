@@ -14,7 +14,7 @@ start "Frontend - Investment AI" cmd /k "cd /d "%~dp0frontend" && npm run dev"
 
 echo [3/3] Sila tunggu 5 saat sebelum peramban (browser) dibuka...
 timeout /t 5 /nobreak >nul
-start http://localhost:3001
+start http://localhost:3000
 
 echo.
 echo SEMUANYA SELESAI !
