@@ -139,93 +139,121 @@ class DecisionMaker:
 
         return result
 
-    def decide_rebalance(self, real_balances: dict, current_price: float) -> dict:
+    def decide_rebalance(self, real_balances: dict, current_price: float,
+                          grid_state=None) -> dict:
         """
-        Fast 3-minute Rebalance (Price-Step Grid):
-        Tracks actual BTC price changes independently of user's MYR/BTC equity to bypass
-        small portfolio constraints while avoiding Luno Minimum Trade Volume blocks.
+        Fast 3-minute Rebalance (Price-Step Grid) — Multi-pair support.
+        Jika grid_state (GridState object) diberikan, guna konfigurasi pair tersebut.
+        Jika tidak, fallback ke BotSettings (backward compat untuk XBTMYR).
         """
-        bot_settings = self.db.query(BotSettings).filter(BotSettings.id == 1).first()
-        if not bot_settings or not bot_settings.bot_enabled:
-            return {"action": "HOLD", "execute": False, "reason": "Bot disabled"}
+        # ── Tentukan konfigurasi grid ──────────────────────────────
+        if grid_state is not None:
+            # Multi-pair mode: guna GridState per pair
+            if not grid_state.enabled:
+                return {"action": "HOLD", "execute": False, "reason": f"{grid_state.pair} disabled"}
 
-        # Initialize Base Price from last actual trade, NOT current market price
-        if not bot_settings.base_price_myr or bot_settings.base_price_myr == 0.0:
-            last_trade = self.db.query(Trade).order_by(Trade.created_at.desc()).first()
-            if last_trade and last_trade.price_myr:
-                bot_settings.base_price_myr = last_trade.price_myr
-                logger.info(f"🔒 Base Price dikunci dari trade terakhir: RM {last_trade.price_myr:,.2f} ({last_trade.trade_type} pada {last_trade.created_at})")
-            else:
-                bot_settings.base_price_myr = current_price
-                logger.info(f"🔒 Base Price dikunci pada harga semasa (tiada rekod trade): RM {current_price:,.2f}")
-            self.db.commit()
+            bot_settings = self.db.query(BotSettings).filter(BotSettings.id == 1).first()
+            if not bot_settings or not bot_settings.bot_enabled:
+                return {"action": "HOLD", "execute": False, "reason": "Bot disabled"}
 
-        base_price = bot_settings.base_price_myr
-        margin_pct = bot_settings.rebalance_margin_pct
-        trade_size = bot_settings.trade_size_myr
+            pair       = grid_state.pair
+            margin_pct = grid_state.rebalance_margin_pct
+            trade_size = grid_state.trade_size_myr
+            base_currency = grid_state.base_currency  # XBT, ETH, XRP, SOL
 
-        req_upper = base_price * (1 + margin_pct / 100.0)
-        req_lower = base_price * (1 - margin_pct / 100.0)
-        
+            # Auto-init base_price jika belum set
+            if not grid_state.base_price_myr or grid_state.base_price_myr == 0.0:
+                last_trade = self.db.query(Trade).filter(Trade.pair == pair) \
+                                   .order_by(Trade.created_at.desc()).first()
+                if last_trade and last_trade.price_myr:
+                    grid_state.base_price_myr = last_trade.price_myr
+                    logger.info(f"🔒 [{pair}] Base dikunci dari trade terakhir: RM {last_trade.price_myr:,.2f}")
+                else:
+                    grid_state.base_price_myr = current_price
+                    logger.info(f"🔒 [{pair}] Base dikunci pada harga semasa: RM {current_price:,.2f}")
+                self.db.commit()
+
+            base_price = grid_state.base_price_myr
+
+        else:
+            # Legacy mode: BotSettings (XBTMYR sahaja)
+            bot_settings = self.db.query(BotSettings).filter(BotSettings.id == 1).first()
+            if not bot_settings or not bot_settings.bot_enabled:
+                return {"action": "HOLD", "execute": False, "reason": "Bot disabled"}
+
+            pair          = "XBTMYR"
+            base_currency = "XBT"
+            margin_pct    = bot_settings.rebalance_margin_pct
+            trade_size    = bot_settings.trade_size_myr
+
+            if not bot_settings.base_price_myr or bot_settings.base_price_myr == 0.0:
+                last_trade = self.db.query(Trade).order_by(Trade.created_at.desc()).first()
+                if last_trade and last_trade.price_myr:
+                    bot_settings.base_price_myr = last_trade.price_myr
+                    logger.info(f"🔒 [BTC] Base dikunci dari trade terakhir: RM {last_trade.price_myr:,.2f}")
+                else:
+                    bot_settings.base_price_myr = current_price
+                    logger.info(f"🔒 [BTC] Base dikunci pada harga semasa: RM {current_price:,.2f}")
+                self.db.commit()
+
+            base_price = bot_settings.base_price_myr
+
+        # ── Grid Logic (sama untuk semua pair) ────────────────────
+        req_upper        = base_price * (1 + margin_pct / 100.0)
+        req_lower        = base_price * (1 - margin_pct / 100.0)
         price_change_pct = ((current_price - base_price) / base_price) * 100
 
         result = {
-            "action": "HOLD",
-            "execute": False,
+            "action":   "HOLD",
+            "execute":  False,
             "amount_myr": 0.0,
             "amount_btc": 0.0,
-            "reason": f"Harga RM {current_price:,.2f} masih dalam grid (Base: RM {base_price:,.2f})",
+            "pair":     pair,
+            "reason":   f"[{pair}] Harga RM {current_price:,.2f} dalam grid (Base: RM {base_price:,.2f})",
         }
 
-        # Scenario 1: Naik (Take profit) — Tiered Sell
+        # Scenario 1: Naik → Jual
         if current_price >= req_upper:
-            # Jika naik 2x margin (contoh 5% bila margin 2.5%) → jual 2x ganda
-            req_double = base_price * (1 + (margin_pct * 2) / 100.0)
-            is_double_trigger = current_price >= req_double
-            effective_size = trade_size * 2 if is_double_trigger else trade_size
+            req_double      = base_price * (1 + (margin_pct * 2) / 100.0)
+            is_double       = current_price >= req_double
+            effective_size  = trade_size * 2 if is_double else trade_size
+            crypto_to_sell  = effective_size / current_price
+            live_crypto     = real_balances.get(base_currency, 0.0)
 
-            btc_to_sell = effective_size / current_price
-            can_sell, blocked = self.can_sell(btc_to_sell, live_btc=real_balances.get("XBT", 0.0))
-
+            can_sell, blocked = self.can_sell(crypto_to_sell, live_btc=live_crypto)
             if can_sell:
-                btc_min = 0.0001  # Luno minimum sell volume
-                if btc_to_sell < btc_min:
-                    result["reason"] = f"Grid Sell Tersekat: BTC terlalu kecil ({btc_to_sell:.8f} < {btc_min})"
-                    logger.warning(f"⛔ GRID SELL BLOCKED: BTC volume too small ({btc_to_sell:.8f})")
-                else:
-                    # PENTING: Commit base_price SELEPAS order berjaya
-                    label = f"2× GANDA (naik {price_change_pct:.2f}%)" if is_double_trigger else f"naik {price_change_pct:.2f}%"
-                    result.update({
-                        "action": "SELL",
-                        "execute": True,
-                        "amount_btc": btc_to_sell,
-                        "amount_myr": effective_size,
-                        "new_base_price": current_price,
-                        "reason": f"Grid Sell {label} (> RM {req_upper:,.2f}). Jual RM {effective_size:.2f}"
-                    })
-                    logger.success(f"✅ GRID SELL {'2×' if is_double_trigger else '1×'} RM {effective_size:.2f} di harga RM {current_price:,.2f}")
+                label = f"2× (naik {price_change_pct:.2f}%)" if is_double else f"naik {price_change_pct:.2f}%"
+                result.update({
+                    "action":       "SELL",
+                    "execute":      True,
+                    "amount_btc":   crypto_to_sell,
+                    "amount_myr":   effective_size,
+                    "new_base_price": current_price,
+                    "reason":       f"[{pair}] Grid Sell {label} (> RM {req_upper:,.2f})",
+                })
+                logger.success(f"✅ [{pair}] GRID SELL {'2×' if is_double else '1×'} RM {effective_size:.2f} @ RM {current_price:,.2f}")
             else:
-                result["reason"] = f"Grid Sell Tersekat: {blocked}"
-                logger.warning(f"⛔ GRID SELL BLOCKED: {blocked}")
+                result["reason"] = f"[{pair}] Grid Sell Tersekat: {blocked}"
+                logger.warning(f"⛔ [{pair}] GRID SELL BLOCKED: {blocked}")
 
-        # Scenario 2: Turun (Buy the dip)
+        # Scenario 2: Turun → Beli
         elif current_price <= req_lower:
             can_buy, blocked = self.can_buy(trade_size, live_myr=real_balances.get("MYR", 0.0))
-                
             if can_buy:
                 result.update({
-                    "action": "BUY",
-                    "execute": True,
-                    "amount_myr": trade_size,
+                    "action":       "BUY",
+                    "execute":      True,
+                    "amount_myr":   trade_size,
                     "new_base_price": current_price,
-                    "reason": f"Grid Buy: Harga jatuh {price_change_pct:.2f}% (< RM {req_lower:,.2f}). Beli RM {trade_size:.2f}"
+                    "reason":       f"[{pair}] Grid Buy: jatuh {price_change_pct:.2f}% (< RM {req_lower:,.2f})",
                 })
-                logger.success(f"✅ GRID DECISION: BUY RM {trade_size:.2f} di harga RM {current_price:,.2f}")
+                logger.success(f"✅ [{pair}] GRID BUY RM {trade_size:.2f} @ RM {current_price:,.2f}")
             else:
-                result["reason"] = f"Grid Buy Tersekat: {blocked}"
-                logger.warning(f"⛔ GRID BUY BLOCKED: {blocked}")
+                result["reason"] = f"[{pair}] Grid Buy Tersekat: {blocked}"
+                logger.warning(f"⛔ [{pair}] GRID BUY BLOCKED: {blocked}")
 
         return result
+
 
     def log_daily_action(self, decision: dict, signal: Signal):
         """Log daily action ke database"""

@@ -12,7 +12,7 @@ import sys, os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import settings
-from database.models import get_db, Trade, Portfolio, BotSettings, SessionLocal
+from database.models import get_db, Trade, Portfolio, BotSettings, GridState, SessionLocal
 from exchange.luno_client import luno_client
 from strategy.signal_engine import signal_engine
 from strategy.decision_maker import DecisionMaker
@@ -168,104 +168,129 @@ def run_daily_job():
         db.close()
 
 
+import time as _time
+
+
+def _execute_grid_trade(db, decision: dict, grid_state=None):
+    """
+    Helper: execute BUY or SELL based on decision dict, save to DB with fee tracking.
+    Works for any pair via grid_state.
+    """
+    pair = decision.get("pair", "XBTMYR")
+
+    if decision["action"] == "BUY":
+        trade_result = luno_client.place_buy_order(decision["amount_myr"], pair=pair)
+        fee_myr = 0.0
+        if trade_result.get("order_id"):
+            _time.sleep(1)
+            try:
+                order_info = luno_client.get_order_status(trade_result["order_id"])
+                fee_myr = order_info.get("fee_myr", 0.0)
+                logger.info(f"[{pair}] Fee BUY: RM {fee_myr:.4f}")
+            except Exception:
+                pass
+        trade = Trade(
+            pair=pair,
+            trade_type="BUY",
+            amount_myr=trade_result["amount_myr"],
+            amount_btc=trade_result["amount_btc"],
+            price_myr=trade_result["price"],
+            fee_myr=fee_myr,
+            signal=decision["reason"],
+            order_id=trade_result.get("order_id"),
+            status="COMPLETED"
+        )
+        db.add(trade)
+        # Update base_price
+        if decision.get("new_base_price"):
+            if grid_state:
+                grid_state.base_price_myr = decision["new_base_price"]
+            else:
+                bot_s = db.query(BotSettings).filter(BotSettings.id == 1).first()
+                if bot_s:
+                    bot_s.base_price_myr = decision["new_base_price"]
+        db.commit()
+        telegram.notify_buy(
+            amount_myr=trade_result["amount_myr"],
+            amount_btc=trade_result["amount_btc"],
+            price=trade_result["price"],
+            reason=decision["reason"]
+        )
+
+    elif decision["action"] == "SELL":
+        trade_result = luno_client.place_sell_order(decision["amount_btc"], pair=pair)
+        fee_myr = 0.0
+        if trade_result.get("order_id"):
+            _time.sleep(1)
+            try:
+                order_info = luno_client.get_order_status(trade_result["order_id"])
+                fee_myr = order_info.get("fee_myr", 0.0)
+                logger.info(f"[{pair}] Fee SELL: RM {fee_myr:.4f}")
+            except Exception:
+                pass
+        pnl_after_fee = decision["amount_myr"] - fee_myr
+        trade = Trade(
+            pair=pair,
+            trade_type="SELL",
+            amount_myr=trade_result["amount_myr"],
+            amount_btc=trade_result["amount_btc"],
+            price_myr=trade_result["price"],
+            fee_myr=fee_myr,
+            signal=decision["reason"],
+            pnl_myr=pnl_after_fee,
+            order_id=trade_result.get("order_id"),
+            status="COMPLETED"
+        )
+        db.add(trade)
+        if decision.get("new_base_price"):
+            if grid_state:
+                grid_state.base_price_myr = decision["new_base_price"]
+            else:
+                bot_s = db.query(BotSettings).filter(BotSettings.id == 1).first()
+                if bot_s:
+                    bot_s.base_price_myr = decision["new_base_price"]
+        db.commit()
+        telegram.notify_sell(
+            amount_btc=trade_result["amount_btc"],
+            amount_myr=trade_result["amount_myr"],
+            price=trade_result["price"],
+            reason=decision["reason"],
+            pnl=pnl_after_fee
+        )
+
+
 def run_rebalance_job():
     """
-    Fast Rebalance Job — runs every 3 minutes
-    1. Fetch real balances & current price
-    2. Check decide_rebalance
-    3. Execute if necessary
+    Fast Rebalance Job — runs every 3 minutes.
+    Loops through ALL enabled GridState pairs independently.
     """
     db = SessionLocal()
     try:
-        current_price = luno_client.get_btc_price()["last_trade"]
         balances = luno_client.get_balances()
-        
-        decision_maker = DecisionMaker(db)
-        decision = decision_maker.decide_rebalance(balances, current_price)
-        
-        if decision["execute"]:
-            logger.info("=" * 60)
-            logger.info(f"⚡ REBALANCE TRIGGERED — {datetime.now(KL_TZ).strftime('%H:%M:%S')}")
-            
-            trade_result = None
-            if decision["action"] == "BUY":
-                trade_result = luno_client.place_buy_order(decision["amount_myr"])
-                # Ambil fee sebenar dari Luno
-                fee_myr = 0.0
-                if trade_result.get("order_id"):
-                    import time; time.sleep(1)  # bagi masa order settle
-                    try:
-                        order_info = luno_client.get_order_status(trade_result["order_id"])
-                        fee_myr = order_info.get("fee_myr", 0.0)
-                        logger.info(f"Fee BUY: RM {fee_myr:.4f}")
-                    except Exception:
-                        pass
-                trade = Trade(
-                    trade_type="BUY",
-                    amount_myr=trade_result["amount_myr"],
-                    amount_btc=trade_result["amount_btc"],
-                    price_myr=trade_result["price"],
-                    fee_myr=fee_myr,
-                    signal=decision["reason"],
-                    order_id=trade_result.get("order_id"),
-                    status="COMPLETED"
-                )
-                db.add(trade)
-                # Update base price SELEPAS order berjaya
-                if decision.get("new_base_price"):
-                    bot_s = db.query(BotSettings).filter(BotSettings.id == 1).first()
-                    if bot_s:
-                        bot_s.base_price_myr = decision["new_base_price"]
-                db.commit()
-                telegram.notify_buy(
-                    amount_myr=trade_result["amount_myr"],
-                    amount_btc=trade_result["amount_btc"],
-                    price=trade_result["price"],
-                    reason=decision["reason"]
-                )
+        dm = DecisionMaker(db)
 
-            elif decision["action"] == "SELL":
-                trade_result = luno_client.place_sell_order(decision["amount_btc"])
-                # Ambil fee sebenar dari Luno
-                fee_myr = 0.0
-                if trade_result.get("order_id"):
-                    import time; time.sleep(1)
-                    try:
-                        order_info = luno_client.get_order_status(trade_result["order_id"])
-                        fee_myr = order_info.get("fee_myr", 0.0)
-                        logger.info(f"Fee SELL: RM {fee_myr:.4f}")
-                    except Exception:
-                        pass
-                # P&L = jualan - fee (fee potong dari keuntungan)
-                pnl_after_fee = decision["amount_myr"] - fee_myr
-                trade = Trade(
-                    trade_type="SELL",
-                    amount_myr=trade_result["amount_myr"],
-                    amount_btc=trade_result["amount_btc"],
-                    price_myr=trade_result["price"],
-                    fee_myr=fee_myr,
-                    signal=decision["reason"],
-                    pnl_myr=pnl_after_fee,
-                    order_id=trade_result.get("order_id"),
-                    status="COMPLETED"
-                )
-                db.add(trade)
-                # Update base price SELEPAS order berjaya
-                if decision.get("new_base_price"):
-                    bot_s = db.query(BotSettings).filter(BotSettings.id == 1).first()
-                    if bot_s:
-                        bot_s.base_price_myr = decision["new_base_price"]
-                db.commit()
-                telegram.notify_sell(
-                    amount_btc=trade_result["amount_btc"],
-                    amount_myr=trade_result["amount_myr"],
-                    price=trade_result["price"],
-                    reason=decision["reason"],
-                    pnl=pnl_after_fee
-                )
-        else:
-            # Tidak laksanakan transaksi, log reason ke terminal supaya pengguna nampak
-            logger.info(f"💤 GRID CHECK: {decision.get('reason', 'HOLD')}")
+        # Ambil semua grid pairs yang aktif
+        active_pairs = db.query(GridState).filter(GridState.enabled == True).all()
+
+        if not active_pairs:
+            logger.info("💤 No active pairs configured")
+            return
+
+        for gs in active_pairs:
+            try:
+                price_data  = luno_client.get_price(gs.pair)
+                curr_price  = price_data["last_trade"]
+                decision    = dm.decide_rebalance(balances, curr_price, grid_state=gs)
+
+                if decision["execute"]:
+                    logger.info("=" * 50)
+                    logger.info(f"⚡ [{gs.pair}] GRID TRIGGERED — {datetime.now(KL_TZ).strftime('%H:%M:%S')}")
+                    _execute_grid_trade(db, decision, grid_state=gs)
+                else:
+                    logger.info(f"💤 [{gs.pair}] {decision.get('reason', 'HOLD')}")
+
+            except Exception as pair_err:
+                logger.error(f"❌ [{gs.pair}] Error: {pair_err}")
 
     except Exception as e:
         logger.error(f"❌ REBALANCE JOB ERROR: {e}")

@@ -57,6 +57,23 @@ interface Stats {
   win_rate: number;
 }
 
+interface GridState {
+  pair: string;
+  display_name: string;
+  base_currency: string;
+  enabled: boolean;
+  base_price_myr: number;
+  rebalance_margin_pct: number;
+  trade_size_myr: number;
+  current_price: number | null;
+  next_buy_price: number | null;
+  next_sell_price: number | null;
+  last_trade_price: number | null;
+  last_trade_type: string | null;
+  pnl_myr: number;
+  total_trades: number;
+}
+
 async function fetchJSON(url: string) {
   try {
     const res = await fetch(url, { cache: "no-store" });
@@ -79,9 +96,11 @@ export default function Dashboard() {
   const [toggling, setToggling] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [countdown, setCountdown] = useState(30);
+  const [gridStates, setGridStates] = useState<GridState[]>([]);
+
 
   const fetchAll = useCallback(async () => {
-    const [portfolioData, statusData, signalData, tradesData, statsData, settingsData] =
+    const [portfolioData, statusData, signalData, tradesData, statsData, settingsData, gridData] =
       await Promise.all([
         fetchJSON(`${API}/portfolio`),
         fetchJSON(`${API}/status`),
@@ -89,6 +108,7 @@ export default function Dashboard() {
         fetchJSON(`${API}/trades?limit=5`),
         fetchJSON(`${API}/trades/stats`),
         fetchJSON(`${API}/settings`),
+        fetchJSON(`${API}/grid-states`),
       ]);
     if (portfolioData) setPortfolio(portfolioData);
     if (statusData) setStatus(statusData);
@@ -96,6 +116,7 @@ export default function Dashboard() {
     if (tradesData) setTrades(tradesData);
     if (statsData) setStats(statsData);
     if (settingsData) setSettings(settingsData);
+    if (gridData) setGridStates(gridData);
     setLastUpdate(new Date());
     setLoading(false);
   }, []);
@@ -218,82 +239,105 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* BTC Price Card — 3 maklumat penting sahaja */}
-          <div className="glass-card p-5 slide-up glow-green" style={{ animationDelay: "100ms" }}>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-medium" style={{ color: "#94a3b8" }}>Harga BTC/MYR</span>
-              <Bitcoin size={16} style={{ color: "#f7931a" }} />
-            </div>
-
-            {/* Harga Sekarang */}
-            <div className="mb-4">
-              <p className="text-3xl font-bold number-glow" style={{ color: "#f1f5f9" }}>
-                RM {signal?.current_price ? signal.current_price.toLocaleString("ms-MY", { maximumFractionDigits: 0 }) : "---"}
-              </p>
-              <div className="flex items-center gap-2 mt-1">
-                {(signal?.price_change_pct ?? 0) >= 0
-                  ? <ArrowUpRight size={14} style={{ color: "#00d4aa" }} />
-                  : <ArrowDownRight size={14} style={{ color: "#ff4757" }} />}
-                <span className="text-xs" style={{ color: (signal?.price_change_pct ?? 0) >= 0 ? "#00d4aa" : "#ff4757" }}>
-                  {signal?.price_change_pct !== undefined ? `${signal.price_change_pct >= 0 ? "+" : ""}${signal.price_change_pct.toFixed(2)}%` : "---"} dari semalam
-                </span>
+          {/* Multi-Pair Price Cards */}
+          <div className="flex flex-col gap-3">
+            {gridStates.length === 0 ? (
+              // Fallback: BTC only card (same as before)
+              <div className="glass-card p-5 slide-up glow-green" style={{ animationDelay: "100ms" }}>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-medium" style={{ color: "#94a3b8" }}>Harga BTC/MYR</span>
+                  <Bitcoin size={16} style={{ color: "#f7931a" }} />
+                </div>
+                <p className="text-3xl font-bold number-glow" style={{ color: "#f1f5f9" }}>
+                  RM {signal?.current_price ? signal.current_price.toLocaleString("ms-MY", { maximumFractionDigits: 0 }) : "---"}
+                </p>
               </div>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              {/* Last Beli/Jual */}
-              {portfolio?.last_buy_price && (() => {
-                const pct = signal?.current_price
-                  ? (((signal.current_price - portfolio.last_buy_price) / portfolio.last_buy_price) * 100)
-                  : null;
+            ) : (
+              gridStates.map((gs) => {
+                const pairEmoji: Record<string, string> = { XBTMYR: "₿", ETHMYR: "Ξ", XRPMYR: "✕", SOLMYR: "◎" };
+                const pairColor: Record<string, string> = { XBTMYR: "#f7931a", ETHMYR: "#627eea", XRPMYR: "#00aae4", SOLMYR: "#9945ff" };
+                const color = pairColor[gs.pair] ?? "#00d4aa";
+                const emoji = pairEmoji[gs.pair] ?? "●";
+                const curr = gs.current_price;
+                const last = gs.last_trade_price;
+                const pct = curr && last ? ((curr - last) / last) * 100 : null;
                 const isUp = pct !== null && pct >= 0;
-                const isSell = portfolio.last_trade_type === "SELL";
-                const tradeColor = isSell ? "#ff4757" : "#00d4aa";
-                const tradeLabel = isSell ? "🔴 Last Jual" : "🟢 Last Beli";
+                const isSell = gs.last_trade_type === "SELL";
+
                 return (
-                  <div className="p-3 rounded-lg" style={{ background: isSell ? "rgba(255,71,87,0.07)" : "rgba(0,212,170,0.08)", border: `1px solid ${isSell ? "rgba(255,71,87,0.2)" : "rgba(0,212,170,0.2)"}` }}>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-[10px] font-medium" style={{ color: tradeColor }}>{tradeLabel}</p>
-                      <p className="text-[10px]" style={{ color: "#475569" }}>
-                        {portfolio.last_buy_date ? new Date(portfolio.last_buy_date).toLocaleString("ms-MY", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}
-                      </p>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <p className="text-base font-bold" style={{ color: "#f1f5f9" }}>
-                        RM {portfolio.last_buy_price.toLocaleString("ms-MY", { maximumFractionDigits: 0 })}
-                      </p>
-                      {pct !== null && (
-                        <span className="text-sm font-bold px-2 py-0.5 rounded-full" style={{
-                          background: isUp ? "rgba(0,212,170,0.15)" : "rgba(255,71,87,0.15)",
-                          color: isUp ? "#00d4aa" : "#ff4757",
-                          border: `1px solid ${isUp ? "rgba(0,212,170,0.3)" : "rgba(255,71,87,0.3)"}`
+                  <div key={gs.pair} className="glass-card p-4 slide-up"
+                    style={{ animationDelay: "100ms", opacity: gs.enabled ? 1 : 0.5, border: gs.enabled ? `1px solid ${color}30` : undefined }}>
+
+                    {/* Header */}
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg font-bold" style={{ color }}>{emoji}</span>
+                        <div>
+                          <p className="text-sm font-semibold" style={{ color: "#f1f5f9" }}>{gs.display_name}</p>
+                          <p className="text-[10px]" style={{ color: "#475569" }}>{gs.pair.replace("MYR", "/MYR")}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {pct !== null && (
+                          <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{
+                            background: isUp ? "rgba(0,212,170,0.15)" : "rgba(255,71,87,0.15)",
+                            color: isUp ? "#00d4aa" : "#ff4757",
+                          }}>
+                            {isUp ? "▲" : "▼"} {Math.abs(pct).toFixed(2)}%
+                          </span>
+                        )}
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{
+                          background: gs.enabled ? "rgba(0,212,170,0.1)" : "rgba(100,116,139,0.1)",
+                          color: gs.enabled ? "#00d4aa" : "#64748b",
                         }}>
-                          {isUp ? "▲" : "▼"} {Math.abs(pct).toFixed(2)}%
+                          {gs.enabled ? "ON" : "OFF"}
                         </span>
-                      )}
+                      </div>
                     </div>
+
+                    {/* Current Price + Last Trade + Next Targets */}
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="p-2 rounded-lg" style={{ background: "rgba(255,255,255,0.03)" }}>
+                        <p className="text-[9px] mb-1" style={{ color: "#64748b" }}>Harga Semasa</p>
+                        <p className="text-sm font-bold" style={{ color: "#f1f5f9" }}>
+                          {curr ? `RM ${curr.toLocaleString("ms-MY", { maximumFractionDigits: curr > 100 ? 0 : 4 })}` : "—"}
+                        </p>
+                      </div>
+                      <div className="p-2 rounded-lg" style={{ background: isSell ? "rgba(255,71,87,0.06)" : "rgba(0,212,170,0.06)" }}>
+                        <p className="text-[9px] mb-1" style={{ color: "#64748b" }}>{isSell ? "🔴 Last Jual" : "🟢 Last Beli"}</p>
+                        <p className="text-sm font-bold" style={{ color: isSell ? "#ff4757" : "#00d4aa" }}>
+                          {last ? `RM ${last.toLocaleString("ms-MY", { maximumFractionDigits: last > 100 ? 0 : 4 })}` : "—"}
+                        </p>
+                      </div>
+                      <div className="p-2 rounded-lg" style={{ background: "rgba(255,255,255,0.03)" }}>
+                        <p className="text-[9px] mb-1" style={{ color: "#64748b" }}>P&L</p>
+                        <p className="text-sm font-bold" style={{ color: gs.pnl_myr >= 0 ? "#00d4aa" : "#ff4757" }}>
+                          {gs.pnl_myr >= 0 ? "+" : ""}RM {gs.pnl_myr.toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Next Buy / Sell targets */}
+                    {gs.enabled && gs.next_buy_price && gs.next_sell_price && (
+                      <div className="flex gap-2 mt-2">
+                        <div className="flex-1 p-1.5 rounded text-center" style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.15)" }}>
+                          <p className="text-[9px]" style={{ color: "#3b82f6" }}>⬇ Next Beli</p>
+                          <p className="text-xs font-bold" style={{ color: "#f1f5f9" }}>
+                            RM {gs.next_buy_price.toLocaleString("ms-MY", { maximumFractionDigits: gs.next_buy_price > 100 ? 0 : 4 })}
+                          </p>
+                        </div>
+                        <div className="flex-1 p-1.5 rounded text-center" style={{ background: "rgba(0,212,170,0.08)", border: "1px solid rgba(0,212,170,0.15)" }}>
+                          <p className="text-[9px]" style={{ color: "#00d4aa" }}>⬆ Next Jual</p>
+                          <p className="text-xs font-bold" style={{ color: "#f1f5f9" }}>
+                            RM {gs.next_sell_price.toLocaleString("ms-MY", { maximumFractionDigits: gs.next_sell_price > 100 ? 0 : 4 })}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
-              })()}
-
-              {/* Next Beli / Next Jual */}
-              {settings && settings.base_price_myr > 0 && (
-                <div className="flex gap-2">
-                  <div className="flex-1 p-3 rounded-lg text-center" style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.2)" }}>
-                    <p className="text-[10px] font-medium mb-1" style={{ color: "#3b82f6" }}>⬇ Next Beli</p>
-                    <p className="text-sm font-bold" style={{ color: "#f1f5f9" }}>
-                      RM {(settings.base_price_myr * (1 - settings.rebalance_margin_pct / 100)).toLocaleString("ms-MY", { maximumFractionDigits: 0 })}
-                    </p>
-                  </div>
-                  <div className="flex-1 p-3 rounded-lg text-center" style={{ background: "rgba(0,212,170,0.08)", border: "1px solid rgba(0,212,170,0.2)" }}>
-                    <p className="text-[10px] font-medium mb-1" style={{ color: "#00d4aa" }}>⬆ Next Jual</p>
-                    <p className="text-sm font-bold" style={{ color: "#f1f5f9" }}>
-                      RM {(settings.base_price_myr * (1 + settings.rebalance_margin_pct / 100)).toLocaleString("ms-MY", { maximumFractionDigits: 0 })}
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
+              })
+            )}
           </div>
 
         </div>

@@ -12,7 +12,7 @@ from loguru import logger
 import sys, os
 
 from config import settings
-from database.models import create_tables, get_db, Trade, Portfolio, BotSettings, DailyLog
+from database.models import create_tables, get_db, Trade, Portfolio, BotSettings, GridState, DailyLog
 from exchange.luno_client import luno_client
 from strategy.signal_engine import signal_engine
 from scheduler.daily_job import bot_scheduler
@@ -49,6 +49,14 @@ class SettingsUpdate(BaseModel):
     rebalance_margin_pct: Optional[float] = None
     base_price_myr: Optional[float] = None
     trade_size_myr: Optional[float] = None
+
+
+class GridStateUpdate(BaseModel):
+    enabled: Optional[bool] = None
+    base_price_myr: Optional[float] = None
+    rebalance_margin_pct: Optional[float] = None
+    trade_size_myr: Optional[float] = None
+
 
 
 # ─── Startup / Shutdown ──────────────────────────────────────────────
@@ -222,19 +230,24 @@ def get_portfolio_history(days: int = 30, db: Session = Depends(get_db)):
 
 
 @app.get("/api/trades")
-def get_trades(limit: int = 50, trade_type: Optional[str] = None, db: Session = Depends(get_db)):
-    """Get trade history"""
+def get_trades(limit: int = 50, trade_type: Optional[str] = None,
+               pair: Optional[str] = None, db: Session = Depends(get_db)):
+    """Get trade history — optional filter by pair or type"""
     query = db.query(Trade).order_by(Trade.created_at.desc())
     if trade_type:
         query = query.filter(Trade.trade_type == trade_type.upper())
+    if pair:
+        query = query.filter(Trade.pair == pair.upper())
     trades = query.limit(limit).all()
     return [{
         "id": t.id,
+        "pair": getattr(t, "pair", "XBTMYR"),
         "type": t.trade_type,
         "amount_myr": t.amount_myr,
         "amount_btc": t.amount_btc,
         "price_myr": t.price_myr,
         "pnl_myr": t.pnl_myr,
+        "fee_myr": getattr(t, "fee_myr", 0.0) or 0.0,
         "signal": t.signal,
         "status": t.status,
         "order_id": t.order_id,
@@ -371,6 +384,88 @@ def manual_trigger(background_tasks: BackgroundTasks):
     logger.info("🔥 Manual trigger from API")
     background_tasks.add_task(bot_scheduler.trigger_now)
     return {"success": True, "message": "Trading job triggered — running in background"}
+
+
+# ─── Grid State Endpoints ────────────────────────────────────────────
+
+@app.get("/api/grid-states")
+def get_grid_states(db: Session = Depends(get_db)):
+    """Get all trading pairs grid configuration + live prices"""
+    grid_states = db.query(GridState).all()
+    result = []
+    for gs in grid_states:
+        # Get live price for each pair
+        try:
+            price_data = luno_client.get_price(gs.pair)
+            current_price = price_data["last_trade"]
+        except Exception:
+            current_price = None
+
+        # Get last trade for this pair
+        last_trade = db.query(Trade).filter(
+            Trade.pair == gs.pair, Trade.status == "COMPLETED"
+        ).order_by(Trade.created_at.desc()).first()
+
+        # Calculate next targets
+        base = gs.base_price_myr or 0
+        margin = gs.rebalance_margin_pct
+        next_buy  = base * (1 - margin / 100) if base > 0 else None
+        next_sell = base * (1 + margin / 100) if base > 0 else None
+
+        # Pair-specific P&L
+        buys  = db.query(Trade).filter(Trade.pair == gs.pair, Trade.trade_type == "BUY",  Trade.status == "COMPLETED").all()
+        sells = db.query(Trade).filter(Trade.pair == gs.pair, Trade.trade_type == "SELL", Trade.status == "COMPLETED").all()
+        total_cost   = sum(t.amount_myr for t in buys)
+        total_sell   = sum(t.amount_myr for t in sells)
+        total_fees   = sum(getattr(t, "fee_myr", 0.0) or 0.0 for t in buys + sells)
+        btc_bought   = sum(t.amount_btc for t in buys)
+        btc_sold     = sum(t.amount_btc for t in sells)
+        bot_remaining = max(0.0, btc_bought - btc_sold)
+        bot_value    = bot_remaining * current_price if current_price else 0
+        pnl          = total_sell + bot_value - total_cost - total_fees
+
+        result.append({
+            "pair":             gs.pair,
+            "display_name":     gs.display_name,
+            "base_currency":    gs.base_currency,
+            "enabled":          gs.enabled,
+            "base_price_myr":   gs.base_price_myr,
+            "rebalance_margin_pct": gs.rebalance_margin_pct,
+            "trade_size_myr":   gs.trade_size_myr,
+            "current_price":    current_price,
+            "next_buy_price":   round(next_buy, 2) if next_buy else None,
+            "next_sell_price":  round(next_sell, 2) if next_sell else None,
+            "last_trade_price": last_trade.price_myr if last_trade else None,
+            "last_trade_type":  last_trade.trade_type if last_trade else None,
+            "last_trade_date":  last_trade.created_at.isoformat() if last_trade else None,
+            "total_trades":     len(buys) + len(sells),
+            "pnl_myr":          round(pnl, 2),
+        })
+    return result
+
+
+@app.put("/api/grid-states/{pair}")
+def update_grid_state(pair: str, update: GridStateUpdate, db: Session = Depends(get_db)):
+    """Update grid config for a specific pair (enable/disable, margin, trade size)"""
+    gs = db.query(GridState).filter(GridState.pair == pair.upper()).first()
+    if not gs:
+        raise HTTPException(status_code=404, detail=f"Pair {pair} not found")
+    for field, value in update.model_dump(exclude_none=True).items():
+        setattr(gs, field, value)
+    gs.updated_at = datetime.now()
+    db.commit()
+    logger.info(f"⚙️ GridState [{pair}] updated: {update.model_dump(exclude_none=True)}")
+    return {"success": True, "pair": pair, "message": "Grid state updated"}
+
+
+@app.get("/api/prices")
+def get_all_prices():
+    """Get live prices for all 4 pairs"""
+    try:
+        prices = luno_client.get_all_prices(["XBTMYR", "ETHMYR", "XRPMYR", "SOLMYR"])
+        return {"success": True, "data": prices}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":

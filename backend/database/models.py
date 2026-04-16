@@ -1,7 +1,7 @@
 """
 database/models.py — SQLAlchemy database models
 """
-from sqlalchemy import create_engine, Column, Integer, Float, String, Boolean, DateTime
+from sqlalchemy import create_engine, Column, Integer, Float, String, Boolean, DateTime, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -19,16 +19,33 @@ class Trade(Base):
     __tablename__ = "trades"
 
     id          = Column(Integer, primary_key=True, index=True)
+    pair        = Column(String, default="XBTMYR", nullable=False)  # e.g. XBTMYR, ETHMYR, XRPMYR
     trade_type  = Column(String, nullable=False)      # BUY / SELL
     amount_myr  = Column(Float, nullable=False)        # RM yang digunakan
-    amount_btc  = Column(Float, nullable=False)        # BTC yang dibeli/dijual
-    price_myr   = Column(Float, nullable=False)        # Harga BTC masa tu
+    amount_btc  = Column(Float, nullable=False)        # Crypto yang dibeli/dijual (kolum lama kekal)
+    price_myr   = Column(Float, nullable=False)        # Harga crypto masa tu
     fee_myr     = Column(Float, default=0.0)           # Fee Luno (MYR) — deducted from P&L
-    signal      = Column(String, nullable=True)        # RSI_OVERSOLD / PRICE_DROP / PRICE_RISE
+    signal      = Column(String, nullable=True)        # RSI_OVERSOLD / GRID_BUY / GRID_SELL
     pnl_myr     = Column(Float, default=0.0)           # Profit/Loss selepas fee (untuk SELL)
     status      = Column(String, default="COMPLETED")  # COMPLETED / FAILED / PENDING
     order_id    = Column(String, nullable=True)        # Luno order ID
     created_at  = Column(DateTime, default=datetime.utcnow)
+
+
+class GridState(Base):
+    """Satu baris per pasangan crypto — simpan state grid untuk setiap pair"""
+    __tablename__ = "grid_states"
+    __table_args__ = (UniqueConstraint("pair", name="uq_grid_pair"),)
+
+    id                = Column(Integer, primary_key=True, index=True)
+    pair              = Column(String, nullable=False, unique=True)  # e.g. XBTMYR
+    display_name      = Column(String, nullable=False)               # e.g. Bitcoin (BTC)
+    base_currency     = Column(String, nullable=False)               # e.g. XBT, ETH, XRP
+    enabled           = Column(Boolean, default=True)
+    base_price_myr    = Column(Float, default=0.0)       # Harga rujukan grid (0 = auto-detect)
+    rebalance_margin_pct = Column(Float, default=2.5)    # % naik/turun untuk trigger
+    trade_size_myr    = Column(Float, default=35.0)      # RM per trade
+    updated_at        = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class Portfolio(Base):
@@ -56,15 +73,13 @@ class BotSettings(Base):
     schedule_time     = Column(String, default="08:00")
     max_capital_myr   = Column(Float, default=100.0)
     bot_enabled       = Column(Boolean, default=True)
-    
-    # New fast rebalance parameters
-    target_baseline_myr  = Column(Float, default=100.0)  # Modal sasaran asasi (Legacy/Not actively used in Price Grid)
-    rebalance_margin_pct = Column(Float, default=2.0)    # Jual jika naik > 2%, Beli jika turun < 2%
-    
-    # Grid Trading via Price Step parameters
-    base_price_myr = Column(Float, default=0.0)          # Harga sasaran tetap pasaran (0 = uninitialized, auto lock)
-    trade_size_myr = Column(Float, default=30.0)         # Modal dilontarkan tepat RM 30 setiap kali ayunan tercapai
-    
+
+    # Legacy Grid Trading (XBTMYR only — migrated to GridState)
+    target_baseline_myr  = Column(Float, default=100.0)
+    rebalance_margin_pct = Column(Float, default=2.5)
+    base_price_myr       = Column(Float, default=0.0)
+    trade_size_myr       = Column(Float, default=35.0)
+
     updated_at        = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
@@ -74,9 +89,9 @@ class DailyLog(Base):
     id           = Column(Integer, primary_key=True, index=True)
     date         = Column(String, nullable=False)    # YYYY-MM-DD
     action       = Column(String, nullable=False)    # BUY / SELL / HOLD
-    reason       = Column(String, nullable=True)     # sebab action tu
+    reason       = Column(String, nullable=True)
     btc_price    = Column(Float)
-    price_change = Column(Float)                     # % change from yesterday
+    price_change = Column(Float)
     rsi_value    = Column(Float)
     total_value  = Column(Float)
     pnl_myr      = Column(Float)
