@@ -137,34 +137,56 @@ def get_portfolio(db: Session = Depends(get_db)):
     """Get live portfolio — gabung Luno balance + DB history"""
     try:
         # Ambil live data dari Luno
-        balances = luno_client.get_balances()
-        price_data = luno_client.get_btc_price()
+        balances     = luno_client.get_balances()
+        price_data   = luno_client.get_btc_price()
         current_price = price_data["last_trade"]
-        btc_balance = balances["XBT"]
-        myr_balance = balances["MYR"]
+        btc_balance  = balances["XBT"]
+        myr_balance  = balances["MYR"]
         btc_value_myr = btc_balance * current_price
-        total_value = myr_balance + btc_value_myr
+        total_value  = myr_balance + btc_value_myr
 
-        # Kira P&L berdasarkan kos belian sebenar dari rekod trade (Cost Basis)
-        all_buys  = db.query(Trade).filter(Trade.trade_type == "BUY",  Trade.status == "COMPLETED").all()
-        all_sells = db.query(Trade).filter(Trade.trade_type == "SELL", Trade.status == "COMPLETED").all()
+        # ── Kira P&L secara per-pair (guna harga betul setiap pair) ──
+        ACTIVE_PAIRS = ["XBTMYR", "ETHMYR", "XRPMYR", "SOLMYR"]
+        PAIR_PRICE_MAP = {"XBTMYR": current_price}
 
-        total_cost_myr      = sum(t.amount_myr for t in all_buys)    # Jumlah RM dibelanjakan beli
-        total_sell_myr      = sum(t.amount_myr for t in all_sells)   # Jumlah RM diterima dari jual
-        total_fees_myr      = sum(getattr(t, "fee_myr", 0.0) or 0.0 for t in all_buys + all_sells)
+        # Ambil live price untuk pair lain
+        for p in ["ETHMYR", "XRPMYR", "SOLMYR"]:
+            try:
+                PAIR_PRICE_MAP[p] = luno_client.get_price(p)["last_trade"]
+            except Exception:
+                PAIR_PRICE_MAP[p] = 0.0
 
-        # Kira berapa BTC masih dipegang BOT (bukan semua BTC dalam wallet!)
-        total_btc_bought    = sum(t.amount_btc for t in all_buys)
-        total_btc_sold      = sum(t.amount_btc for t in all_sells)
-        bot_btc_remaining   = max(0.0, total_btc_bought - total_btc_sold)
-        bot_btc_value_myr   = bot_btc_remaining * current_price
+        total_cost_myr = 0.0
+        total_sell_myr = 0.0
+        total_fees_myr = 0.0
+        total_pnl      = 0.0
 
-        # P&L = Wang dari jual + Nilai BTC bot yang masih ada - Kos beli - Fees
-        total_pnl = total_sell_myr + bot_btc_value_myr - total_cost_myr - total_fees_myr
-        pnl_pct   = (total_pnl / total_cost_myr * 100) if total_cost_myr > 0 else 0.0
+        for pair in ACTIVE_PAIRS:
+            pair_price = PAIR_PRICE_MAP.get(pair, 0.0)
+            buys  = db.query(Trade).filter(Trade.pair == pair, Trade.trade_type == "BUY",  Trade.status == "COMPLETED").all()
+            sells = db.query(Trade).filter(Trade.pair == pair, Trade.trade_type == "SELL", Trade.status == "COMPLETED").all()
 
-        # Ambil trade TERBARU — sama ada BUY atau SELL
-        last_trade = db.query(Trade).filter(Trade.status == "COMPLETED").order_by(Trade.created_at.desc()).first()
+            cost  = sum(t.amount_myr for t in buys)
+            sold  = sum(t.amount_myr for t in sells)
+            fees  = sum(getattr(t, "fee_myr", 0.0) or 0.0 for t in buys + sells)
+            vol_bought = sum(t.amount_btc for t in buys)
+            vol_sold   = sum(t.amount_btc for t in sells)
+            remaining  = max(0.0, vol_bought - vol_sold)
+            curr_val   = remaining * pair_price if pair_price > 0 else 0.0
+
+            pair_pnl   = sold + curr_val - cost - fees
+
+            total_cost_myr += cost
+            total_sell_myr += sold
+            total_fees_myr += fees
+            total_pnl      += pair_pnl
+
+        pnl_pct = (total_pnl / total_cost_myr * 100) if total_cost_myr > 0 else 0.0
+
+        # Ambil trade TERBARU (BTC sahaja untuk main card)
+        last_trade = db.query(Trade).filter(
+            Trade.pair == "XBTMYR", Trade.status == "COMPLETED"
+        ).order_by(Trade.created_at.desc()).first()
 
         return {
             "btc_balance": btc_balance,
@@ -174,13 +196,12 @@ def get_portfolio(db: Session = Depends(get_db)):
             "total_value": round(total_value, 2),
             "total_pnl": round(total_pnl, 2),
             "pnl_pct": round(pnl_pct, 2),
-            # last trade info (buy atau sell, mana terbaru)
+            "total_fees_myr": round(total_fees_myr, 4),
             "last_buy_price": last_trade.price_myr if last_trade else None,
             "last_buy_date":  last_trade.created_at.isoformat() if last_trade else None,
             "last_trade_type": last_trade.trade_type if last_trade else None,
             "updated_at": datetime.now().isoformat(),
             "source": "live"
-
         }
     except Exception as e:
         logger.warning(f"⚠️ Cannot get live portfolio, fallback to DB: {e}")
