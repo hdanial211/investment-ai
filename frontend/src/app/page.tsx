@@ -94,6 +94,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [togglingPair, setTogglingPair] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [countdown, setCountdown] = useState(30);
   const [gridStates, setGridStates] = useState<GridState[]>([]);
@@ -147,6 +148,23 @@ export default function Dashboard() {
     setTriggering(true);
     await fetch(`${API}/bot/trigger`, { method: "POST" });
     setTimeout(() => { fetchAll(); setTriggering(false); }, 3000);
+  };
+
+  const togglePair = async (pair: string, currentEnabled: boolean) => {
+    if (pair === "XBTMYR") return; // BTC sentiasa ON
+    setTogglingPair(pair);
+    try {
+      await fetch(`${API}/grid-states/${pair}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: !currentEnabled }),
+      });
+      await fetchAll(); // Refresh data
+    } catch (e) {
+      console.error("Toggle pair failed:", e);
+    } finally {
+      setTogglingPair(null);
+    }
   };
 
   const pnlPositive = (portfolio?.total_pnl ?? 0) >= 0;
@@ -286,12 +304,22 @@ export default function Dashboard() {
                             {isUp ? "▲" : "▼"} {Math.abs(pct).toFixed(2)}%
                           </span>
                         )}
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{
-                          background: gs.enabled ? "rgba(0,212,170,0.1)" : "rgba(100,116,139,0.1)",
-                          color: gs.enabled ? "#00d4aa" : "#64748b",
-                        }}>
-                          {gs.enabled ? "ON" : "OFF"}
-                        </span>
+                        {/* Toggle Button — klik untuk ON/OFF */}
+                        <button
+                          onClick={() => togglePair(gs.pair, gs.enabled)}
+                          disabled={togglingPair === gs.pair || gs.pair === "XBTMYR"}
+                          title={gs.pair === "XBTMYR" ? "BTC sentiasa aktif" : gs.enabled ? "Klik untuk disable" : "Klik untuk enable"}
+                          className="text-[10px] px-2 py-0.5 rounded-full font-bold transition-all"
+                          style={{
+                            background: gs.enabled ? "rgba(0,212,170,0.15)" : "rgba(100,116,139,0.1)",
+                            color: gs.enabled ? "#00d4aa" : "#64748b",
+                            border: `1px solid ${gs.enabled ? "rgba(0,212,170,0.3)" : "rgba(100,116,139,0.2)"}`,
+                            cursor: gs.pair === "XBTMYR" ? "not-allowed" : "pointer",
+                            opacity: togglingPair === gs.pair ? 0.5 : 1,
+                          }}
+                        >
+                          {togglingPair === gs.pair ? "..." : gs.enabled ? "● ON" : "○ OFF"}
+                        </button>
                       </div>
                     </div>
 
