@@ -154,15 +154,23 @@ export default function Dashboard() {
     if (pair === "XBTMYR") return; // BTC sentiasa ON
     setTogglingPair(pair);
     try {
-      await fetch(`${API}/grid-states/${pair}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled: !currentEnabled }),
-      });
-      await fetchAll(); // Refresh data
+      if (!currentEnabled) {
+        // Turning ON → call /enable (beli RM35 terus sebagai initial buy)
+        await fetch(`${API}/grid-states/${pair}/enable`, { method: "POST" });
+        // Tunggu 3 saat untuk beli selesai dulu
+        setTimeout(() => { fetchAll(); setTogglingPair(null); }, 3000);
+      } else {
+        // Turning OFF → disable sahaja, tiada trade
+        await fetch(`${API}/grid-states/${pair}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled: false }),
+        });
+        await fetchAll();
+        setTogglingPair(null);
+      }
     } catch (e) {
       console.error("Toggle pair failed:", e);
-    } finally {
       setTogglingPair(null);
     }
   };

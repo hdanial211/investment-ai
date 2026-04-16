@@ -458,14 +458,84 @@ def update_grid_state(pair: str, update: GridStateUpdate, db: Session = Depends(
     return {"success": True, "pair": pair, "message": "Grid state updated"}
 
 
-@app.get("/api/prices")
-def get_all_prices():
-    """Get live prices for all 4 pairs"""
-    try:
-        prices = luno_client.get_all_prices(["XBTMYR", "ETHMYR", "XRPMYR", "SOLMYR"])
-        return {"success": True, "data": prices}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+@app.post("/api/grid-states/{pair}/enable")
+def enable_pair_with_buy(pair: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """
+    Enable pair dan terus beli RM35 sebagai posisi awal (initial buy).
+    Base price akan dikunci pada harga beli ini.
+    """
+    gs = db.query(GridState).filter(GridState.pair == pair.upper()).first()
+    if not gs:
+        raise HTTPException(status_code=404, detail=f"Pair {pair} not found")
+    if gs.enabled:
+        return {"success": False, "message": f"{pair} sudah enabled"}
+
+    def _enable_and_buy():
+        import time as _t
+        _db = next(get_db())
+        try:
+            _gs = _db.query(GridState).filter(GridState.pair == pair.upper()).first()
+
+            # 1. Check balance dulu
+            balances = luno_client.get_balances()
+            myr_bal  = balances.get("MYR", 0.0)
+            if myr_bal < _gs.trade_size_myr:
+                logger.warning(f"⚠️ [{pair}] Baki MYR tidak cukup: RM {myr_bal:.2f} < RM {_gs.trade_size_myr:.2f}")
+                # Enable pair tapi skip buy
+                _gs.enabled = True
+                _db.commit()
+                return
+
+            # 2. Beli initial position
+            logger.info(f"🛒 [{pair}] Initial BUY: RM {_gs.trade_size_myr:.2f}")
+            result = luno_client.place_buy_order(_gs.trade_size_myr, pair=pair.upper())
+
+            # 3. Ambil fee
+            fee_myr = 0.0
+            if result.get("order_id"):
+                _t.sleep(1)
+                try:
+                    order_info = luno_client.get_order_status(result["order_id"])
+                    fee_myr = order_info.get("fee_myr", 0.0)
+                except Exception:
+                    pass
+
+            # 4. Simpan trade
+            trade = Trade(
+                pair=pair.upper(),
+                trade_type="BUY",
+                amount_myr=result["amount_myr"],
+                amount_btc=result["amount_btc"],
+                price_myr=result["price"],
+                fee_myr=fee_myr,
+                signal="INITIAL_BUY",
+                order_id=result.get("order_id"),
+                status="COMPLETED"
+            )
+            _db.add(trade)
+
+            # 5. Set base_price = harga beli + enable pair
+            _gs.base_price_myr = result["price"]
+            _gs.enabled = True
+            _db.commit()
+
+            logger.success(f"✅ [{pair}] Enabled! Initial BUY RM {result['amount_myr']:.2f} @ RM {result['price']:,.2f}")
+
+        except Exception as e:
+            logger.error(f"❌ [{pair}] Enable+Buy failed: {e}")
+            # Still enable even if buy fails
+            try:
+                _gs = _db.query(GridState).filter(GridState.pair == pair.upper()).first()
+                if _gs:
+                    _gs.enabled = True
+                    _db.commit()
+            except Exception:
+                pass
+        finally:
+            _db.close()
+
+    background_tasks.add_task(_enable_and_buy)
+    return {"success": True, "pair": pair, "message": f"{pair} sedang diaktifkan — initial buy RM {gs.trade_size_myr:.0f} dalam proses..."}
 
 
 if __name__ == "__main__":
