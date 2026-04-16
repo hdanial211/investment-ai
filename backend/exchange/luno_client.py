@@ -22,7 +22,15 @@ VOLUME_PRECISION = {
     "XRPMYR": 2,   # XRP uses 2 decimal places
     "SOLMYR": 4,
     "AVAXMYR": 4,
-    "ADAMY R": 0,
+    "ADAMYR": 0,
+}
+
+# Minimum trade volumes per pair (Luno official limits)
+MIN_VOLUME = {
+    "XBTMYR": 0.0001,   # ~RM 30 at current price
+    "ETHMYR": 0.001,    # ~RM 9 at current price
+    "XRPMYR": 10.0,     # ~RM 56 at current price
+    "SOLMYR": 0.01,     # ~RM 3 at current price
 }
 
 

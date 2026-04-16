@@ -11,6 +11,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import settings
 from strategy.signal_engine import Signal, signal_engine
 from database.models import Trade, Portfolio, BotSettings, DailyLog
+from exchange.luno_client import MIN_VOLUME
 
 
 class DecisionMaker:
@@ -222,16 +223,22 @@ class DecisionMaker:
 
             can_sell, blocked = self.can_sell(crypto_to_sell, live_btc=live_crypto)
             if can_sell:
-                label = f"2× (naik {price_change_pct:.2f}%)" if is_double else f"naik {price_change_pct:.2f}%"
-                result.update({
-                    "action":       "SELL",
-                    "execute":      True,
-                    "amount_btc":   crypto_to_sell,
-                    "amount_myr":   effective_size,
-                    "new_base_price": current_price,
-                    "reason":       f"[{pair}] Grid Sell {label} (> RM {req_upper:,.2f})",
-                })
-                logger.success(f"✅ [{pair}] GRID SELL {'2×' if is_double else '1×'} RM {effective_size:.2f} @ RM {current_price:,.2f}")
+                # Check minimum volume per pair
+                min_vol = MIN_VOLUME.get(pair, 0.0001)
+                if crypto_to_sell < min_vol:
+                    result["reason"] = f"[{pair}] Sell terlalu kecil ({crypto_to_sell:.6f} < min {min_vol})"
+                    logger.warning(f"⛔ [{pair}] SELL BLOCKED: volume {crypto_to_sell:.6f} < min {min_vol}")
+                else:
+                    label = f"2x (naik {price_change_pct:.2f}%)" if is_double else f"naik {price_change_pct:.2f}%"
+                    result.update({
+                        "action":       "SELL",
+                        "execute":      True,
+                        "amount_btc":   crypto_to_sell,
+                        "amount_myr":   effective_size,
+                        "new_base_price": current_price,
+                        "reason":       f"[{pair}] Grid Sell {label} (> RM {req_upper:,.2f})",
+                    })
+                    logger.success(f"✅ [{pair}] GRID SELL {'2x' if is_double else '1x'} RM {effective_size:.2f} @ RM {current_price:,.2f}")
             else:
                 result["reason"] = f"[{pair}] Grid Sell Tersekat: {blocked}"
                 logger.warning(f"⛔ [{pair}] GRID SELL BLOCKED: {blocked}")
