@@ -245,51 +245,43 @@ class DecisionMaker:
 
         # Scenario 2: Turun → Beli (Grid)
         elif current_price <= req_lower:
-            can_buy, blocked = self.can_buy(trade_size, live_myr=real_balances.get("MYR", 0.0))
+            # ── 3× KALI GANDA jika buffer rendah (< 2× trade_size) ──
+            buffer_low    = self._check_buffer_low(pair, base_currency, current_price, trade_size)
+            effective_buy = trade_size * 3 if buffer_low else trade_size
+            buy_label     = "3x GANDA (buffer rendah)" if buffer_low else "1x"
+
+            can_buy, blocked = self.can_buy(effective_buy, live_myr=real_balances.get("MYR", 0.0))
+            if not can_buy and buffer_low:
+                # Tak dapat 3x, cuba 1x biasa
+                effective_buy = trade_size
+                buy_label     = "1x (MYR kurang)"
+                can_buy, blocked = self.can_buy(trade_size, live_myr=real_balances.get("MYR", 0.0))
+
             if can_buy:
                 result.update({
-                    "action":       "BUY",
-                    "execute":      True,
-                    "amount_myr":   trade_size,
+                    "action":         "BUY",
+                    "execute":        True,
+                    "amount_myr":     effective_buy,
                     "new_base_price": current_price,
-                    "reason":       f"[{pair}] Grid Buy: jatuh {price_change_pct:.2f}% (< RM {req_lower:,.2f})",
+                    "reason":         f"[{pair}] Grid Buy {buy_label}: jatuh {price_change_pct:.2f}% (< RM {req_lower:,.2f})",
                 })
-                logger.success(f"✅ [{pair}] GRID BUY RM {trade_size:.2f} @ RM {current_price:,.2f}")
+                logger.success(f"✅ [{pair}] GRID BUY {buy_label} RM {effective_buy:.2f} @ RM {current_price:,.2f}")
             else:
                 result["reason"] = f"[{pair}] Grid Buy Tersekat: {blocked}"
                 logger.warning(f"⛔ [{pair}] GRID BUY BLOCKED: {blocked}")
 
-        # Scenario 3: REPLENISH — topup jika holdings < 2× trade_size
-        # Hanya beli semasa HOLD (harga dalam grid) DAN harga ≤ base_price (cari dip)
-        if not result["execute"] and grid_state is not None:
-            topup_needed = self._check_replenish_needed(pair, base_currency, current_price, trade_size)
-            if topup_needed > 0 and current_price <= base_price:
-                can_buy, blocked = self.can_buy(topup_needed, live_myr=real_balances.get("MYR", 0.0))
-                if can_buy:
-                    result.update({
-                        "action":       "BUY",
-                        "execute":      True,
-                        "amount_myr":   topup_needed,
-                        "new_base_price": current_price,
-                        "reason":       f"[{pair}] REPLENISH: Buffer < 2x trade_size, beli RM {topup_needed:.2f} @ dip",
-                    })
-                    logger.info(f"🔋 [{pair}] REPLENISH BUY RM {topup_needed:.2f} @ RM {current_price:,.2f}")
-                else:
-                    logger.info(f"💤 [{pair}] Replenish perlu tapi baki MYR tak cukup: {blocked}")
-            elif topup_needed > 0:
-                logger.info(f"💤 [{pair}] Replenish perlu (RM{topup_needed:.2f}) tapi tunggu harga jatuh ke ≤ RM{base_price:,.2f}")
-
         return result
 
 
-    def _check_replenish_needed(self, pair: str, base_currency: str,
-                                current_price: float, trade_size: float) -> float:
+
+    def _check_buffer_low(self, pair: str, base_currency: str,
+                          current_price: float, trade_size: float) -> bool:
         """
-        Semak sama ada holdings bot < 2× trade_size.
-        Return: jumlah MYR yang perlu dibeli untuk topup (0 jika cukup).
+        Return True jika bot crypto holdings untuk pair ini < 2× trade_size.
+        Ini bermakna next BUY perlu 3× ganda untuk replenish buffer.
+        Contoh: trade_size=RM35 → threshold=RM70.
         """
-        MIN_MULTIPLIER = 2.0  # Pastikan sentiasa ada 2× trade_size worth of crypto
-        target_myr = trade_size * MIN_MULTIPLIER
+        threshold_myr = trade_size * 2.0   # e.g. RM70 untuk trade_size RM35
 
         buys  = self.db.query(Trade).filter(
             Trade.pair == pair, Trade.trade_type == "BUY",  Trade.status == "COMPLETED"
@@ -303,11 +295,13 @@ class DecisionMaker:
         remaining  = max(0.0, vol_bought - vol_sold)
         curr_val   = remaining * current_price
 
-        if curr_val < target_myr:
-            shortfall = target_myr - curr_val
-            logger.info(f"🔋 [{pair}] Buffer rendah: RM{curr_val:.2f} < RM{target_myr:.2f} (perlu topup RM{shortfall:.2f})")
-            return round(shortfall, 2)
-        return 0.0
+        if curr_val < threshold_myr:
+            logger.info(
+                f"🔋 [{pair}] Buffer rendah! RM{curr_val:.2f} < RM{threshold_myr:.2f} "
+                f"→ Next BUY akan 3× ganda (RM{trade_size*3:.2f})"
+            )
+            return True
+        return False
 
 
     def log_daily_action(self, decision: dict, signal: Signal):
