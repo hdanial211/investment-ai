@@ -40,6 +40,7 @@ interface Signal {
 interface Trade {
   id: number;
   type: string;
+  pair: string;
   amount_myr: number;
   amount_btc: number;
   price_myr: number;
@@ -238,9 +239,9 @@ export default function Dashboard() {
               <div className="flex items-center justify-between p-2 rounded-lg" style={{ background: "rgba(59,130,246,0.05)", border: "1px solid rgba(59,130,246,0.2)" }}>
                 <div className="flex items-center gap-2">
                   <Clock size={14} style={{ color: "#3b82f6" }} />
-                  <span className="text-xs font-medium" style={{ color: "#f1f5f9" }}>Enjin: Daily Flipper</span>
+                  <span className="text-xs font-medium" style={{ color: "#f1f5f9" }}>Ringkasan Petang</span>
                 </div>
-                <span className="text-[10px]" style={{ color: "#3b82f6" }}>08:00 Pagi</span>
+                <span className="text-[10px]" style={{ color: "#3b82f6" }}>9:00 PM</span>
               </div>
             </div>
             <div className="flex gap-2">
@@ -384,7 +385,7 @@ export default function Dashboard() {
             {
               label: "Jumlah Portfolio",
               value: `RM ${portfolio?.total_value?.toFixed(2) ?? "0.00"}`,
-              sub: "Nilai semasa",
+              sub: "MYR + semua crypto",
               icon: <DollarSign size={16} />,
               color: "#3b82f6"
             },
@@ -462,9 +463,9 @@ export default function Dashboard() {
                   <p className="text-xs mb-1" style={{ color: "#64748b" }}>Total Invest</p>
                   <p className="font-bold" style={{ color: "#f1f5f9" }}>RM {stats?.total_invested_myr?.toFixed(2) ?? "0.00"}</p>
                 </div>
-                <div className="p-3 rounded-xl" style={{ background: (stats?.total_pnl_myr ?? 0) >= 0 ? "rgba(0,212,170,0.06)" : "rgba(255,71,87,0.06)", border: `1px solid ${(stats?.total_pnl_myr ?? 0) >= 0 ? "rgba(0,212,170,0.15)" : "rgba(255,71,87,0.15)"}` }}>
+                <div className="p-3 rounded-xl" style={{ background: (portfolio?.total_pnl ?? 0) >= 0 ? "rgba(0,212,170,0.06)" : "rgba(255,71,87,0.06)", border: `1px solid ${(portfolio?.total_pnl ?? 0) >= 0 ? "rgba(0,212,170,0.15)" : "rgba(255,71,87,0.15)"}` }}>
                   <p className="text-xs mb-1" style={{ color: "#64748b" }}>Total P&L</p>
-                  <p className="font-bold" style={{ color: (stats?.total_pnl_myr ?? 0) >= 0 ? "#00d4aa" : "#ff4757" }}>RM {stats?.total_pnl_myr?.toFixed(2) ?? "0.00"}</p>
+                  <p className="font-bold" style={{ color: (portfolio?.total_pnl ?? 0) >= 0 ? "#00d4aa" : "#ff4757" }}>RM {portfolio?.total_pnl?.toFixed(2) ?? "0.00"}</p>
                 </div>
               </div>
 
@@ -506,7 +507,7 @@ export default function Dashboard() {
                         RM {t.amount_myr.toFixed(2)}
                       </p>
                       <p className="text-xs" style={{ color: "#64748b" }}>
-                        {t.amount_btc.toFixed(6)} BTC
+                        {t.amount_btc.toFixed(t.pair === "XBTMYR" || t.pair === "ETHMYR" ? 6 : 2)} {t.pair === "XBTMYR" ? "BTC" : t.pair === "ETHMYR" ? "ETH" : t.pair === "XRPMYR" ? "XRP" : t.pair === "SOLMYR" ? "SOL" : "crypto"}
                       </p>
                     </div>
                   </div>
