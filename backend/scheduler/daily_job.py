@@ -263,6 +263,7 @@ def run_rebalance_job():
     """
     Fast Rebalance Job — runs every 3 minutes.
     Loops through ALL enabled GridState pairs independently.
+    Also saves portfolio snapshot for historical chart.
     """
     db = SessionLocal()
     try:
@@ -274,23 +275,56 @@ def run_rebalance_job():
 
         if not active_pairs:
             logger.info("💤 No active pairs configured")
-            return
+        else:
+            for gs in active_pairs:
+                try:
+                    price_data  = luno_client.get_price(gs.pair)
+                    curr_price  = price_data["last_trade"]
+                    decision    = dm.decide_rebalance(balances, curr_price, grid_state=gs)
 
-        for gs in active_pairs:
-            try:
-                price_data  = luno_client.get_price(gs.pair)
-                curr_price  = price_data["last_trade"]
-                decision    = dm.decide_rebalance(balances, curr_price, grid_state=gs)
+                    if decision["execute"]:
+                        logger.info("=" * 50)
+                        logger.info(f"⚡ [{gs.pair}] GRID TRIGGERED — {datetime.now(KL_TZ).strftime('%H:%M:%S')}")
+                        _execute_grid_trade(db, decision, grid_state=gs)
+                    else:
+                        logger.info(f"💤 [{gs.pair}] {decision.get('reason', 'HOLD')}")
 
-                if decision["execute"]:
-                    logger.info("=" * 50)
-                    logger.info(f"⚡ [{gs.pair}] GRID TRIGGERED — {datetime.now(KL_TZ).strftime('%H:%M:%S')}")
-                    _execute_grid_trade(db, decision, grid_state=gs)
-                else:
-                    logger.info(f"💤 [{gs.pair}] {decision.get('reason', 'HOLD')}")
+                except Exception as pair_err:
+                    logger.error(f"❌ [{gs.pair}] Error: {pair_err}")
 
-            except Exception as pair_err:
-                logger.error(f"❌ [{gs.pair}] Error: {pair_err}")
+        # ── Simpan Portfolio Snapshot untuk Chart ──────────────────────
+        try:
+            ASSET_PAIR = {"XBT": "XBTMYR", "ETH": "ETHMYR", "XRP": "XRPMYR", "SOL": "SOLMYR"}
+            crypto_val = 0.0
+            for asset, pair in ASSET_PAIR.items():
+                try:
+                    p = luno_client.get_price(pair)["last_trade"]
+                    crypto_val += balances.get(asset, 0.0) * p
+                except Exception:
+                    pass
+            myr_bal    = balances.get("MYR", 0.0)
+            total_val  = myr_bal + crypto_val
+
+            # Ambil cumulative invest dari DB
+            buys      = db.query(Trade).filter(Trade.trade_type == "BUY", Trade.status == "COMPLETED").all()
+            total_inv = sum(t.amount_myr for t in buys)
+            pnl       = total_val - total_inv
+            pnl_pct   = (pnl / total_inv * 100) if total_inv > 0 else 0.0
+
+            snap = Portfolio(
+                btc_balance = balances.get("XBT", 0.0),
+                myr_balance = myr_bal,
+                btc_price   = 0.0,      # multi-pair — not single price anymore
+                total_value = round(total_val, 2),
+                total_pnl   = round(pnl, 4),
+                pnl_pct     = round(pnl_pct, 2),
+                snapshot_at = datetime.utcnow(),
+            )
+            db.add(snap)
+            db.commit()
+            logger.info(f"📸 Snapshot: RM{total_val:.2f} (P&L: {pnl:+.2f})")
+        except Exception as snap_err:
+            logger.warning(f"⚠️ Snapshot failed: {snap_err}")
 
     except Exception as e:
         logger.error(f"❌ REBALANCE JOB ERROR: {e}")

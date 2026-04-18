@@ -288,6 +288,82 @@ def get_portfolio_chart(db: Session = Depends(get_db)):
         return []
 
 
+@app.get("/api/portfolio/chart")
+def get_portfolio_chart_v2(days: int = 7, db: Session = Depends(get_db)):
+    """
+    Portfolio value chart dari snapshot history (disimpan setiap 3 minit).
+    Ini chart SEBENAR — nilai berubah ikut harga crypto masa tu.
+    Fallback ke trade reconstruction kalau snapshot belum ada.
+    """
+    try:
+        since = datetime.utcnow() - timedelta(days=days)
+        snaps = db.query(Portfolio).filter(
+            Portfolio.snapshot_at >= since,
+            Portfolio.total_value > 0,
+        ).order_by(Portfolio.snapshot_at.asc()).all()
+
+        if snaps:
+            # Downsample kalau terlalu banyak titik (max 200)
+            step = max(1, len(snaps) // 200)
+            subset = snaps[::step]
+            # Pastikan titik terakhir sentiasa ada
+            if subset[-1].id != snaps[-1].id:
+                subset.append(snaps[-1])
+
+            return [
+                {
+                    "time":  s.snapshot_at.isoformat(),
+                    "value": s.total_value,
+                    "pnl":   s.total_pnl,
+                    "label": f"RM {s.total_value:.2f}",
+                }
+                for s in subset
+            ]
+
+        # Fallback: bina dari trade events (sebelum ada snapshot)
+        trades = db.query(Trade).filter(Trade.status == "COMPLETED").order_by(Trade.created_at.asc()).all()
+        if not trades:
+            return []
+
+        ASSET_PAIR = {"XBT": "XBTMYR", "ETH": "ETHMYR", "XRP": "XRPMYR", "SOL": "SOLMYR"}
+        prices = {}
+        for pair in ASSET_PAIR.values():
+            try:
+                prices[pair] = luno_client.get_price(pair)["last_trade"]
+            except Exception:
+                prices[pair] = 0.0
+
+        try:
+            balances = luno_client.get_balances()
+        except Exception:
+            balances = {}
+
+        points = []
+        cumulative_cost = 0.0
+        holdings: dict = {}
+
+        for t in trades:
+            pair  = t.pair or "XBTMYR"
+            asset = pair.replace("MYR", "")
+            if t.trade_type == "BUY":
+                cumulative_cost += t.amount_myr
+                holdings[asset]  = holdings.get(asset, 0.0) + t.amount_btc
+            else:
+                holdings[asset]  = max(0.0, holdings.get(asset, 0.0) - t.amount_btc)
+            holding_val = sum(vol * prices.get(ASSET_PAIR.get(ast, "XBTMYR"), 0.0) for ast, vol in holdings.items())
+            pnl = holding_val - cumulative_cost
+            points.append({"time": t.created_at.isoformat(), "value": round(cumulative_cost + pnl, 2), "pnl": round(pnl, 4), "label": f"{t.trade_type} {asset}"})
+
+        live_crypto = sum(balances.get(ast, 0.0) * prices.get(pair, 0.0) for ast, pair in ASSET_PAIR.items())
+        live_total  = live_crypto + balances.get("MYR", 0.0)
+        points.append({"time": datetime.now().isoformat(), "value": round(live_total, 2), "pnl": round(live_total - cumulative_cost, 4), "label": "Sekarang"})
+        return points
+
+    except Exception as e:
+        logger.warning(f"portfolio/chart v2 failed: {e}")
+        return []
+
+
 @app.get("/api/trades")
 def get_trades(limit: int = 50, trade_type: Optional[str] = None,
                pair: Optional[str] = None, db: Session = Depends(get_db)):
