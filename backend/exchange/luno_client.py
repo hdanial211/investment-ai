@@ -176,17 +176,29 @@ class LunoClient:
 
                 remaining = max(0.0, vol_bought - vol_sold)
                 curr_val  = remaining * live_price
-                pnl       = total_sell + curr_val - total_cost - total_fees
+
+                # ── FIFO Cap: kalau jual lebih dari yang dibeli (guna BTC lama),
+                # hanya kira proceeds berkadar dengan apa yang bot betul-betul beli.
+                # Ini elak BTC lama dalam wallet dikira sebagai "untung" bot.
+                if vol_sold > vol_bought > 0:
+                    ratio          = vol_bought / vol_sold
+                    attributed_sell = total_sell * ratio
+                    logger.info(f"📐 [{pair}] Overshoot: sold {vol_sold:.8f} > bought {vol_bought:.8f} → attribute {ratio:.2%} of sells")
+                else:
+                    attributed_sell = total_sell
+
+                pnl = attributed_sell + curr_val - total_cost - total_fees
 
                 pair_results[pair] = {
-                    "cost":          round(total_cost, 4),
-                    "sold":          round(total_sell, 4),
-                    "fees":          round(total_fees, 4),
-                    "remaining_vol": round(remaining, 8),
-                    "remaining_val": round(curr_val, 4),
-                    "live_price":    live_price,
-                    "pnl":           round(pnl, 4),
-                    "num_trades":    len(trades),
+                    "cost":           round(total_cost, 4),
+                    "sold":           round(total_sell, 4),
+                    "attributed_sell":round(attributed_sell, 4),
+                    "fees":           round(total_fees, 4),
+                    "remaining_vol":  round(remaining, 8),
+                    "remaining_val":  round(curr_val, 4),
+                    "live_price":     live_price,
+                    "pnl":            round(pnl, 4),
+                    "num_trades":     len(trades),
                 }
 
                 grand_cost += total_cost
