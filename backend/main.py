@@ -138,14 +138,28 @@ def get_portfolio(db: Session = Depends(get_db)):
     try:
         # Ambil live data dari Luno
         balances      = luno_client.get_balances()
-        price_data    = luno_client.get_btc_price()
-        current_price = price_data["last_trade"]
-        btc_balance   = balances.get("XBT", 0.0)
+        current_price = luno_client.get_btc_price()["last_trade"]
         myr_balance   = balances.get("MYR", 0.0)
-        btc_value_myr = btc_balance * current_price
-        total_value   = myr_balance + btc_value_myr
+        btc_balance   = balances.get("XBT", 0.0)
 
-        # ── P&L terus dari Luno order history (lebih tepat) ──
+        # Ambil harga semua pair untuk kira total value
+        ASSET_PAIR = {"XBT": "XBTMYR", "ETH": "ETHMYR", "XRP": "XRPMYR", "SOL": "SOLMYR"}
+        prices = {"XBTMYR": current_price}
+        for pair in ["ETHMYR", "XRPMYR", "SOLMYR"]:
+            try:
+                prices[pair] = luno_client.get_price(pair)["last_trade"]
+            except Exception:
+                prices[pair] = 0.0
+
+        # Total value = MYR + semua crypto dalam wallet × harga semasa
+        crypto_value = 0.0
+        for asset, pair in ASSET_PAIR.items():
+            amt = balances.get(asset, 0.0)
+            crypto_value += amt * prices.get(pair, 0.0)
+        btc_value_myr = btc_balance * current_price
+        total_value   = myr_balance + crypto_value
+
+        # ── P&L terus dari Luno listtrades (semua trades termasuk manual) ──
         pnl_data = luno_client.get_pnl_from_luno()
 
         # Ambil trade TERBARU (BTC) untuk info kad utama
@@ -158,16 +172,17 @@ def get_portfolio(db: Session = Depends(get_db)):
             "myr_balance":    myr_balance,
             "btc_price":      current_price,
             "btc_value_myr":  btc_value_myr,
+            "crypto_value":   round(crypto_value, 2),
             "total_value":    round(total_value, 2),
             "total_pnl":      pnl_data["total_pnl"],
             "pnl_pct":        pnl_data["pnl_pct"],
             "total_fees_myr": pnl_data["total_fees"],
-            "pnl_by_pair":    pnl_data["pairs"],        # breakdown per pair
+            "pnl_by_pair":    pnl_data["pairs"],
             "last_buy_price": last_trade.price_myr if last_trade else None,
             "last_buy_date":  last_trade.created_at.isoformat() if last_trade else None,
             "last_trade_type": last_trade.trade_type if last_trade else None,
-            "updated_at": datetime.now().isoformat(),
-            "source": "live"
+            "updated_at":     datetime.now().isoformat(),
+            "source":         "luno_api"
         }
     except Exception as e:
         logger.warning(f"⚠️ Cannot get live portfolio, fallback to DB: {e}")

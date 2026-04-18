@@ -115,12 +115,10 @@ class LunoClient:
 
     def get_pnl_from_luno(self, pairs: list = None) -> dict:
         """
-        Kira P&L sebenar terus dari Luno order history.
-        fee_base = fees dalam crypto unit → ditukar ke MYR menggunakan harga trade.
-        Returns: {
-            "pairs": { "XBTMYR": {cost, sold, fees, remaining_val, pnl}, ... },
-            "total_cost", "total_pnl", "total_fees", "pnl_pct"
-        }
+        Kira P&L sebenar terus dari Luno listtrades API.
+        listtrades = SEMUA trades termasuk manual dari app/web Luno.
+        listorders = API trades sahaja (tidak complete).
+        fee_base = fees dalam crypto unit → ditukar ke MYR guna harga trade.
         """
         if pairs is None:
             pairs = ["XBTMYR", "ETHMYR", "XRPMYR", "SOLMYR"]
@@ -130,33 +128,41 @@ class LunoClient:
 
         for pair in pairs:
             try:
-                # Get live price for unrealised value calc
+                # Get live price
                 try:
                     live_price = self.get_price(pair)["last_trade"]
                 except Exception:
                     live_price = 0.0
 
-                # Fetch all completed orders from Luno
-                resp = self._get("/listorders", params={"pair": pair, "state": "COMPLETE"})
-                orders = resp.get("orders") or []
+                # listtrades includes ALL trades (API + manual app/web)
+                resp = self._get("/listtrades", params={"pair": pair})
+                trades = resp.get("trades") or []
 
                 total_cost = total_sell = total_fees = 0.0
                 vol_bought = vol_sold = 0.0
 
-                for o in orders:
-                    otype   = o.get("type", "")
-                    base    = float(o.get("base", 0) or 0)     # crypto amount
-                    counter = float(o.get("counter", 0) or 0)  # MYR amount
-                    fee_b   = float(o.get("fee_base", 0) or 0) # fee in crypto
-                    # convert crypto fee → MYR
-                    trade_price = counter / base if base > 0 else live_price
-                    fee_myr = fee_b * trade_price
+                for t in trades:
+                    is_buy  = t.get("is_buy", False)  # False means SELL in listtrades
+                    base    = float(t.get("base", 0) or 0)       # crypto amount
+                    counter = float(t.get("counter", 0) or 0)    # MYR amount
+                    fee_b   = float(t.get("fee_base", 0) or 0)   # fee in crypto
+                    fee_c   = float(t.get("fee_counter", 0) or 0) # fee in MYR (sometimes)
+                    price   = float(t.get("price", 0) or 0)
+                    if price == 0 and base > 0:
+                        price = counter / base
+                    fee_myr = (fee_b * price) + fee_c
 
-                    if otype in ("BID", "BUY") and counter > 0:
+                    # NOTE: in listtrades, is_buy=False means it's a BUY order (Taker)
+                    # The field indicates if the trade was a buy from market perspective
+                    # We use the type field if available, otherwise infer from context
+                    ttype = t.get("type", "")
+                    if ttype in ("BID",) or (not ttype and not is_buy):
+                        # BUY
                         total_cost += counter
                         total_fees += fee_myr
                         vol_bought += base
-                    elif otype in ("ASK", "SELL") and counter > 0:
+                    elif ttype in ("ASK",) or (not ttype and is_buy):
+                        # SELL
                         total_sell += counter
                         total_fees += fee_myr
                         vol_sold   += base
@@ -173,6 +179,7 @@ class LunoClient:
                     "remaining_val": round(curr_val, 4),
                     "live_price":    live_price,
                     "pnl":           round(pnl, 4),
+                    "num_trades":    len(trades),
                 }
 
                 grand_cost += total_cost
@@ -187,12 +194,12 @@ class LunoClient:
         pnl_pct = (grand_pnl / grand_cost * 100) if grand_cost > 0 else 0.0
 
         return {
-            "pairs":       pair_results,
-            "total_cost":  round(grand_cost, 4),
-            "total_sell":  round(grand_sell, 4),
-            "total_fees":  round(grand_fees, 4),
-            "total_pnl":   round(grand_pnl, 4),
-            "pnl_pct":     round(pnl_pct, 2),
+            "pairs":      pair_results,
+            "total_cost": round(grand_cost, 4),
+            "total_sell": round(grand_sell, 4),
+            "total_fees": round(grand_fees, 4),
+            "total_pnl":  round(grand_pnl, 4),
+            "pnl_pct":    round(pnl_pct, 2),
         }
 
     def get_balances(self) -> dict:
