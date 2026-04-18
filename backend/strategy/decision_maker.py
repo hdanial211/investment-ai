@@ -243,7 +243,7 @@ class DecisionMaker:
                 result["reason"] = f"[{pair}] Grid Sell Tersekat: {blocked}"
                 logger.warning(f"⛔ [{pair}] GRID SELL BLOCKED: {blocked}")
 
-        # Scenario 2: Turun → Beli
+        # Scenario 2: Turun → Beli (Grid)
         elif current_price <= req_lower:
             can_buy, blocked = self.can_buy(trade_size, live_myr=real_balances.get("MYR", 0.0))
             if can_buy:
@@ -259,7 +259,55 @@ class DecisionMaker:
                 result["reason"] = f"[{pair}] Grid Buy Tersekat: {blocked}"
                 logger.warning(f"⛔ [{pair}] GRID BUY BLOCKED: {blocked}")
 
+        # Scenario 3: REPLENISH — topup jika holdings < 2× trade_size
+        # Hanya beli semasa HOLD (harga dalam grid) DAN harga ≤ base_price (cari dip)
+        if not result["execute"] and grid_state is not None:
+            topup_needed = self._check_replenish_needed(pair, base_currency, current_price, trade_size)
+            if topup_needed > 0 and current_price <= base_price:
+                can_buy, blocked = self.can_buy(topup_needed, live_myr=real_balances.get("MYR", 0.0))
+                if can_buy:
+                    result.update({
+                        "action":       "BUY",
+                        "execute":      True,
+                        "amount_myr":   topup_needed,
+                        "new_base_price": current_price,
+                        "reason":       f"[{pair}] REPLENISH: Buffer < 2x trade_size, beli RM {topup_needed:.2f} @ dip",
+                    })
+                    logger.info(f"🔋 [{pair}] REPLENISH BUY RM {topup_needed:.2f} @ RM {current_price:,.2f}")
+                else:
+                    logger.info(f"💤 [{pair}] Replenish perlu tapi baki MYR tak cukup: {blocked}")
+            elif topup_needed > 0:
+                logger.info(f"💤 [{pair}] Replenish perlu (RM{topup_needed:.2f}) tapi tunggu harga jatuh ke ≤ RM{base_price:,.2f}")
+
         return result
+
+
+    def _check_replenish_needed(self, pair: str, base_currency: str,
+                                current_price: float, trade_size: float) -> float:
+        """
+        Semak sama ada holdings bot < 2× trade_size.
+        Return: jumlah MYR yang perlu dibeli untuk topup (0 jika cukup).
+        """
+        MIN_MULTIPLIER = 2.0  # Pastikan sentiasa ada 2× trade_size worth of crypto
+        target_myr = trade_size * MIN_MULTIPLIER
+
+        buys  = self.db.query(Trade).filter(
+            Trade.pair == pair, Trade.trade_type == "BUY",  Trade.status == "COMPLETED"
+        ).all()
+        sells = self.db.query(Trade).filter(
+            Trade.pair == pair, Trade.trade_type == "SELL", Trade.status == "COMPLETED"
+        ).all()
+
+        vol_bought = sum(t.amount_btc for t in buys)
+        vol_sold   = sum(t.amount_btc for t in sells)
+        remaining  = max(0.0, vol_bought - vol_sold)
+        curr_val   = remaining * current_price
+
+        if curr_val < target_myr:
+            shortfall = target_myr - curr_val
+            logger.info(f"🔋 [{pair}] Buffer rendah: RM{curr_val:.2f} < RM{target_myr:.2f} (perlu topup RM{shortfall:.2f})")
+            return round(shortfall, 2)
+        return 0.0
 
 
     def log_daily_action(self, decision: dict, signal: Signal):
