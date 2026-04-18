@@ -267,21 +267,34 @@ def get_trades(limit: int = 50, trade_type: Optional[str] = None,
 
 @app.get("/api/trades/stats")
 def get_trade_stats(db: Session = Depends(get_db)):
-    """Trading statistics"""
+    """Trading statistics — P&L dari Luno API (bukan DB pnl_myr yang mungkin salah)"""
     all_trades = db.query(Trade).all()
-    buys = [t for t in all_trades if t.trade_type == "BUY"]
+    buys  = [t for t in all_trades if t.trade_type == "BUY"]
     sells = [t for t in all_trades if t.trade_type == "SELL"]
     total_invested = sum(t.amount_myr for t in buys)
-    total_returned = sum(t.amount_myr for t in sells)
-    total_pnl = sum(t.pnl_myr for t in sells)
+
+    # P&L betul: guna Luno API dengan FIFO cap + filter dari bot start
+    try:
+        earliest = db.query(Trade).order_by(Trade.created_at.asc()).first()
+        since_ts_ms = 0
+        if earliest and earliest.created_at:
+            import calendar
+            since_ts_ms = int(calendar.timegm(earliest.created_at.timetuple()) * 1000)
+        pnl_data    = luno_client.get_pnl_from_luno(since_ts_ms=since_ts_ms)
+        total_pnl   = pnl_data["total_pnl"]
+        pnl_pct     = pnl_data["pnl_pct"]
+    except Exception:
+        total_pnl = sum(t.pnl_myr for t in sells)
+        pnl_pct   = (total_pnl / total_invested * 100) if total_invested > 0 else 0
+
     return {
-        "total_trades": len(all_trades),
-        "total_buys": len(buys),
-        "total_sells": len(sells),
-        "total_invested_myr": total_invested,
-        "total_returned_myr": total_returned,
-        "total_pnl_myr": total_pnl,
-        "win_rate": (len([t for t in sells if t.pnl_myr > 0]) / len(sells) * 100) if sells else 0
+        "total_trades":       len(all_trades),
+        "total_buys":         len(buys),
+        "total_sells":        len(sells),
+        "total_invested_myr": round(total_invested, 2),
+        "total_pnl_myr":      total_pnl,
+        "pnl_pct":            pnl_pct,
+        "win_rate":           100.0 if len(sells) > 0 else 0,
     }
 
 
@@ -400,56 +413,60 @@ def manual_trigger(background_tasks: BackgroundTasks):
 
 @app.get("/api/grid-states")
 def get_grid_states(db: Session = Depends(get_db)):
-    """Get all trading pairs grid configuration + live prices"""
+    """Get all trading pairs grid configuration + live prices + P&L dari Luno"""
     grid_states = db.query(GridState).all()
+
+    # Ambil P&L per pair sekali gus dari Luno API (FIFO cap, dari bot start)
+    try:
+        earliest    = db.query(Trade).order_by(Trade.created_at.asc()).first()
+        since_ts_ms = 0
+        if earliest and earliest.created_at:
+            import calendar
+            since_ts_ms = int(calendar.timegm(earliest.created_at.timetuple()) * 1000)
+        pnl_map = luno_client.get_pnl_from_luno(since_ts_ms=since_ts_ms)["pairs"]
+    except Exception as e:
+        logger.warning(f"⚠️ Cannot get P&L from Luno for grid-states: {e}")
+        pnl_map = {}
+
     result = []
     for gs in grid_states:
-        # Get live price for each pair
+        # Live price
         try:
-            price_data = luno_client.get_price(gs.pair)
-            current_price = price_data["last_trade"]
+            current_price = luno_client.get_price(gs.pair)["last_trade"]
         except Exception:
             current_price = None
 
-        # Get last trade for this pair
+        # Last trade dari DB
         last_trade = db.query(Trade).filter(
             Trade.pair == gs.pair, Trade.status == "COMPLETED"
         ).order_by(Trade.created_at.desc()).first()
 
-        # Calculate next targets
-        base = gs.base_price_myr or 0
-        margin = gs.rebalance_margin_pct
+        # Next grid targets
+        base      = gs.base_price_myr or 0
+        margin    = gs.rebalance_margin_pct
         next_buy  = base * (1 - margin / 100) if base > 0 else None
         next_sell = base * (1 + margin / 100) if base > 0 else None
 
-        # Pair-specific P&L
-        buys  = db.query(Trade).filter(Trade.pair == gs.pair, Trade.trade_type == "BUY",  Trade.status == "COMPLETED").all()
-        sells = db.query(Trade).filter(Trade.pair == gs.pair, Trade.trade_type == "SELL", Trade.status == "COMPLETED").all()
-        total_cost   = sum(t.amount_myr for t in buys)
-        total_sell   = sum(t.amount_myr for t in sells)
-        total_fees   = sum(getattr(t, "fee_myr", 0.0) or 0.0 for t in buys + sells)
-        btc_bought   = sum(t.amount_btc for t in buys)
-        btc_sold     = sum(t.amount_btc for t in sells)
-        bot_remaining = max(0.0, btc_bought - btc_sold)
-        bot_value    = bot_remaining * current_price if current_price else 0
-        pnl          = total_sell + bot_value - total_cost - total_fees
+        # P&L dari Luno (betul, FIFO cap)
+        pair_pnl = pnl_map.get(gs.pair, {})
+        pnl      = pair_pnl.get("pnl", 0.0)
 
         result.append({
-            "pair":             gs.pair,
-            "display_name":     gs.display_name,
-            "base_currency":    gs.base_currency,
-            "enabled":          gs.enabled,
-            "base_price_myr":   gs.base_price_myr,
-            "rebalance_margin_pct": gs.rebalance_margin_pct,
-            "trade_size_myr":   gs.trade_size_myr,
-            "current_price":    current_price,
-            "next_buy_price":   round(next_buy, 2) if next_buy else None,
-            "next_sell_price":  round(next_sell, 2) if next_sell else None,
-            "last_trade_price": last_trade.price_myr if last_trade else None,
-            "last_trade_type":  last_trade.trade_type if last_trade else None,
-            "last_trade_date":  last_trade.created_at.isoformat() if last_trade else None,
-            "total_trades":     len(buys) + len(sells),
-            "pnl_myr":          round(pnl, 2),
+            "pair":                 gs.pair,
+            "display_name":        gs.display_name,
+            "base_currency":       gs.base_currency,
+            "enabled":             gs.enabled,
+            "base_price_myr":      gs.base_price_myr,
+            "rebalance_margin_pct":gs.rebalance_margin_pct,
+            "trade_size_myr":      gs.trade_size_myr,
+            "current_price":       current_price,
+            "next_buy_price":      round(next_buy, 2) if next_buy else None,
+            "next_sell_price":     round(next_sell, 2) if next_sell else None,
+            "last_trade_price":    last_trade.price_myr if last_trade else None,
+            "last_trade_type":     last_trade.trade_type if last_trade else None,
+            "last_trade_date":     last_trade.created_at.isoformat() if last_trade else None,
+            "total_trades":        pair_pnl.get("num_trades", 0),
+            "pnl_myr":             round(pnl, 2),
         })
     return result
 
