@@ -113,6 +113,88 @@ class LunoClient:
                 result[pair] = None
         return result
 
+    def get_pnl_from_luno(self, pairs: list = None) -> dict:
+        """
+        Kira P&L sebenar terus dari Luno order history.
+        fee_base = fees dalam crypto unit → ditukar ke MYR menggunakan harga trade.
+        Returns: {
+            "pairs": { "XBTMYR": {cost, sold, fees, remaining_val, pnl}, ... },
+            "total_cost", "total_pnl", "total_fees", "pnl_pct"
+        }
+        """
+        if pairs is None:
+            pairs = ["XBTMYR", "ETHMYR", "XRPMYR", "SOLMYR"]
+
+        grand_cost = grand_sell = grand_fees = grand_pnl = 0.0
+        pair_results = {}
+
+        for pair in pairs:
+            try:
+                # Get live price for unrealised value calc
+                try:
+                    live_price = self.get_price(pair)["last_trade"]
+                except Exception:
+                    live_price = 0.0
+
+                # Fetch all completed orders from Luno
+                resp = self._get("/listorders", params={"pair": pair, "state": "COMPLETE"})
+                orders = resp.get("orders") or []
+
+                total_cost = total_sell = total_fees = 0.0
+                vol_bought = vol_sold = 0.0
+
+                for o in orders:
+                    otype   = o.get("type", "")
+                    base    = float(o.get("base", 0) or 0)     # crypto amount
+                    counter = float(o.get("counter", 0) or 0)  # MYR amount
+                    fee_b   = float(o.get("fee_base", 0) or 0) # fee in crypto
+                    # convert crypto fee → MYR
+                    trade_price = counter / base if base > 0 else live_price
+                    fee_myr = fee_b * trade_price
+
+                    if otype in ("BID", "BUY") and counter > 0:
+                        total_cost += counter
+                        total_fees += fee_myr
+                        vol_bought += base
+                    elif otype in ("ASK", "SELL") and counter > 0:
+                        total_sell += counter
+                        total_fees += fee_myr
+                        vol_sold   += base
+
+                remaining = max(0.0, vol_bought - vol_sold)
+                curr_val  = remaining * live_price
+                pnl       = total_sell + curr_val - total_cost - total_fees
+
+                pair_results[pair] = {
+                    "cost":          round(total_cost, 4),
+                    "sold":          round(total_sell, 4),
+                    "fees":          round(total_fees, 4),
+                    "remaining_vol": round(remaining, 8),
+                    "remaining_val": round(curr_val, 4),
+                    "live_price":    live_price,
+                    "pnl":           round(pnl, 4),
+                }
+
+                grand_cost += total_cost
+                grand_sell += total_sell
+                grand_fees += total_fees
+                grand_pnl  += pnl
+
+            except Exception as e:
+                logger.warning(f"⚠️ [{pair}] P&L from Luno failed: {e}")
+                pair_results[pair] = {"cost": 0, "sold": 0, "fees": 0, "remaining_val": 0, "pnl": 0}
+
+        pnl_pct = (grand_pnl / grand_cost * 100) if grand_cost > 0 else 0.0
+
+        return {
+            "pairs":       pair_results,
+            "total_cost":  round(grand_cost, 4),
+            "total_sell":  round(grand_sell, 4),
+            "total_fees":  round(grand_fees, 4),
+            "total_pnl":   round(grand_pnl, 4),
+            "pnl_pct":     round(pnl_pct, 2),
+        }
+
     def get_balances(self) -> dict:
         """
         Dapatkan semua baki akaun (semua asset)
