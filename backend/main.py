@@ -159,8 +159,16 @@ def get_portfolio(db: Session = Depends(get_db)):
         btc_value_myr = btc_balance * current_price
         total_value   = myr_balance + crypto_value
 
-        # ── P&L terus dari Luno listtrades (semua trades termasuk manual) ──
-        pnl_data = luno_client.get_pnl_from_luno()
+        # ── Tentukan tarikh bot start (trade terawal dalam DB bot) ──
+        earliest = db.query(Trade).order_by(Trade.created_at.asc()).first()
+        if earliest and earliest.created_at:
+            import calendar
+            since_ts_ms = int(calendar.timegm(earliest.created_at.timetuple()) * 1000)
+        else:
+            since_ts_ms = 0  # kira semua jika tiada data
+
+        # ── P&L terus dari Luno listtrades (sejak bot start sahaja) ──
+        pnl_data = luno_client.get_pnl_from_luno(since_ts_ms=since_ts_ms)
 
         # Ambil trade TERBARU (BTC) untuk info kad utama
         last_trade = db.query(Trade).filter(

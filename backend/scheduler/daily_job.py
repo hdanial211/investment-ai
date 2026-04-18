@@ -329,17 +329,7 @@ class BotScheduler:
 
     def _setup_jobs(self):
         """Setup all scheduled jobs"""
-        # Evening summary — 9:00 PM KL
-        self.scheduler.add_job(
-            func=run_evening_summary,
-            trigger=CronTrigger(hour=21, minute=0, timezone=KL_TZ),
-            id="evening_summary",
-            name="Evening Summary (9:00 PM)",
-            replace_existing=True
-        )
-        logger.info("📊 Evening summary scheduled: every day at 9:00 PM KLT")
-
-        # Fast Rebalance + Auto-Replenish — Every 3 Minutes
+        # Grid Rebalance + Auto-Replenish — Every 3 Minutes
         self.scheduler.add_job(
             func=run_rebalance_job,
             trigger=IntervalTrigger(minutes=3, timezone=KL_TZ),

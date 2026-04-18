@@ -113,12 +113,11 @@ class LunoClient:
                 result[pair] = None
         return result
 
-    def get_pnl_from_luno(self, pairs: list = None) -> dict:
+    def get_pnl_from_luno(self, pairs: list = None, since_ts_ms: int = 0) -> dict:
         """
         Kira P&L sebenar terus dari Luno listtrades API.
-        listtrades = SEMUA trades termasuk manual dari app/web Luno.
-        listorders = API trades sahaja (tidak complete).
-        fee_base = fees dalam crypto unit → ditukar ke MYR guna harga trade.
+        since_ts_ms: abaikan trades SEBELUM timestamp ini (ms epoch).
+                     Gunakan tarikh bot start supaya trades lama tidak dikira.
         """
         if pairs is None:
             pairs = ["XBTMYR", "ETHMYR", "XRPMYR", "SOLMYR"]
@@ -134,9 +133,17 @@ class LunoClient:
                 except Exception:
                     live_price = 0.0
 
-                # listtrades includes ALL trades (API + manual app/web)
-                resp = self._get("/listtrades", params={"pair": pair})
+                # listtrades = ALL trades (API + manual app/web)
+                resp   = self._get("/listtrades", params={"pair": pair})
                 trades = resp.get("trades") or []
+
+                # Filter: abaikan trades SEBELUM bot start
+                if since_ts_ms > 0:
+                    before = len(trades)
+                    trades = [t for t in trades if int(t.get("timestamp", 0)) >= since_ts_ms]
+                    skipped = before - len(trades)
+                    if skipped > 0:
+                        logger.info(f"🕐 [{pair}] Skip {skipped} trade sebelum bot start (since={since_ts_ms})")
 
                 total_cost = total_sell = total_fees = 0.0
                 vol_bought = vol_sold = 0.0
@@ -194,12 +201,13 @@ class LunoClient:
         pnl_pct = (grand_pnl / grand_cost * 100) if grand_cost > 0 else 0.0
 
         return {
-            "pairs":      pair_results,
-            "total_cost": round(grand_cost, 4),
-            "total_sell": round(grand_sell, 4),
-            "total_fees": round(grand_fees, 4),
-            "total_pnl":  round(grand_pnl, 4),
-            "pnl_pct":    round(pnl_pct, 2),
+            "pairs":       pair_results,
+            "total_cost":  round(grand_cost, 4),
+            "total_sell":  round(grand_sell, 4),
+            "total_fees":  round(grand_fees, 4),
+            "total_pnl":   round(grand_pnl, 4),
+            "pnl_pct":     round(pnl_pct, 2),
+            "since_ts_ms": since_ts_ms,
         }
 
     def get_balances(self) -> dict:
