@@ -329,20 +329,6 @@ class BotScheduler:
 
     def _setup_jobs(self):
         """Setup all scheduled jobs"""
-        # Parse schedule time
-        hour, minute = settings.schedule_time.split(":")
-
-        # Main daily trading job — 8:00 AM KL
-        self.scheduler.add_job(
-            func=run_daily_job,
-            trigger=CronTrigger(hour=int(hour), minute=int(minute), timezone=KL_TZ),
-            id="daily_trading_job",
-            name="Daily Trading Job (8:00 AM)",
-            replace_existing=True,
-            misfire_grace_time=300  # 5 min grace period
-        )
-        logger.info(f"⏰ Trading job scheduled: every day at {settings.schedule_time} KLT")
-
         # Evening summary — 9:00 PM KL
         self.scheduler.add_job(
             func=run_evening_summary,
@@ -352,8 +338,8 @@ class BotScheduler:
             replace_existing=True
         )
         logger.info("📊 Evening summary scheduled: every day at 9:00 PM KLT")
-        
-        # Fast Rebalance — Every 3 Minutes
+
+        # Fast Rebalance + Auto-Replenish — Every 3 Minutes
         self.scheduler.add_job(
             func=run_rebalance_job,
             trigger=IntervalTrigger(minutes=3, timezone=KL_TZ),
@@ -362,7 +348,7 @@ class BotScheduler:
             replace_existing=True,
             misfire_grace_time=60
         )
-        logger.info("⚡ Fast rebalance scheduled: every 3 minutes")
+        logger.info("⚡ Grid rebalance + auto-replenish scheduled: every 3 minutes")
 
     def start(self):
         self.scheduler.start()
@@ -373,16 +359,15 @@ class BotScheduler:
         logger.info("⏹️ Bot scheduler stopped")
 
     def trigger_now(self):
-        """Manual trigger — run job immediately"""
-        logger.info("🔥 Manual trigger — running daily job now...")
-        run_daily_job()
+        """Manual trigger — run rebalance immediately"""
+        logger.info("🔥 Manual trigger — running rebalance now...")
+        run_rebalance_job()
 
     def get_next_run(self) -> str:
         """Get next scheduled run time"""
-        job = self.scheduler.get_job("daily_trading_job")
+        job = self.scheduler.get_job("fast_rebalance_job")
         if job and job.next_run_time:
-            daily_run = job.next_run_time.strftime("%d %b, %I:%M %p")
-            return f"Setiap 3-minit (Rebalance) & Harian {daily_run}"
+            return f"Rebalance setiap 3-minit | Ringkasan petang 9:00 PM"
         return "N/A"
 
 
