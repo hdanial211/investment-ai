@@ -366,20 +366,12 @@ export default function Dashboard() {
                           {gs.enabled ? "ON" : "OFF"}
                         </span>
                       </div>
-                      {/* Modal & Nilai */}
-                      <div className="grid grid-cols-2 gap-1 mb-1.5">
-                        <div className="rounded-lg px-2 py-1" style={{ background: "rgba(255,255,255,0.04)" }}>
-                          <p className="text-[9px]" style={{ color: "#475569" }}>Modal</p>
-                          <p className="text-[11px] font-bold" style={{ color: "#f1f5f9" }}>
-                            RM {((gs as any).invested_myr ?? 0).toFixed(2)}
-                          </p>
-                        </div>
-                        <div className="rounded-lg px-2 py-1" style={{ background: "rgba(255,255,255,0.04)" }}>
-                          <p className="text-[9px]" style={{ color: "#475569" }}>Nilai Kini</p>
-                          <p className="text-[11px] font-bold" style={{ color: col }}>
-                            RM {((gs as any).holding_value_myr ?? 0).toFixed(2)}
-                          </p>
-                        </div>
+                      {/* Nilai Kini */}
+                      <div className="rounded-lg px-2 py-1.5 mb-1.5" style={{ background: "rgba(255,255,255,0.04)" }}>
+                        <p className="text-[9px]" style={{ color: "#475569" }}>Nilai Kini</p>
+                        <p className="text-sm font-bold" style={{ color: col }}>
+                          RM {((gs as any).holding_value_myr ?? 0).toFixed(2)}
+                        </p>
                       </div>
                       {/* P&L */}
                       <p className="text-[10px]" style={{ color: pnlOk ? "#00d4aa" : "#ff4757" }}>
