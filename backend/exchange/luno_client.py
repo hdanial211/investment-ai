@@ -204,17 +204,19 @@ class LunoClient:
 
     def get_balances(self) -> dict:
         """
-        Dapatkan semua baki akaun (semua asset)
+        Dapatkan semua baki akaun (semua asset).
+        SUM entries untuk asset yang sama (Luno boleh ada 2 ETH accounts).
         Returns: {"MYR": float, "XBT": float, "ETH": float, "XRP": float, "SOL": float, ...}
         """
         try:
             data     = self._get("/balance")
-            balances = {}
+            balances: dict = {}
             for b in data.get("balance", []):
                 asset     = b["asset"]
                 available = float(b["balance"]) - float(b["reserved"])
-                balances[asset] = round(available, 8)
-            logger.info(f"💰 MYR: {balances.get('MYR', 0):.2f} | XBT: {balances.get('XBT', 0):.6f}")
+                # SUM jika asset sama (bukan overwrite) — Luno ada 2 ETH accounts
+                balances[asset] = balances.get(asset, 0.0) + round(available, 8)
+            logger.info(f"💰 MYR: {balances.get('MYR', 0):.2f} | XBT: {balances.get('XBT', 0):.6f} | ETH: {balances.get('ETH', 0):.6f} | XRP: {balances.get('XRP', 0):.4f}")
             return balances
         except Exception as e:
             logger.error(f"❌ Error getting balances: {e}")
