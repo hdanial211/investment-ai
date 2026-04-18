@@ -541,6 +541,15 @@ def get_grid_states(db: Session = Depends(get_db)):
     """Get all trading pairs grid configuration + live prices + P&L dari Luno"""
     grid_states = db.query(GridState).all()
 
+    # Ambil live balances dari Luno sekali untuk semua pair
+    try:
+        live_balances = luno_client.get_balances()
+    except Exception:
+        live_balances = {}
+
+    # Map pair → asset code
+    PAIR_ASSET = {"XBTMYR": "XBT", "ETHMYR": "ETH", "XRPMYR": "XRP", "SOLMYR": "SOL"}
+
     # Ambil P&L per pair sekali gus dari Luno API (FIFO cap, dari bot start)
     try:
         earliest    = db.query(Trade).order_by(Trade.created_at.asc()).first()
@@ -576,14 +585,14 @@ def get_grid_states(db: Session = Depends(get_db)):
         pair_pnl = pnl_map.get(gs.pair, {})
         pnl      = pair_pnl.get("pnl", 0.0)
 
-        # Invested & current holding value per pair (dari DB trades)
-        buys_db  = db.query(Trade).filter(Trade.pair == gs.pair, Trade.trade_type == "BUY",  Trade.status == "COMPLETED").all()
-        sells_db = db.query(Trade).filter(Trade.pair == gs.pair, Trade.trade_type == "SELL", Trade.status == "COMPLETED").all()
-        invested_myr    = sum(t.amount_myr for t in buys_db)
-        crypto_bought   = sum(t.amount_btc for t in buys_db)
-        crypto_sold     = sum(t.amount_btc for t in sells_db)
-        crypto_held     = max(0.0, crypto_bought - crypto_sold)
-        holding_val_myr = round(crypto_held * current_price, 2) if current_price else 0.0
+        # Invested dari bot DB trades
+        buys_db      = db.query(Trade).filter(Trade.pair == gs.pair, Trade.trade_type == "BUY",  Trade.status == "COMPLETED").all()
+        invested_myr = sum(t.amount_myr for t in buys_db)
+
+        # Holding value = LIVE balance dari Luno wallet (bukan DB je)
+        asset           = PAIR_ASSET.get(gs.pair, gs.base_currency)
+        live_crypto_bal = live_balances.get(asset, 0.0)
+        holding_val_myr = round(live_crypto_bal * current_price, 2) if current_price else 0.0
 
         result.append({
             "pair":                 gs.pair,
@@ -603,7 +612,7 @@ def get_grid_states(db: Session = Depends(get_db)):
             "pnl_myr":             round(pnl, 2),
             "invested_myr":        round(invested_myr, 2),
             "holding_value_myr":   holding_val_myr,
-            "crypto_held":         round(crypto_held, 8),
+            "crypto_held":         round(live_crypto_bal, 8),
         })
     return result
 
