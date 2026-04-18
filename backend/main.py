@@ -576,6 +576,15 @@ def get_grid_states(db: Session = Depends(get_db)):
         pair_pnl = pnl_map.get(gs.pair, {})
         pnl      = pair_pnl.get("pnl", 0.0)
 
+        # Invested & current holding value per pair (dari DB trades)
+        buys_db  = db.query(Trade).filter(Trade.pair == gs.pair, Trade.trade_type == "BUY",  Trade.status == "COMPLETED").all()
+        sells_db = db.query(Trade).filter(Trade.pair == gs.pair, Trade.trade_type == "SELL", Trade.status == "COMPLETED").all()
+        invested_myr    = sum(t.amount_myr for t in buys_db)
+        crypto_bought   = sum(t.amount_btc for t in buys_db)
+        crypto_sold     = sum(t.amount_btc for t in sells_db)
+        crypto_held     = max(0.0, crypto_bought - crypto_sold)
+        holding_val_myr = round(crypto_held * current_price, 2) if current_price else 0.0
+
         result.append({
             "pair":                 gs.pair,
             "display_name":        gs.display_name,
@@ -592,6 +601,9 @@ def get_grid_states(db: Session = Depends(get_db)):
             "last_trade_date":     last_trade.created_at.isoformat() if last_trade else None,
             "total_trades":        pair_pnl.get("num_trades", 0),
             "pnl_myr":             round(pnl, 2),
+            "invested_myr":        round(invested_myr, 2),
+            "holding_value_myr":   holding_val_myr,
+            "crypto_held":         round(crypto_held, 8),
         })
     return result
 

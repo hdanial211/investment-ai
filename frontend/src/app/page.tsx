@@ -344,18 +344,32 @@ export default function Dashboard() {
                   return (
                     <div key={gs.pair} className="rounded-xl p-2.5"
                       style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${gs.enabled ? col+"25" : "rgba(255,255,255,0.06)"}`, opacity: gs.enabled ? 1 : 0.5 }}>
-                      <div className="flex items-center gap-1.5 mb-1.5">
+                      {/* Header */}
+                      <div className="flex items-center gap-1.5 mb-2">
                         <span className="text-sm font-bold" style={{ color: col }}>{EMOJI[gs.pair] ?? "●"}</span>
                         <span className="text-[10px] font-semibold" style={{ color: "#94a3b8" }}>{gs.pair.replace("MYR","/MYR")}</span>
                         <span className="ml-auto text-[9px] px-1 py-0.5 rounded" style={{ background: gs.enabled?"rgba(0,212,170,0.1)":"rgba(100,116,139,0.1)", color: gs.enabled?"#00d4aa":"#475569" }}>
                           {gs.enabled ? "ON" : "OFF"}
                         </span>
                       </div>
-                      <p className="text-xs font-bold" style={{ color: "#f1f5f9" }}>
-                        {gs.current_price ? `RM ${gs.current_price.toLocaleString("ms-MY", { maximumFractionDigits: gs.current_price > 100 ? 0 : 4 })}` : "—"}
-                      </p>
-                      <p className="text-[10px] mt-0.5" style={{ color: pnlOk ? "#00d4aa" : "#ff4757" }}>
-                        P&L {pnlOk?"+":""}RM {(gs.pnl_myr ?? 0).toFixed(2)}
+                      {/* Modal & Nilai */}
+                      <div className="grid grid-cols-2 gap-1 mb-1.5">
+                        <div className="rounded-lg px-2 py-1" style={{ background: "rgba(255,255,255,0.04)" }}>
+                          <p className="text-[9px]" style={{ color: "#475569" }}>Modal</p>
+                          <p className="text-[11px] font-bold" style={{ color: "#f1f5f9" }}>
+                            RM {((gs as any).invested_myr ?? 0).toFixed(2)}
+                          </p>
+                        </div>
+                        <div className="rounded-lg px-2 py-1" style={{ background: "rgba(255,255,255,0.04)" }}>
+                          <p className="text-[9px]" style={{ color: "#475569" }}>Nilai Kini</p>
+                          <p className="text-[11px] font-bold" style={{ color: col }}>
+                            RM {((gs as any).holding_value_myr ?? 0).toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                      {/* P&L */}
+                      <p className="text-[10px]" style={{ color: pnlOk ? "#00d4aa" : "#ff4757" }}>
+                        P&L {pnlOk ? "+" : ""}RM {(gs.pnl_myr ?? 0).toFixed(2)}
                       </p>
                     </div>
                   );
