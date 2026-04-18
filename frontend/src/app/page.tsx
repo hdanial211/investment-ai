@@ -228,21 +228,10 @@ export default function Dashboard() {
                 {status?.bot_enabled ? "AKTIF" : "BERHENTI"}
               </span>
             </div>
-            <div className="flex flex-col gap-2 mb-4">
-              <div className="flex items-center justify-between p-2 rounded-lg" style={{ background: "rgba(0,212,170,0.05)", border: "1px solid rgba(0,212,170,0.2)" }}>
-                <div className="flex items-center gap-2">
-                  <Zap size={14} style={{ color: "#00d4aa" }} />
-                  <span className="text-xs font-medium" style={{ color: "#f1f5f9" }}>Enjin: Grid Sniper</span>
-                </div>
-                <span className="text-[10px]" style={{ color: "#00d4aa" }}>Setiap 3 Min</span>
-              </div>
-              <div className="flex items-center justify-between p-2 rounded-lg" style={{ background: "rgba(59,130,246,0.05)", border: "1px solid rgba(59,130,246,0.2)" }}>
-                <div className="flex items-center gap-2">
-                  <Clock size={14} style={{ color: "#3b82f6" }} />
-                  <span className="text-xs font-medium" style={{ color: "#f1f5f9" }}>Ringkasan Petang</span>
-                </div>
-                <span className="text-[10px]" style={{ color: "#3b82f6" }}>9:00 PM</span>
-              </div>
+            <div className="flex items-center gap-2 mb-4 p-2 rounded-lg" style={{ background: "rgba(0,212,170,0.05)", border: "1px solid rgba(0,212,170,0.2)" }}>
+              <Zap size={14} style={{ color: "#00d4aa" }} />
+              <span className="text-xs font-medium" style={{ color: "#f1f5f9" }}>Grid Sniper</span>
+              <span className="ml-auto text-[10px]" style={{ color: "#00d4aa" }}>Setiap 3 Min</span>
             </div>
             <div className="flex gap-2">
               <button
