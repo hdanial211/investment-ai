@@ -99,10 +99,11 @@ export default function Dashboard() {
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [countdown, setCountdown] = useState(30);
   const [gridStates, setGridStates] = useState<GridState[]>([]);
-
+  const [chartData, setChartData] = useState<{time:string;value:number;pnl:number;label:string}[]>([]);
+  const [chartHover, setChartHover] = useState<{x:number;y:number;point:any}|null>(null);
 
   const fetchAll = useCallback(async () => {
-    const [portfolioData, statusData, signalData, tradesData, statsData, settingsData, gridData] =
+    const [portfolioData, statusData, signalData, tradesData, statsData, settingsData, gridData, chartRaw] =
       await Promise.all([
         fetchJSON(`${API}/portfolio`),
         fetchJSON(`${API}/status`),
@@ -111,6 +112,7 @@ export default function Dashboard() {
         fetchJSON(`${API}/trades/stats`),
         fetchJSON(`${API}/settings`),
         fetchJSON(`${API}/grid-states`),
+        fetchJSON(`${API}/portfolio/chart`),
       ]);
     if (portfolioData) setPortfolio(portfolioData);
     if (statusData) setStatus(statusData);
@@ -119,6 +121,7 @@ export default function Dashboard() {
     if (statsData) setStats(statsData);
     if (settingsData) setSettings(settingsData);
     if (gridData) setGridStates(gridData);
+    if (chartRaw && chartRaw.length > 0) setChartData(chartRaw);
     setLastUpdate(new Date());
     setLoading(false);
   }, []);
@@ -217,23 +220,23 @@ export default function Dashboard() {
 
           {/* Bot Status Card */}
           <div className="glass-card p-5 slide-up" style={{ animationDelay: "0ms" }}>
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-3">
               <span className="text-sm font-medium" style={{ color: "#94a3b8" }}>Status Bot</span>
               <Activity size={16} style={{ color: "#94a3b8" }} />
             </div>
-            <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center gap-3 mb-3">
               <div className={`w-3 h-3 rounded-full pulse-dot`}
                 style={{ background: status?.bot_enabled ? "#00d4aa" : "#ff4757" }} />
               <span className="text-xl font-bold" style={{ color: status?.bot_enabled ? "#00d4aa" : "#ff4757" }}>
                 {status?.bot_enabled ? "AKTIF" : "BERHENTI"}
               </span>
             </div>
-            <div className="flex items-center gap-2 mb-4 p-2 rounded-lg" style={{ background: "rgba(0,212,170,0.05)", border: "1px solid rgba(0,212,170,0.2)" }}>
+            <div className="flex items-center gap-2 mb-3 p-2 rounded-lg" style={{ background: "rgba(0,212,170,0.05)", border: "1px solid rgba(0,212,170,0.2)" }}>
               <Zap size={14} style={{ color: "#00d4aa" }} />
               <span className="text-xs font-medium" style={{ color: "#f1f5f9" }}>Grid Sniper</span>
               <span className="ml-auto text-[10px]" style={{ color: "#00d4aa" }}>Setiap 3 Min</span>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 mb-4">
               <button
                 onClick={toggleBot}
                 disabled={toggling}
@@ -252,6 +255,82 @@ export default function Dashboard() {
                 style={{ background: "rgba(59,130,246,0.15)", color: "#3b82f6", border: "1px solid rgba(59,130,246,0.3)" }}>
                 {triggering ? "Running..." : <><Zap size={14} className="inline mr-1" />Run Sekarang</>}
               </button>
+            </div>
+
+            {/* Portfolio Mini Chart */}
+            <div className="rounded-xl overflow-hidden" style={{ background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.05)" }}>
+              <div className="px-3 pt-3 pb-1 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px]" style={{ color: "#64748b" }}>Jumlah Portfolio</p>
+                  <p className="text-base font-bold" style={{ color: "#f1f5f9" }}>
+                    RM {portfolio?.total_value?.toFixed(2) ?? "0.00"}
+                  </p>
+                  <p className="text-[10px]" style={{ color: (portfolio?.total_pnl ?? 0) >= 0 ? "#00d4aa" : "#ff4757" }}>
+                    {(portfolio?.total_pnl ?? 0) >= 0 ? "+" : ""}RM {portfolio?.total_pnl?.toFixed(2) ?? "0.00"} ({portfolio?.pnl_pct?.toFixed(2) ?? "0.00"}%)
+                  </p>
+                </div>
+                {chartHover && (
+                  <div className="text-right">
+                    <p className="text-xs font-bold" style={{ color: "#00d4aa" }}>RM {chartHover.point.value.toFixed(2)}</p>
+                    <p className="text-[10px]" style={{ color: "#64748b" }}>{chartHover.point.label}</p>
+                  </div>
+                )}
+              </div>
+              {chartData.length >= 2 ? (() => {
+                const W = 280, H = 80;
+                const vals = chartData.map(d => d.value);
+                const minV = Math.min(...vals) * 0.995;
+                const maxV = Math.max(...vals) * 1.005;
+                const toX = (i: number) => (i / (chartData.length - 1)) * W;
+                const toY = (v: number) => H - ((v - minV) / (maxV - minV || 1)) * H;
+                const pts = chartData.map((d, i) => `${toX(i).toFixed(1)},${toY(d.value).toFixed(1)}`).join(" ");
+                const lastY = toY(chartData[chartData.length - 1].value);
+                const pnlPositiveChart = (chartData[chartData.length-1]?.pnl ?? 0) >= 0;
+                const lineColor = pnlPositiveChart ? "#00d4aa" : "#ff4757";
+                const fillId = "chartFill";
+                return (
+                  <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }}
+                    onMouseMove={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const x = ((e.clientX - rect.left) / rect.width) * (chartData.length - 1);
+                      const idx = Math.round(Math.max(0, Math.min(chartData.length - 1, x)));
+                      setChartHover({ x: toX(idx), y: toY(chartData[idx].value), point: chartData[idx] });
+                    }}
+                    onMouseLeave={() => setChartHover(null)}>
+                    <defs>
+                      <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={lineColor} stopOpacity="0.25" />
+                        <stop offset="100%" stopColor={lineColor} stopOpacity="0" />
+                      </linearGradient>
+                    </defs>
+                    {/* Fill area */}
+                    <polygon
+                      points={`0,${H} ${pts} ${W},${H}`}
+                      fill={`url(#${fillId})`} />
+                    {/* Line */}
+                    <polyline
+                      points={pts}
+                      fill="none"
+                      stroke={lineColor}
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round" />
+                    {/* Hover dot */}
+                    {chartHover && (
+                      <>
+                        <line x1={chartHover.x} y1="0" x2={chartHover.x} y2={H}
+                          stroke="rgba(255,255,255,0.15)" strokeWidth="1" strokeDasharray="3 2" />
+                        <circle cx={chartHover.x} cy={chartHover.y} r="4"
+                          fill={lineColor} stroke="#0a0e1a" strokeWidth="2" />
+                      </>
+                    )}
+                  </svg>
+                );
+              })() : (
+                <div className="flex items-center justify-center h-16">
+                  <p className="text-xs" style={{ color: "#475569" }}>Menunggu data trade...</p>
+                </div>
+              )}
             </div>
           </div>
 
