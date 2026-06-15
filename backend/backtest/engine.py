@@ -115,10 +115,10 @@ def run_backtest(csv_path, model_path, initial_cash=1000.0, commission=0.001):
     
     import numpy as np
     signals = np.zeros(len(probs))
-    # Hanya beli jika confidence > 75%
-    signals[probs[:, 2] > 0.75] = 1
-    # Hanya jual (kalau ada) jika confidence > 75%
-    signals[probs[:, 0] > 0.75] = -1
+    # Hanya beli jika confidence > 65% (Disesuaikan untuk data setahun)
+    signals[probs[:, 2] > 0.65] = 1
+    # Hanya jual (kalau ada) jika confidence > 65%
+    signals[probs[:, 0] > 0.65] = -1
     
     df_features['ai_signal'] = signals
     
