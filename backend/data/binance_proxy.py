@@ -26,6 +26,7 @@ def download_historical_data(symbol='BTC/USDT', timeframe='1m', limit=1000, days
             all_ohlcv.extend(ohlcv)
             
             print(f"Fetched {len(ohlcv)} candles, total: {len(all_ohlcv)}...")
+            time.sleep(0.2)
             time.sleep(exchange.rateLimit / 1000) # Respect rate limits
             
         except Exception as e:

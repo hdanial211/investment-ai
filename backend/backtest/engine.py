@@ -39,10 +39,6 @@ class AIScalpingStrategy(bt.Strategy):
         if self.order:
             return
 
-        # Simple logic: 
-        # If AI says BUY (1) and we are not in the market, BUY.
-        # If AI says SELL (-1) and we are in the market, SELL.
-        
         current_signal = self.signal[0]
 
         if not self.position:
@@ -54,10 +50,19 @@ class AIScalpingStrategy(bt.Strategy):
                 self.order = self.buy(size=size)
                 logger.debug(f"BUY CREATED at {price} size {size}")
         else:
-            if current_signal == -1:
-                # Sell
+            # Risk Management: Take Profit (1.0%) and Stop Loss (0.5%)
+            profit_pct = (self.data.close[0] - self.position.price) / self.position.price
+            
+            if profit_pct >= 0.010:
                 self.order = self.close()
-                logger.debug(f"SELL CREATED at {self.data.close[0]}")
+                logger.debug(f"TAKE PROFIT HIT at {self.data.close[0]}")
+            elif profit_pct <= -0.005:
+                self.order = self.close()
+                logger.debug(f"STOP LOSS HIT at {self.data.close[0]}")
+            elif current_signal == -1:
+                # AI predicted SELL
+                self.order = self.close()
+                logger.debug(f"AI SELL CREATED at {self.data.close[0]}")
 
     def notify_order(self, order):
         if order.status in [order.Submitted, order.Accepted]:
@@ -92,17 +97,30 @@ def run_backtest(csv_path, model_path, initial_cash=1000.0, commission=0.001):
     import joblib
     model_obj = joblib.load(model_path)
     # Get the feature columns that the model expects
-    bb_cols = [c for c in df_features.columns if c.startswith('BBL') or c.startswith('BBM') or c.startswith('BBU') or c.startswith('BBB') or c.startswith('BBP')]
-    feature_cols = ['open', 'high', 'low', 'close', 'volume', 'EMA_9', 'EMA_21', 'EMA_Trend', 'RSI_14', 'Volume_ROC'] + bb_cols
+    bb_cols = [c for c in df_features.columns if c.startswith('BB')]
+    macd_cols = [c for c in df_features.columns if c.startswith('MACD')]
+    stoch_cols = [c for c in df_features.columns if c.startswith('STOCH')]
+    atr_cols = [c for c in df_features.columns if c.startswith('ATR')]
+    
+    feature_cols = ['open', 'high', 'low', 'close', 'volume', 'EMA_9', 'EMA_21', 'EMA_Trend', 'RSI_14', 'Volume_ROC'] + bb_cols + macd_cols + stoch_cols + atr_cols
     vwap_col = 'VWAP_D' if 'VWAP_D' in df_features.columns else 'VWAP'
     if vwap_col in df_features.columns:
         feature_cols.append(vwap_col)
         
     X = df_features[feature_cols]
     
-    # Predict everything at once for speed
-    predictions = model_obj.predict(X)
-    df_features['ai_signal'] = predictions - 1  # Shift back to -1, 0, 1
+    # Predict using probabilities to filter out low-confidence signals
+    probs = model_obj.predict_proba(X)
+    # probs[:, 0] = SELL (-1), probs[:, 1] = HOLD (0), probs[:, 2] = BUY (1)
+    
+    import numpy as np
+    signals = np.zeros(len(probs))
+    # Hanya beli jika confidence > 75%
+    signals[probs[:, 2] > 0.75] = 1
+    # Hanya jual (kalau ada) jika confidence > 75%
+    signals[probs[:, 0] > 0.75] = -1
+    
+    df_features['ai_signal'] = signals
     
     logger.info(f"Signal Counts:\n{df_features['ai_signal'].value_counts()}")
     

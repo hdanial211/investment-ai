@@ -21,13 +21,17 @@ class AIScalpingModel:
         logger.info("Calculating features (Technical Indicators)...")
         df_features = calculate_features(df)
         
-        # Select features
-        bb_cols = [c for c in df_features.columns if c.startswith('BBL') or c.startswith('BBM') or c.startswith('BBU') or c.startswith('BBB') or c.startswith('BBP')]
+        # Select features dynamically
+        bb_cols = [c for c in df_features.columns if c.startswith('BB')]
+        macd_cols = [c for c in df_features.columns if c.startswith('MACD')]
+        stoch_cols = [c for c in df_features.columns if c.startswith('STOCH')]
+        atr_cols = [c for c in df_features.columns if c.startswith('ATR')]
+        
         feature_cols = [
             'open', 'high', 'low', 'close', 'volume', 
             'EMA_9', 'EMA_21', 'EMA_Trend', 'RSI_14', 
             'Volume_ROC'
-        ] + bb_cols
+        ] + bb_cols + macd_cols + stoch_cols + atr_cols
         
         # VWAP column name depends on the fallback or pandas_ta
         vwap_col = 'VWAP_D' if 'VWAP_D' in df_features.columns else 'VWAP'
@@ -45,18 +49,21 @@ class AIScalpingModel:
         # Split data (Chronological split is better for trading, no shuffle)
         X_train, X_test, y_train, y_test = train_test_split(X, y_mapped, test_size=0.2, shuffle=False)
         
-        logger.info("Training XGBoost Classifier...")
+        logger.info("Training XGBoost Classifier with Class Weights...")
+        from sklearn.utils.class_weight import compute_sample_weight
+        sample_weights = compute_sample_weight(class_weight='balanced', y=y_train)
+        
         self.model = xgb.XGBClassifier(
             objective='multi:softprob',
             num_class=3,
-            max_depth=5,
-            learning_rate=0.05,
-            n_estimators=100,
+            max_depth=6,
+            learning_rate=0.01,
+            n_estimators=300,
             n_jobs=-1,
             random_state=42
         )
         
-        self.model.fit(X_train, y_train)
+        self.model.fit(X_train, y_train, sample_weight=sample_weights)
         
         logger.info("Evaluating model...")
         predictions = self.model.predict(X_test)
