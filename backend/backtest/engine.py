@@ -93,34 +93,45 @@ def run_backtest(csv_path, model_path, initial_cash=1000.0, commission=0.001):
     # 2. Calculate Features & Predict
     df_features = calculate_features(df)
     
-    # Load Model directly using joblib for bulk prediction
-    import joblib
-    model_obj = joblib.load(model_path)
-    # Get the feature columns that the model expects
     bb_cols = [c for c in df_features.columns if c.startswith('BB')]
     macd_cols = [c for c in df_features.columns if c.startswith('MACD')]
     stoch_cols = [c for c in df_features.columns if c.startswith('STOCH')]
     atr_cols = [c for c in df_features.columns if c.startswith('ATR')]
-    
     feature_cols = ['open', 'high', 'low', 'close', 'volume', 'EMA_9', 'EMA_21', 'EMA_Trend', 'RSI_14', 'Volume_ROC'] + bb_cols + macd_cols + stoch_cols + atr_cols
     vwap_col = 'VWAP_D' if 'VWAP_D' in df_features.columns else 'VWAP'
     if vwap_col in df_features.columns:
         feature_cols.append(vwap_col)
-        
-    X = df_features[feature_cols]
-    
-    # Predict using probabilities to filter out low-confidence signals
-    probs = model_obj.predict_proba(X)
-    # probs[:, 0] = SELL (-1), probs[:, 1] = HOLD (0), probs[:, 2] = BUY (1)
-    
     import numpy as np
-    signals = np.zeros(len(probs))
-    # Hanya beli jika confidence > 65% (Disesuaikan untuk data setahun)
-    signals[probs[:, 2] > 0.65] = 1
-    # Hanya jual (kalau ada) jika confidence > 65%
-    signals[probs[:, 0] > 0.65] = -1
-    
-    df_features['ai_signal'] = signals
+
+    if model_path.endswith('.zip'):
+        from stable_baselines3 import PPO
+        logger.info("Loading Reinforcement Learning (PPO) model...")
+        model_obj = PPO.load(model_path)
+        
+        # Vectorized prediction (much faster than row-by-row)
+        obs = df_features[feature_cols].values.astype(np.float32)
+        # Pad with 0.0 for position and unrealized_profit
+        padding = np.zeros((len(obs), 2), dtype=np.float32)
+        obs = np.hstack((obs, padding))
+        obs = np.nan_to_num(obs, nan=0.0, posinf=0.0, neginf=0.0)
+        
+        actions, _states = model_obj.predict(obs, deterministic=True)
+        
+        signals = np.zeros(len(actions))
+        signals[actions == 1] = 1
+        signals[actions == 2] = -1
+        
+        df_features['ai_signal'] = signals
+    else:
+        logger.info("Loading XGBoost model...")
+        import joblib
+        model_obj = joblib.load(model_path)
+        X = df_features[feature_cols]
+        probs = model_obj.predict_proba(X)
+        signals = np.zeros(len(probs))
+        signals[probs[:, 2] > 0.65] = 1
+        signals[probs[:, 0] > 0.65] = -1
+        df_features['ai_signal'] = signals
     
     logger.info(f"Signal Counts:\n{df_features['ai_signal'].value_counts()}")
     
@@ -160,7 +171,10 @@ if __name__ == "__main__":
     
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
     data_path = os.path.join(base_dir, 'data', dataset_name)
-    model_path = os.path.join(base_dir, 'models', model_name)
+    if model_name.endswith('.zip'):
+        model_path = os.path.join(base_dir, 'backend', 'models', model_name)
+    else:
+        model_path = os.path.join(base_dir, 'models', model_name)
     
     if os.path.exists(data_path) and os.path.exists(model_path):
         run_backtest(data_path, model_path, initial_cash=1000.0) # RM1000 modal permulaan
