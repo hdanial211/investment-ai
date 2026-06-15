@@ -20,3 +20,10 @@ mcp>=1.0.0
 pytz>=2024.1
 rich>=13.7.0
 loguru>=0.7.2
+
+# Hata API & AI Backtesting
+ccxt>=4.2.0
+websockets>=12.0
+scikit-learn>=1.4.0
+xgboost>=2.0.3
+backtrader>=1.9.78.123
