@@ -12,8 +12,8 @@ def main():
     try:
         # Test 1: Get Markets (Public endpoint usually)
         print("\n--- Fetching Markets ---")
-        # markets = client.get_markets()
-        # print(f"Successfully fetched {len(markets.get('data', []))} markets.")
+        markets = client.get_markets()
+        print(f"Successfully fetched {len(markets.get('symbols', []))} markets.")
         
         # Test 2: Get Balance (Private endpoint)
         print("\n--- Fetching Balances ---")

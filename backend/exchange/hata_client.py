@@ -1,4 +1,5 @@
 import os
+import time
 import hmac
 import hashlib
 import requests
@@ -30,6 +31,10 @@ class HataClient:
     def _request(self, method: str, endpoint: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
         params = params or {}
         
+        # Add timestamp for signed endpoints
+        if self.api_secret and "/sapi/" in endpoint:
+            params['timestamp'] = int(time.time())
+            
         headers = {}
         if self.api_key:
             headers["X-API-KEY"] = self.api_key
@@ -58,8 +63,8 @@ class HataClient:
 
     def get_markets(self):
         """Get available markets (no auth required usually)"""
-        return self._request("GET", "/api/v1/markets")
+        return self._request("GET", "/orderbook/api/v2/exchange-info")
 
     def get_balance(self):
         """Get account balance"""
-        return self._request("GET", "/api/v1/account/balances")
+        return self._request("GET", "/orderbook/sapi/balance")
