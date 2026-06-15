@@ -86,15 +86,23 @@ class AIScalpingModel:
         return prediction[0] - 1
 
 if __name__ == "__main__":
+    import sys
     logging.basicConfig(level=logging.INFO)
-    model = AIScalpingModel(model_path='models/xgboost_scalping.pkl')
-    # Change path to data relative to where script is executed
-    data_path = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'BTC_USDT_1m.csv')
     
-    # Try the alternate path if running from backend folder directly
+    # Allow passing dataset filename via arguments
+    dataset_name = sys.argv[1] if len(sys.argv) > 1 else 'BTC_USDT_1m.csv'
+    model_name = sys.argv[2] if len(sys.argv) > 2 else f"xgboost_scalping_{dataset_name.split('_')[0]}.pkl"
+    
+    model_path = f"models/{model_name}"
+    model = AIScalpingModel(model_path=model_path)
+    
+    # Determine the correct data path depending on execution directory
+    data_path = os.path.join(os.path.dirname(__file__), '..', '..', 'data', dataset_name)
     if not os.path.exists(data_path):
-        data_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'BTC_USDT_1m.csv')
-        
+        data_path = os.path.join(os.path.dirname(__file__), '..', 'data', dataset_name)
+        if not os.path.exists(data_path):
+            data_path = os.path.join(os.path.dirname(__file__), 'data', dataset_name)
+            
     if os.path.exists(data_path):
         model.train(data_path)
     else:

@@ -45,4 +45,9 @@ def download_historical_data(symbol='BTC/USDT', timeframe='1m', limit=1000, days
     return df
 
 if __name__ == "__main__":
-    download_historical_data('BTC/USDT', '1m', 1000, 7) # Get 7 days of 1m data for testing
+    import sys
+    symbol = sys.argv[1] if len(sys.argv) > 1 else 'BTC/USDT'
+    timeframe = sys.argv[2] if len(sys.argv) > 2 else '1m'
+    days = int(sys.argv[3]) if len(sys.argv) > 3 else 7
+    
+    download_historical_data(symbol, timeframe, 1000, days)
