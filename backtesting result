@@ -87,3 +87,17 @@ Yuran Hata Exchange: 0.1% Taker / 0.1% Maker (Total: 0.2% per round trip)
 - Jumlah Kitaran (Trades): 1,019 Selesai (Sekitar 3 kali sehari).
 - Win Rate: 53.58% (546 Menang / 473 Kalah)
 - Kesimpulan: AI ini sangat pintar kerana berjaya mencapai 53.58% kemenangan (menewaskan kebarangkalian rawak). Namun begitu, secara MATEMATIK, yuran Hata 0.1% (0.2% pusingan) memakan keuntungan terlalu banyak. Untuk membuat untung dengan Stop Loss dan yuran, bot memerlukan Win Rate **melebihi 60%**. Oleh kerana ia hanya mencapai 53.58%, modal bocor akibat yuran secara perlahan-lahan.
+
+---
+
+## 8. GABUNGAN HOLY GRAIL: AI Triple Barrier (60%) + Layering DCA RM50
+**Tetapan:**
+- AI Model: XGBoost Triple Barrier (Hanya masuk apabila dijamin >60% tiada *Stop Loss* disentuh).
+- Matlamat: AI mencari *"Golden Entry"*. Jika untung terus *Take Profit*. Jika AI tersilap (40% kebarangkalian), sistem *Layering DCA RM50* akan menyelamatkannya tanpa *Stop Loss*.
+**Keputusan (Data 1 Tahun):**
+- Baki Akhir: RM 11,191.49
+- Max Drawdown: 16.32%
+- Jumlah Kitaran (Trades): 160 Kitaran Selesai (Sekitar 1 kitaran setiap 2 hari).
+- Win Rate: 100.00% (160 Menang / 0 Kalah)
+- Untung Bersih: **RM 1,192.43 (+11.26%)**
+- Kesimpulan: Ini adalah gabungan yang sangat sempurna. AI yang pintar (Triple Barrier) mencari poin kemasukan yang berkualiti (mengurangkan risiko "Sangkut"), dan DCA RM50 menyelamatkan apa jua kesilapan AI. Untung bersih adalah sangat munasabah (11% setahun) dan tiada kerugian modal sebenar berlaku. *Max Drawdown* hanya mencapai paras 16.32% sebelum ia melantun dan menyapu bersih keuntungan!

@@ -113,8 +113,10 @@ def run_dca_backtest(csv_path, model_path, initial_cash=10000.0, commission=0.00
     probs = model_obj.predict_proba(X)
     signals = np.zeros(len(probs))
     
-    # Menurunkan syarat masuk dari 65% kepada 52% supaya ia berdagang 10-20 kali sehari!
-    signals[probs[:, 2] > 0.52] = 1
+    # Model Baharu: Triple Barrier (Binary). Kelas 1 ialah "Golden Entry".
+    # Memandangkan AI ini sudah cukup bijak (53% win rate semula jadi), kita hanya 
+    # baling pukat apabila ia sekurang-kurangnya 60% pasti (Gabungan Kualiti & Kekerapan)
+    signals[probs[:, 1] > 0.60] = 1
     # We ignore sell signals (-1) because DCA relies purely on Take Profit math.
     
     df_features['ai_signal'] = signals
