@@ -128,8 +128,8 @@ def run_backtest(csv_path, model_path, initial_cash=1000.0, commission=0.001):
         X = df_features[feature_cols]
         probs = model_obj.predict_proba(X)
         signals = np.zeros(len(probs))
-        signals[probs[:, 2] > 0.65] = 1
-        signals[probs[:, 0] > 0.65] = -1
+        # Binary Classification: Class 1 is "Golden Entry"
+        signals[probs[:, 1] > 0.70] = 1 # We use 70% threshold to ensure high precision and positive expectancy
         df_features['ai_signal'] = signals
     
     logger.info(f"Signal Counts:\n{df_features['ai_signal'].value_counts()}")

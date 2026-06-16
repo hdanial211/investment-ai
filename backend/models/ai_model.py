@@ -38,11 +38,53 @@ class AIScalpingModel:
         if vwap_col in df_features.columns:
             feature_cols.append(vwap_col)
             
+        df = df.dropna().reset_index(drop=True)
+    
+        # 2. Define Target (Triple Barrier Method for Golden Entry)
+        import numpy as np
+        from numba import jit
+        
+        @jit(nopython=True)
+        def apply_triple_barrier(closes, highs, lows, tp_pct, sl_pct, max_horizon):
+            n = len(closes)
+            labels = np.zeros(n, dtype=np.int32)
+            for i in range(n - 1):
+                entry_price = closes[i]
+                tp_price = entry_price * (1 + tp_pct)
+                sl_price = entry_price * (1 + sl_pct)
+                
+                label = 0 # 0 means Failure/SL hit/Time ran out
+                for j in range(1, max_horizon + 1):
+                    idx = i + j
+                    if idx >= n:
+                        break
+                    # Always check SL first for safety (worst case scenario within the minute)
+                    if lows[idx] <= sl_price:
+                        label = 0
+                        break
+                    # Did we hit TP safely?
+                    if highs[idx] >= tp_price:
+                        label = 1
+                        break
+                labels[i] = label
+            return labels
+
+        logger.info("Applying Triple Barrier Labelling (TP=0.6%, SL=-0.4%, Horizon=60m)...")
+        closes = df_features['close'].values
+        highs = df_features['high'].values
+        lows = df_features['low'].values
+        
+        # TP = 0.006 (0.6%), SL = -0.004 (-0.4%), Max Wait = 60 mins
+        labels = apply_triple_barrier(closes, highs, lows, 0.006, -0.004, 60)
+        df_features['target'] = labels
+        
+        df_features = df_features.iloc[:-60].reset_index(drop=True)
+            
         X = df_features[feature_cols]
         y = df_features['target']
         
-        # Need to shift class labels from [-1, 0, 1] to [0, 1, 2] for XGBoost multiclass
-        y_mapped = y + 1 
+        # Binary classification target (0 or 1)
+        y_mapped = y
         
         logger.info(f"Training data shape: {X.shape}")
         
@@ -54,8 +96,7 @@ class AIScalpingModel:
         sample_weights = compute_sample_weight(class_weight='balanced', y=y_train)
         
         self.model = xgb.XGBClassifier(
-            objective='multi:softprob',
-            num_class=3,
+            objective='binary:logistic',
             max_depth=6,
             learning_rate=0.01,
             n_estimators=300,
@@ -71,7 +112,7 @@ class AIScalpingModel:
         acc = accuracy_score(y_test, predictions)
         logger.info(f"Accuracy: {acc*100:.2f}%")
         
-        report = classification_report(y_test, predictions, target_names=['SELL (-1)', 'HOLD (0)', 'BUY (1)'], zero_division=0)
+        report = classification_report(y_test, predictions, target_names=['FAILURE/HOLD (0)', 'GOLDEN ENTRY (1)'], zero_division=0)
         print("\nClassification Report:")
         print(report)
         
@@ -89,8 +130,7 @@ class AIScalpingModel:
                 
         # Must match feature_cols
         prediction = self.model.predict(current_features)
-        # Shift back to -1, 0, 1
-        return prediction[0] - 1
+        return prediction[0]
 
 if __name__ == "__main__":
     import sys
