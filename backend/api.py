@@ -4,6 +4,7 @@ import os
 import uvicorn
 from pydantic import BaseModel
 from dotenv import load_dotenv
+from shared import engine_state
 
 load_dotenv()
 
@@ -15,18 +16,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Global State
-engine_state = {
-    "current_price": 0.0,
-    "last_signal": 0.0, # 0 = wait, 1 = golden entry
-    "confidence": 0.0,
-    "is_auto": False,
-    "layers": [],
-    "total_pnl": 0.0,
-    "balance_myr": 10000.00,
-    "trade_amount_myr": 50.0
-}
 
 class AutoToggle(BaseModel):
     is_auto: bool

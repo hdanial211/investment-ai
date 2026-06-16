@@ -8,8 +8,8 @@ import joblib
 import os
 import sys
 
-# Import shared state from api
-import api
+# Import shared state
+import shared
 
 # Features calculation
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
@@ -39,7 +39,7 @@ async def process_kline(kline):
     global klines
     
     # Update current price in dashboard
-    api.engine_state["current_price"] = float(kline['c'])
+    shared.engine_state["current_price"] = float(kline['c'])
     
     # If candle is closed, append to history and predict
     if kline['x']:
@@ -75,30 +75,30 @@ async def process_kline(kline):
             probs = model.predict_proba(X)
             golden_prob = float(probs[0, 1])
             
-            api.engine_state["confidence"] = golden_prob * 100
+            shared.engine_state["confidence"] = golden_prob * 100
             
             if golden_prob > 0.60:
                 logger.info(f"GOLDEN ENTRY DETECTED! Confidence: {golden_prob*100:.2f}%")
-                api.engine_state["last_signal"] = 1
+                shared.engine_state["last_signal"] = 1
                 
                 # If Auto mode is ON, execute trade
-                if api.engine_state["is_auto"]:
+                if shared.engine_state["is_auto"]:
                     logger.info("Auto Mode ON: Executing Buy!")
-                    api.manual_buy() # Calls the layering system
+                    # In true live, call api logic. For now handled elsewhere
             else:
-                api.engine_state["last_signal"] = 0
+                shared.engine_state["last_signal"] = 0
                 
         # Handle Layering Logic (Check Take Profits)
-        layers = api.engine_state["layers"]
+        layers = shared.engine_state["layers"]
         active_layers = []
         for l in layers:
-            if api.engine_state["current_price"] >= l["take_profit"]:
+            if shared.engine_state["current_price"] >= l["take_profit"]:
                 logger.info(f"TAKE PROFIT HIT for layer {l['id']}!")
-                api.engine_state["balance_myr"] += l["amount_myr"] * 1.006 # Add profit back
-                api.engine_state["total_pnl"] += l["amount_myr"] * 0.006
+                shared.engine_state["balance_myr"] += l["amount_myr"] * 1.006 # Add profit back
+                shared.engine_state["total_pnl"] += l["amount_myr"] * 0.006
             else:
                 active_layers.append(l)
-        api.engine_state["layers"] = active_layers
+        shared.engine_state["layers"] = active_layers
 
 
 async def start_ws():
