@@ -26,6 +26,15 @@ class AutoToggle(BaseModel):
 class AmountSetting(BaseModel):
     amount: float
 
+class BacktestParams(BaseModel):
+    initial_cash: float = 100000.0
+    trade_size_fiat: float = 4000.0
+    max_layers: int = 6
+    drop_threshold: float = 0.05
+    take_profit_pct: float = 0.10
+    trailing_activation_pct: float = 0.03
+    trailing_gap_pct: float = 0.01
+
 @app.get("/api/state")
 def get_state():
     return engine_state
@@ -66,6 +75,70 @@ def panic_sell():
     engine_state["layers"] = []
     # Simulate closing all at market
     return {"status": "success", "message": "All positions closed"}
+
+from fastapi import WebSocket, WebSocketDisconnect
+import asyncio
+import json
+
+@app.websocket("/api/backtest-stream")
+async def websocket_backtest(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        config_msg = await websocket.receive_text()
+        config = json.loads(config_msg)
+        params = BacktestParams(**config)
+        
+        queue = asyncio.Queue()
+        loop = asyncio.get_running_loop()
+        
+        def progress_callback(msg):
+            print(f"Callback received: {msg.get('type')}")
+            asyncio.run_coroutine_threadsafe(queue.put(msg), loop)
+            
+        def run_backtest_thread():
+            try:
+                base_dir = os.path.dirname(os.path.dirname(__file__))
+                data_path = os.path.join(base_dir, 'data', 'ETH_USDT_1m.csv')
+                model_path = os.path.join(base_dir, 'models', 'xgboost_scalping_ETH_1y.pkl')
+                
+                if not os.path.exists(data_path) or not os.path.exists(model_path):
+                    progress_callback({"type": "error", "message": "Data or model not found"})
+                    return
+
+                drop_threshold_val = -abs(params.drop_threshold)
+                from backtest.dca_engine import run_dca_backtest
+                metrics = run_dca_backtest(
+                    csv_path=data_path, 
+                    model_path=model_path,
+                    initial_cash=params.initial_cash,
+                    trade_size_fiat=params.trade_size_fiat,
+                    commission=0.000, 
+                    drop_threshold=drop_threshold_val,
+                    take_profit_pct=params.take_profit_pct,
+                    max_layers_per_signal=params.max_layers,
+                    trailing_activation_pct=params.trailing_activation_pct,
+                    trailing_gap_pct=params.trailing_gap_pct,
+                    progress_callback=progress_callback
+                )
+                progress_callback({"type": "complete", "metrics": metrics})
+            except Exception as e:
+                progress_callback({"type": "error", "message": str(e)})
+
+        t = threading.Thread(target=run_backtest_thread)
+        t.start()
+        
+        while True:
+            msg = await queue.get()
+            print(f"Sending WS msg: {msg.get('type')}")
+            await websocket.send_text(json.dumps(msg))
+            if msg.get("type") in ["complete", "error"]:
+                break
+    except WebSocketDisconnect:
+        print("Client disconnected from backtest stream")
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"WebSocket error: {e}")
 
 def update_balance_loop():
     while True:

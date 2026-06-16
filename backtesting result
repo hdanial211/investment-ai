@@ -46,9 +46,58 @@ Yuran Hata Exchange: 0.1% Taker / 0.1% Maker (Total: 0.2% per round trip)
 - Hukuman Keras: AI didenda (-10 mata) jika kena SL, dan hanya dipuji jika TP bersih melebihi yuran.
 **Keputusan (Data 1 Tahun):**
 - Jumlah Trades: 0
+
 ---
 
-## 5. Strategi Layering / Dollar Cost Averaging (DCA) Tanpa Stop Loss
+## 5. Strategi Layering / Dollar Cost Averaging (DCA)* AI Model: xgboost_scalping_ETH_1y.pkl (Probability > 0.60 untuk Entry Pertama)
+* Jumlah Entry Selesai: 22
+
+---
+
+## 6. Layering Skala Besar (Modal 100k) dengan AI Tranche (Max 6 Layer)
+**Tetapan Strategy:**
+* Pasangan: ETH/USDT (1 Minit)
+* Tempoh Data: 1 Tahun
+* Modal Permulaan: RM 100,000.00
+* Saiz Entry (DCA): RM 4,000.00 setiap lapis
+* Syarat DCA: Jatuh -5% (Maksimum 6 lapisan bagi setiap Tranche)
+* Kitaran Baru: Buka 6 kuota baharu JIKA AI mengeluarkan Signal semasa sedang Hold.
+* Syarat Take Profit: Naik +2% (Menggunakan Limit Order: Yuran Maker 0.00%)
+
+**Keputusan Ujian (Backtest) dengan Yuran 0.00%:**
+* Baki Akhir Portfolio: RM 109,604.65 (Termasuk Floating Loss)
+* Pulangan Keseluruhan (Total Return): +9.17%
+* Keuntungan Direalisasi (Realized PnL): **+RM 11,589.09** *(Berbanding RM 9,389.93 jika guna Market Order)*
+* Kadar Kemenangan (Win Rate): 100.00% (75 Menang / 0 Kalah)
+* Drawdown Maksimum: 13.44%
+
+*Nota Analisis Limit Order vs Market Order:*
+Jika kita menggunakan *Market Order* (seperti kebiasaan), Hata mengenakan caj sekitar 0.2% dan kita hanya mendapat untung bersih RM 9,389. Tetapi apabila kita menukar strategi menembak kepada **Limit Order (Yuran Maker 0.00%)**, keuntungan melompat naik kepada **RM 11,589.09**. Ini bermakna kita berjaya menyelamatkan dan membolos lebih daripada **RM 2,199.16** wang yuran yang sepatutnya menjadi milik Exchange Hata! Ini satu perbezaan yang amat ketara (+23% lonjakan keuntungan tunai) hanya dengan trik pesanan ringkas.
+
+---
+
+## 7. Strategi Layering Skala Besar dengan "Trailing Stop" (0% Yuran)
+**Tetapan Strategy:**
+* Pasangan: ETH/USDT (1 Minit)
+* Tempoh Data: 1 Tahun
+* Saiz Entry (DCA): RM 4,000.00 setiap lapis
+* Syarat DCA: Jatuh -5% (Maksimum 6 lapisan bagi setiap Tranche)
+* **Take Profit Dinamik:** 
+  - Jika capai +3.0%, pasang *Trailing Stop* jarak 1.0%.
+  - *Hard TP* Maksimum: +10.0%.
+
+**Keputusan Ujian (Backtest):**
+* Baki Akhir Portfolio: RM 109,598.16
+* Pulangan Keseluruhan (Total Return): +9.17%
+* Keuntungan Direalisasi (Realized PnL): **+RM 11,627.67** *(Lebih tinggi berbanding Fixed TP)*
+* Jumlah Dagangan: 39 Transaksi sahaja
+* Kadar Kemenangan (Win Rate): 100.00% (39 Menang / 0 Kalah)
+* Drawdown Maksimum: 13.38%
+
+*Nota Analisis Trailing Stop:*
+Sistem Trailing Stop berjaya **meningkatkan** jumlah untung tunai (RM 11,627.67 vs RM 11,589.09) walaupun jumlah transaksi jatuh mendadak daripada 75 kepada 39 kali sahaja. Ini bermaksud AI menahan pegangan (*hold*) dengan lebih lama untuk memerah untung yang lebih maksima pada setiap kitaran. Kita kurangkan 50% kekerapan *trading*, tetapi kita buat untung lebih banyak! Strategi yang amat efisien dan kurang merisikokan diri di pasaran.
+
+## 7. Strategi Layering / Dollar Cost Averaging (DCA) Tanpa Stop Loss
 **Tetapan:**
 - AI Model: XGBoost (Untuk Entry Pertama sahaja > 65%).
 - Matlamat: Beli RM 50. Jika jatuh 5%, tambah RM 50 (Layering). Tiada Stop Loss. Jual semua jika untung +2.0% dari Harga Purata.

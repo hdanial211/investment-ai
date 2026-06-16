@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
-import { Activity, Power, ShieldAlert, Zap, Layers } from 'lucide-react'
+import { Activity, Power, ShieldAlert, Zap, Layers, BarChart2, Radio } from 'lucide-react'
 import './App.css'
+import BacktestSimulator from './BacktestSimulator'
 
 function App() {
+  const [activeTab, setActiveTab] = useState('live') // 'live' or 'simulator'
   const [state, setState] = useState({
     current_price: 0,
     last_signal: 0,
@@ -50,13 +52,30 @@ function App() {
           <Zap className="neon-icon" size={32} />
           <h1>INVESTMENT AI <span className="badge">LIVE</span></h1>
         </div>
+        
+        <div className="tab-navigation">
+          <button 
+            className={`tab-btn ${activeTab === 'live' ? 'active' : ''}`}
+            onClick={() => setActiveTab('live')}
+          >
+            <Radio size={16} /> LIVE TRADE
+          </button>
+          <button 
+            className={`tab-btn ${activeTab === 'simulator' ? 'active' : ''}`}
+            onClick={() => setActiveTab('simulator')}
+          >
+            <BarChart2 size={16} /> SIMULATOR
+          </button>
+        </div>
+
         <div className="status-indicator">
           <div className={`led ${state.is_auto ? 'on' : 'off'}`}></div>
           <span>{state.is_auto ? 'AUTO TRADING ACTIVE' : 'MANUAL MODE'}</span>
         </div>
       </header>
 
-      <main className="grid-container">
+      {activeTab === 'live' ? (
+        <main className="grid-container">
         {/* Panel Harga & AI (Kiri Atas) */}
         <section className="panel price-ai-panel">
           <h2><Activity size={20} /> ETH/USDT</h2>
@@ -158,6 +177,9 @@ function App() {
           )}
         </section>
       </main>
+      ) : (
+        <BacktestSimulator />
+      )}
     </div>
   )
 }

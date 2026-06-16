@@ -65,3 +65,44 @@ def print_metrics(strategy):
         logger.info("No closed trades to analyze.")
         
     logger.info("------------------------")
+
+def get_metrics_dict(strategy):
+    """
+    Return the metrics as a dictionary.
+    """
+    metrics = {}
+    
+    # Returns
+    rets = strategy.analyzers.returns.get_analysis()
+    metrics['total_return_pct'] = rets.get('rtot', 0) * 100
+    
+    # Drawdown
+    dd = strategy.analyzers.drawdown.get_analysis()
+    metrics['max_drawdown_pct'] = dd.get('max', {}).get('drawdown', 0)
+    
+    # Trade Analyzer
+    trades = strategy.analyzers.trades.get_analysis()
+    total_trades = trades.get('total', {}).get('closed', 0)
+    metrics['total_closed_trades'] = total_trades
+    
+    if total_trades > 0:
+        won = trades.get('won', {}).get('total', 0)
+        lost = trades.get('lost', {}).get('total', 0)
+        metrics['win_rate_pct'] = (won / total_trades) * 100
+        metrics['won_trades'] = won
+        metrics['lost_trades'] = lost
+        
+        # Profit Factor
+        gross_profit = trades.get('won', {}).get('pnl', {}).get('total', 0)
+        gross_loss = abs(trades.get('lost', {}).get('pnl', {}).get('total', 0))
+        metrics['profit_factor'] = gross_profit / gross_loss if gross_loss > 0 else float('inf')
+            
+        metrics['net_pnl'] = trades.get('pnl', {}).get('net', {}).get('total', 0)
+    else:
+        metrics['win_rate_pct'] = 0.0
+        metrics['won_trades'] = 0
+        metrics['lost_trades'] = 0
+        metrics['profit_factor'] = 0.0
+        metrics['net_pnl'] = 0.0
+        
+    return metrics
