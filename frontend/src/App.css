@@ -22,9 +22,11 @@ body {
 }
 
 .dashboard {
-  max-width: 1200px;
+  width: 100%;
+  max-width: 1600px; /* Lebar maksimum dinaikkan atau gunakan width: 100% tanpa max */
   margin: 0 auto;
   padding: 2rem;
+  box-sizing: border-box;
 }
 
 /* Header */
@@ -338,4 +340,57 @@ button {
   text-align: center;
   padding: 2rem 0;
   font-style: italic;
+}
+
+/* Amount Settings */
+.amount-setting {
+  margin-bottom: 1.5rem;
+}
+
+.amount-setting label {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.amount-controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.amount-controls button {
+  flex: 1;
+  padding: 0.5rem;
+  font-size: 0.9rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.amount-controls button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.amount-controls button.active {
+  background: var(--accent-blue);
+  color: white;
+  border-color: var(--accent-blue);
+}
+
+.amount-controls input {
+  flex: 1;
+  padding: 0.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: rgba(0, 0, 0, 0.2);
+  color: white;
+  font-family: inherit;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.amount-controls input:focus {
+  outline: none;
+  border-color: var(--accent-blue);
 }

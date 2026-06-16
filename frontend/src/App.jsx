@@ -39,6 +39,10 @@ function App() {
     await axios.post('http://localhost:8000/api/panic-sell')
   }
 
+  const setAmount = async (amount) => {
+    await axios.post('http://localhost:8000/api/set-amount', { amount: parseFloat(amount) })
+  }
+
   return (
     <div className="dashboard">
       <header className="header">
@@ -92,12 +96,30 @@ function App() {
         {/* Panel Kawalan (Kanan Bawah) */}
         <section className="panel control-panel">
           <h2>Kawalan Eksekusi Hata</h2>
+          
+          <div className="amount-setting">
+            <label>Saiz Entry (RM)</label>
+            <div className="amount-controls">
+              <button className={state.trade_amount_myr === 50 ? 'active' : ''} onClick={() => setAmount(50)}>50</button>
+              <button className={state.trade_amount_myr === 100 ? 'active' : ''} onClick={() => setAmount(100)}>100</button>
+              <button className={state.trade_amount_myr === 500 ? 'active' : ''} onClick={() => setAmount(500)}>500</button>
+              <input 
+                type="number" 
+                value={state.trade_amount_myr || ''} 
+                onChange={(e) => setAmount(e.target.value)}
+                min="10"
+                step="10"
+                placeholder="Custom"
+              />
+            </div>
+          </div>
+
           <div className="button-group">
             <button className={`btn-auto ${state.is_auto ? 'active' : ''}`} onClick={toggleAuto}>
               <Power size={18} /> {state.is_auto ? 'HENTIKAN AUTO' : 'HIDUPKAN AUTO'}
             </button>
             <button className="btn-manual" onClick={manualBuy}>
-              TEMBAK RM50 SEKARANG
+              TEMBAK RM {state.trade_amount_myr} SEKARANG
             </button>
             <button className="btn-panic" onClick={panicSell}>
               <ShieldAlert size={18} /> PANIC SELL SEMUA!
