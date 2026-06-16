@@ -162,8 +162,8 @@ def run_dca_backtest(csv_path, model_path, initial_cash=100000.0, trade_size_fia
     logger.info("Preparing data and AI predictions...")
     
     df = pd.read_csv(csv_path)
-    # Speed up by slicing to last 10k rows for live simulation
-    df = df.tail(10000).copy()
+    # Using full dataset as requested
+    pass
     if 'timestamp' in df.columns:
         df['timestamp'] = pd.to_datetime(df['timestamp'])
         

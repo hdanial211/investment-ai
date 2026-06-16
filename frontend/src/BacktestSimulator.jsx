@@ -160,7 +160,7 @@ export default function BacktestSimulator() {
               <div className="progress-bar-bg">
                 <div className="progress-bar-fill" style={{ width: `${progress}%` }}></div>
               </div>
-              <p className="progress-text">{progress}% Selesai (Menganalisis Lilin Pasaran...)</p>
+              <p className="progress-text">{progress}% Selesai {progress < 100 ? '(Menganalisis 1 Tahun Lilin Pasaran & AI... Proses ini mengambil masa 1-2 minit sebelum bermula)' : '(Siap!)'}</p>
             </div>
           )}
 
