@@ -2,9 +2,12 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import uvicorn
+import threading
+import time
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from shared import engine_state
+import hata_api
 
 load_dotenv()
 
@@ -64,15 +67,26 @@ def panic_sell():
     # Simulate closing all at market
     return {"status": "success", "message": "All positions closed"}
 
-import threading
+def update_balance_loop():
+    while True:
+        try:
+            myr_balance = hata_api.get_myr_balance()
+            if myr_balance is not None:
+                engine_state["balance_myr"] = myr_balance
+        except Exception as e:
+            print(f"Failed to update balance loop: {e}")
+        time.sleep(15) # Fetch every 15 seconds
 
+@app.on_event("startup")
 def start_server():
     # Start live engine in background
     import live_engine
-    t = threading.Thread(target=live_engine.run, daemon=True)
-    t.start()
+    t1 = threading.Thread(target=live_engine.run, daemon=True)
+    t1.start()
     
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Start balance fetch loop
+    t2 = threading.Thread(target=update_balance_loop, daemon=True)
+    t2.start()
 
 if __name__ == "__main__":
-    start_server()
+    uvicorn.run(app, host="0.0.0.0", port=8000)
