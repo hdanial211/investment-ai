@@ -59,3 +59,17 @@ Yuran Hata Exchange: 0.1% Taker / 0.1% Maker (Total: 0.2% per round trip)
 - Win Rate: 100.00% (4 Menang / 0 Kalah)
 - Untung Bersih: RM 16.89
 - Kesimpulan: Sangat berjaya dari segi **Kadar Kemenangan (100%)**. AI membuat 4 entry tepat yang mana graf menjunam sementara waktu (mencetuskan beberapa *Layer* RM50), dan akhirnya melantun naik melepasi 2% lalu menyapu bersih keuntungan. Selamat, kebal, dan tiada kerugian langsung!
+
+---
+
+## 6. Strategi Layering DCA RM50 (High Frequency - AI 52%)
+**Tetapan:**
+- AI Model: XGBoost (Syarat diturunkan kepada > 52% untuk paksa banyak trade).
+- Matlamat: Layering DCA tanpa Stop Loss.
+**Keputusan (Data 1 Tahun):**
+- Baki Akhir: RM 10,463.27
+- Max Drawdown: 12.99%
+- Jumlah Kitaran (Trades): 120 Kitaran Selesai.
+- Win Rate: 100.00% (120 Menang / 0 Kalah)
+- Untung Bersih: RM 463.48
+- Amaran Sistem: `OUT OF CASH FOR DCA LAYER!`. Terdapat detik di mana harga menjunam sangat teruk sehingga seluruh modal RM 10,000 disedut masuk sebagai *layer* dan bot terpaksa "sangkut" berbulan-bulan menunggu ia melantun semula. Walaupun menang 100%, risiko "Sangkut Kripto" adalah nyata.

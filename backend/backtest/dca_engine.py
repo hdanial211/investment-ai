@@ -112,8 +112,9 @@ def run_dca_backtest(csv_path, model_path, initial_cash=10000.0, commission=0.00
     X = df_features[feature_cols]
     probs = model_obj.predict_proba(X)
     signals = np.zeros(len(probs))
-    # Threshold for entry = 65%
-    signals[probs[:, 2] > 0.65] = 1
+    
+    # Menurunkan syarat masuk dari 65% kepada 52% supaya ia berdagang 10-20 kali sehari!
+    signals[probs[:, 2] > 0.52] = 1
     # We ignore sell signals (-1) because DCA relies purely on Take Profit math.
     
     df_features['ai_signal'] = signals
