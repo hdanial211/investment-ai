@@ -50,17 +50,17 @@ class AIScalpingStrategy(bt.Strategy):
                 self.order = self.buy(size=size)
                 logger.debug(f"BUY CREATED at {price} size {size}")
         else:
-            # Risk Management: Take Profit (1.0%) and Stop Loss (0.5%)
+            # Risk Management: Take Profit (0.6%) and Stop Loss (-0.4%)
             profit_pct = (self.data.close[0] - self.position.price) / self.position.price
             
-            if profit_pct >= 0.010:
+            if profit_pct >= 0.006:
                 self.order = self.close()
                 logger.debug(f"TAKE PROFIT HIT at {self.data.close[0]}")
-            elif profit_pct <= -0.005:
+            elif profit_pct <= -0.004:
                 self.order = self.close()
                 logger.debug(f"STOP LOSS HIT at {self.data.close[0]}")
             elif current_signal == -1:
-                # AI predicted SELL
+                # XGBoost manual SELL signal
                 self.order = self.close()
                 logger.debug(f"AI SELL CREATED at {self.data.close[0]}")
 
@@ -110,8 +110,8 @@ def run_backtest(csv_path, model_path, initial_cash=1000.0, commission=0.001):
         
         # Vectorized prediction (much faster than row-by-row)
         obs = df_features[feature_cols].values.astype(np.float32)
-        # Pad with 0.0 for position and unrealized_profit
-        padding = np.zeros((len(obs), 2), dtype=np.float32)
+        # Pad with 0.0 for position, unrealized_profit, and time_held
+        padding = np.zeros((len(obs), 3), dtype=np.float32)
         obs = np.hstack((obs, padding))
         obs = np.nan_to_num(obs, nan=0.0, posinf=0.0, neginf=0.0)
         
@@ -119,7 +119,6 @@ def run_backtest(csv_path, model_path, initial_cash=1000.0, commission=0.001):
         
         signals = np.zeros(len(actions))
         signals[actions == 1] = 1
-        signals[actions == 2] = -1
         
         df_features['ai_signal'] = signals
     else:

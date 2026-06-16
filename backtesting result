@@ -1,0 +1,61 @@
+# REKOD KEPUTUSAN BACKTEST (INVESTMENT AI)
+Modal Permulaan Rujukan: RM 1,000
+Yuran Hata Exchange: 0.1% Taker / 0.1% Maker (Total: 0.2% per round trip)
+
+---
+
+## 1. XGBoost Asas (Model Kekerapan Tinggi)
+**Tetapan:**
+- AI Model: XGBoost Classifier.
+- Syarat: Beli jika AI arah Beli, Jual jika AI arah Jual. Tiada tapisan keyakinan.
+- TP/SL: Tiada TP/SL tetap, ikut isyarat AI sepenuhnya.
+**Keputusan (Simulasi Awal):**
+- Jumlah Trades: Terlalu banyak (11,000+ isyarat).
+- Kesan: Untung kotor dimakan habis oleh yuran Hata 0.2% setiap kali transaksi. Gagal kerana "Noise".
+
+---
+
+## 2. XGBoost "Sniper" (Konservatif & Selamat)
+**Tetapan:**
+- Penambahan: Probability Threshold (AI hanya masuk pasaran jika Keyakinan > 65%).
+- Pengurusan Risiko: Take Profit (1.0%) dan Stop Loss (0.5%).
+**Keputusan (Data 1 Tahun):**
+- Baki Akhir: RM 1008.35 (+0.83%)
+- Max Drawdown: 2.03%
+- Jumlah Trades: 5 Trades Setahun.
+- Win Rate: 60.00% (3 Menang / 2 Kalah)
+- Kesimpulan: Sangat kebal dan selamat, tetapi amat lambat dan pasif.
+
+---
+
+## 3. Reinforcement Learning PPO (Agresif Scalping)
+**Tetapan:**
+- Model AI: PPO (AI Belajar Sendiri).
+- Matlamat AI: Bebas buat trade tanpa tapisan untuk memaksimumkan untung.
+- TP/SL: Auto TP (1.0%), Auto SL (0.5%).
+**Keputusan (Data 1 Tahun):**
+- Baki Akhir: RM 0.01 (Muflis / 100% Kerugian).
+- Jumlah Trades: 5,887 Trades.
+- Win Rate: 34.47%.
+- Kesimpulan: Menepati kehendak 10-20 trade sehari (purata 16 trade/sehari). Tetapi kerugian terkumpul disebabkan yuran (1177% yuran ditarik) menghancurkan keseluruhan portfolio RM1,000.
+
+---
+
+## 4. Reinforcement Learning PPO (Fokus Expectancy & Perlindungan Yuran)
+**Tetapan:**
+- Hukuman Keras: AI didenda (-10 mata) jika kena SL, dan hanya dipuji jika TP bersih melebihi yuran.
+**Keputusan (Data 1 Tahun):**
+- Jumlah Trades: 0
+---
+
+## 5. Strategi Layering / Dollar Cost Averaging (DCA) Tanpa Stop Loss
+**Tetapan:**
+- AI Model: XGBoost (Untuk Entry Pertama sahaja > 65%).
+- Matlamat: Beli RM 50. Jika jatuh 5%, tambah RM 50 (Layering). Tiada Stop Loss. Jual semua jika untung +2.0% dari Harga Purata.
+**Keputusan (Data 1 Tahun):**
+- Baki Akhir: RM 10016.89 (Bermula RM 10000.00)
+- Max Drawdown: 0.31% (Risiko Sangat Rendah)
+- Jumlah Kitaran (Trades): 4 Kitaran Selesai.
+- Win Rate: 100.00% (4 Menang / 0 Kalah)
+- Untung Bersih: RM 16.89
+- Kesimpulan: Sangat berjaya dari segi **Kadar Kemenangan (100%)**. AI membuat 4 entry tepat yang mana graf menjunam sementara waktu (mencetuskan beberapa *Layer* RM50), dan akhirnya melantun naik melepasi 2% lalu menyapu bersih keuntungan. Selamat, kebal, dan tiada kerugian langsung!
