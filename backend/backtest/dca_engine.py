@@ -72,7 +72,7 @@ class DCALayeringStrategy(bt.Strategy):
                     self.current_sequence_layers = 1
                     self.last_buy_price = current_price
                     self.max_profit_pct = 0.0
-                    msg = f"INITIAL BUY at RM{current_price:,.2f} size {size:.5f} units"
+                    msg = f"INITIAL BUY at RM{current_price:,.2f} size {size:.5f} units | Bal: RM{self.broker.getvalue():,.2f}"
                     logger.debug(msg)
                     if self.p.progress_callback:
                         self.p.progress_callback({"type": "trade", "message": f"[{timestamp}] 🟢 " + msg})
@@ -94,7 +94,7 @@ class DCALayeringStrategy(bt.Strategy):
                 self.current_sequence_layers = 0
                 self.last_buy_price = None
                 self.max_profit_pct = 0.0
-                msg = f"HARD TAKE PROFIT HIT at RM{current_price:,.2f} | Profit: +{total_profit_pct*100:.2f}%"
+                msg = f"HARD TAKE PROFIT HIT at RM{current_price:,.2f} | Profit: +{total_profit_pct*100:.2f}% | Bal: RM{self.broker.getvalue():,.2f}"
                 logger.debug(msg)
                 if self.p.progress_callback:
                     self.p.progress_callback({"type": "trade", "message": f"[{timestamp}] 🔴 " + msg})
@@ -110,7 +110,7 @@ class DCALayeringStrategy(bt.Strategy):
                     self.current_sequence_layers = 0
                     self.last_buy_price = None
                     self.max_profit_pct = 0.0
-                    msg = f"TRAILING STOP HIT at RM{current_price:,.2f} | Profit: +{total_profit_pct*100:.2f}% (Max: +{self.max_profit_pct*100:.2f}%)"
+                    msg = f"TRAILING STOP HIT at RM{current_price:,.2f} | Profit: +{total_profit_pct*100:.2f}% (Max: +{self.max_profit_pct*100:.2f}%) | Bal: RM{self.broker.getvalue():,.2f}"
                     logger.debug(msg)
                     if self.p.progress_callback:
                         self.p.progress_callback({"type": "trade", "message": f"[{timestamp}] 🔴 " + msg})
@@ -125,7 +125,7 @@ class DCALayeringStrategy(bt.Strategy):
                         self.layer_count += 1
                         self.current_sequence_layers = 1 # Start new tranche!
                         self.last_buy_price = current_price
-                        msg = f"NEW TRANCHE BY AI SIGNAL at RM{current_price:,.2f} | Total Layers: {self.layer_count}"
+                        msg = f"NEW TRANCHE BY AI SIGNAL at RM{current_price:,.2f} | Total Layers: {self.layer_count} | Bal: RM{self.broker.getvalue():,.2f}"
                         logger.debug(msg)
                         if self.p.progress_callback:
                             self.p.progress_callback({"type": "trade", "message": f"[{timestamp}] 🟢 " + msg})
@@ -141,7 +141,7 @@ class DCALayeringStrategy(bt.Strategy):
                         self.layer_count += 1
                         self.current_sequence_layers += 1
                         self.last_buy_price = current_price
-                        msg = f"DCA LAYER {self.current_sequence_layers}/{self.p.max_layers_per_signal} TRIGGERED at RM{current_price:,.2f} | Drop: {drop_from_last_buy*100:.2f}%"
+                        msg = f"DCA LAYER {self.current_sequence_layers}/{self.p.max_layers_per_signal} TRIGGERED at RM{current_price:,.2f} | Drop: {drop_from_last_buy*100:.2f}% | Bal: RM{self.broker.getvalue():,.2f}"
                         logger.debug(msg)
                         if self.p.progress_callback:
                             self.p.progress_callback({"type": "trade", "message": f"[{timestamp}] 🔵 " + msg})
