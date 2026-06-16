@@ -95,7 +95,7 @@ def get_metrics_dict(strategy):
         # Profit Factor
         gross_profit = trades.get('won', {}).get('pnl', {}).get('total', 0)
         gross_loss = abs(trades.get('lost', {}).get('pnl', {}).get('total', 0))
-        metrics['profit_factor'] = gross_profit / gross_loss if gross_loss > 0 else float('inf')
+        metrics['profit_factor'] = gross_profit / gross_loss if gross_loss > 0 else 9999.99
             
         metrics['net_pnl'] = trades.get('pnl', {}).get('net', {}).get('total', 0)
     else:
