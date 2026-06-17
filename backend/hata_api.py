@@ -78,20 +78,22 @@ def get_myr_balance() -> float:
         # Return fallback value or None to let caller handle
         return 0.0
 
-def get_ticker(symbol: str = "ETH_MYR") -> dict:
-    """Fetch current market price (ticker)"""
-    # Note: Using generic endpoint, adjust based on Hata docs if different
-    endpoint = "/orderbook/sapi/ticker"
-    url = f"{BASE_URL}{endpoint}"
-    params = {"symbol": symbol}
+def get_ticker(symbol: str = "ETH_MYR") -> float:
+    """Fetch current market price (ticker) from exchange-info"""
+    clean_sym = symbol.replace("_", "").upper()
+    url = f"{BASE_URL}/orderbook/api/v2/exchange-info"
     try:
-        response = requests.get(url, params=params, timeout=10)
+        response = requests.get(url, timeout=10)
         response.raise_for_status()
         data = response.json()
-        if "data" in data and "last" in data["data"]:
-            return float(data["data"]["last"])
-        elif isinstance(data, list) and len(data) > 0:
-            return float(data[0].get("last", 0.0))
+        items = data.get("data", [])
+        for item in items:
+            if item.get("txpair") == clean_sym:
+                return float(item.get("price", 0.0))
+        # Fallback to base + quote check
+        for item in items:
+            if item.get("base") + item.get("quote") == clean_sym:
+                return float(item.get("price", 0.0))
         return 0.0
     except Exception as e:
         print(f"Error fetching ticker for {symbol}: {e}")

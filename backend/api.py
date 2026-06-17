@@ -169,6 +169,12 @@ def update_balance_loop():
             myr_balance = hata_api.get_myr_balance()
             if myr_balance is not None:
                 global_state["balance_myr"] = myr_balance
+                
+            # Dynamically calculate exchange rate (Hata ETH MYR / Binance ETH USDT)
+            hata_eth = hata_api.get_ticker("ETH_MYR")
+            binance_eth = engine_state.get("ETH", {}).get("current_price", 0.0)
+            if hata_eth > 0 and binance_eth > 0:
+                global_state["usdt_myr_rate"] = hata_eth / binance_eth
         except Exception as e:
             print(f"Failed to update balance loop: {e}")
         time.sleep(15) # Fetch every 15 seconds

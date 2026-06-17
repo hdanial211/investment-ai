@@ -7,6 +7,7 @@
 global_state = {
     "balance_myr": 10000.00,
     "is_auto": False,
+    "usdt_myr_rate": 4.70,
 }
 
 def create_coin_state():

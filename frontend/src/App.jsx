@@ -10,7 +10,8 @@ function App() {
   const [state, setState] = useState({
     global: {
       balance_myr: 10000.0,
-      is_auto: false
+      is_auto: false,
+      usdt_myr_rate: 4.70
     },
     coins: {
       ETH: { current_price: 0.0, last_signal: 0.0, confidence: 0.0, layers: [], total_pnl: 0.0, trade_amount_myr: 50.0 },
@@ -86,6 +87,9 @@ function App() {
   // Calculate overall PnL across all coins
   const totalPnL = Object.values(state.coins).reduce((sum, c) => sum + (c.total_pnl || 0), 0)
 
+  // Exchange rate helper
+  const rate = state.global.usdt_myr_rate || 4.70
+
   return (
     <div className="dashboard">
       <header className="header">
@@ -123,6 +127,7 @@ function App() {
               const c = state.coins[coin]
               const isActive = selectedCoin === coin
               const hasSignal = c.last_signal === 1
+              const myrPrice = (c.current_price || 0) * rate
               return (
                 <div 
                   key={coin} 
@@ -134,7 +139,7 @@ function App() {
                     {hasSignal && <span className="coin-badge signal-buy">BUY</span>}
                   </div>
                   <div className="coin-price">
-                    ${c.current_price > 0 ? c.current_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                    RM {myrPrice > 0 ? myrPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
                   </div>
                   <div className="coin-card-footer">
                     <div className="coin-confidence">
@@ -160,9 +165,9 @@ function App() {
                 
                 <div className="detail-price-ai">
                   <div className="detail-price-row">
-                    <span className="currency">$</span>
+                    <span className="currency">RM</span>
                     <span className="price">
-                      {coinData.current_price > 0 ? coinData.current_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                      {((coinData.current_price || 0) * rate) > 0 ? ((coinData.current_price || 0) * rate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
                     </span>
                   </div>
                   
@@ -197,22 +202,26 @@ function App() {
                         <thead>
                           <tr>
                             <th>Layer</th>
-                            <th>Harga Entry</th>
+                            <th>Harga Entry (RM)</th>
                             <th>Saiz (RM)</th>
-                            <th>Take Profit (0.6%)</th>
+                            <th>Take Profit (0.6% - RM)</th>
                             <th>Status</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {coinData.layers.map(l => (
-                            <tr key={l.id}>
-                              <td>#{l.id}</td>
-                              <td>${l.entry_price ? l.entry_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}</td>
-                              <td>RM {l.amount_myr ? l.amount_myr.toFixed(2) : '0.00'}</td>
-                              <td className="profit-target">${l.take_profit ? l.take_profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}</td>
-                              <td><span className="status-badge open">{l.status || 'TERBUKA'}</span></td>
-                            </tr>
-                          ))}
+                          {coinData.layers.map(l => {
+                            const entryPriceMYR = (l.entry_price || 0) * rate
+                            const takeProfitMYR = (l.take_profit || 0) * rate
+                            return (
+                              <tr key={l.id}>
+                                <td>#{l.id}</td>
+                                <td>RM {entryPriceMYR > 0 ? entryPriceMYR.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}</td>
+                                <td>RM {l.amount_myr ? l.amount_myr.toFixed(2) : '0.00'}</td>
+                                <td className="profit-target">RM {takeProfitMYR > 0 ? takeProfitMYR.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}</td>
+                                <td><span className="status-badge open">{l.status || 'TERBUKA'}</span></td>
+                              </tr>
+                            )
+                          })}
                         </tbody>
                       </table>
                     </div>
