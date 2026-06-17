@@ -132,7 +132,7 @@ function App() {
                   onClick={() => setSelectedCoin(coin)}
                 >
                   <div className="coin-card-header">
-                    <span className="coin-name">{coin}/USDT</span>
+                    <span className="coin-name">{coin}/MYR</span>
                     {hasSignal && <span className="coin-badge signal-buy">BUY</span>}
                   </div>
                   <div className="coin-price">
@@ -157,7 +157,7 @@ function App() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               <section className="panel">
                 <div className="panel-header-row">
-                  <h2><Activity size={20} /> Paparan Pasaran: {selectedCoin}/USDT</h2>
+                  <h2><Activity size={20} /> Paparan Pasaran: {selectedCoin}/MYR</h2>
                 </div>
                 
                 <div className="detail-price-ai">
