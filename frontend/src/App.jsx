@@ -87,9 +87,6 @@ function App() {
   // Calculate overall PnL across all coins
   const totalPnL = Object.values(state.coins).reduce((sum, c) => sum + (c.total_pnl || 0), 0)
 
-  // Exchange rate helper
-  const rate = state.global.usdt_myr_rate || 4.70
-
   return (
     <div className="dashboard">
       <header className="header">
@@ -127,7 +124,7 @@ function App() {
               const c = state.coins[coin]
               const isActive = selectedCoin === coin
               const hasSignal = c.last_signal === 1
-              const myrPrice = (c.current_price || 0) * rate
+              const myrPrice = c.current_price || 0
               return (
                 <div 
                   key={coin} 
@@ -167,7 +164,7 @@ function App() {
                   <div className="detail-price-row">
                     <span className="currency">RM</span>
                     <span className="price">
-                      {((coinData.current_price || 0) * rate) > 0 ? ((coinData.current_price || 0) * rate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                      {coinData.current_price > 0 ? coinData.current_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
                     </span>
                   </div>
                   
@@ -210,8 +207,8 @@ function App() {
                         </thead>
                         <tbody>
                           {coinData.layers.map(l => {
-                            const entryPriceMYR = (l.entry_price || 0) * rate
-                            const takeProfitMYR = (l.take_profit || 0) * rate
+                            const entryPriceMYR = l.entry_price || 0
+                            const takeProfitMYR = l.take_profit || 0
                             return (
                               <tr key={l.id}>
                                 <td>#{l.id}</td>

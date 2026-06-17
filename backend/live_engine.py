@@ -37,11 +37,47 @@ for sym in SYMBOLS:
 klines_dict = {sym.replace("usdt", "").upper(): [] for sym in SYMBOLS}
 MAX_KLINES = 150 # Enough for EMA_21, VWAP, etc.
 
+# Hata MYR prices cache
+hata_prices = {
+    "ETH": 0.0,
+    "BTC": 0.0,
+    "SOL": 0.0,
+    "LTC": 0.0,
+    "XRP": 0.0
+}
+
+async def update_hata_prices_loop():
+    while True:
+        try:
+            def fetch_prices():
+                import requests
+                res = requests.get("https://my-api.hata.io/orderbook/api/v2/exchange-info", timeout=5)
+                res.raise_for_status()
+                return res.json().get("data", [])
+                
+            loop = asyncio.get_running_loop()
+            data = await loop.run_in_executor(None, fetch_prices)
+            
+            for item in data:
+                base = item.get("base")
+                quote = item.get("quote")
+                if quote == "MYR" and base in hata_prices:
+                    hata_prices[base] = float(item.get("price", 0.0))
+        except Exception as e:
+            logger.error(f"Failed to update Hata prices: {e}")
+        await asyncio.sleep(10)
+
 async def process_kline(coin_id, kline):
     klines = klines_dict[coin_id]
     
-    # Update current price in dashboard for specific coin
-    shared.engine_state[coin_id]["current_price"] = float(kline['c'])
+    # Update current price in dashboard with Hata's actual MYR price, fallback to Binance
+    hata_price = hata_prices.get(coin_id, 0.0)
+    if hata_price > 0:
+        shared.engine_state[coin_id]["current_price"] = hata_price
+    else:
+        # Fallback to Binance converted price
+        rate = shared.global_state.get("usdt_myr_rate", 4.70)
+        shared.engine_state[coin_id]["current_price"] = float(kline['c']) * rate
     
     # If candle is closed, append to history and predict
     if kline['x']:
@@ -105,6 +141,9 @@ async def process_kline(coin_id, kline):
 
 
 async def start_ws():
+    # Start Hata MYR price update loop in background
+    asyncio.create_task(update_hata_prices_loop())
+    
     while True:
         try:
             async with websockets.connect(WS_URL) as ws:
