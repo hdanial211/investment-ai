@@ -8,9 +8,9 @@ import os
 
 
 class Settings(BaseSettings):
-    # Luno API
-    luno_api_key: str = ""
-    luno_api_secret: str = ""
+    # Hata API
+    hata_api_key: str = ""
+    hata_api_secret: str = ""
 
     # Telegram
     telegram_bot_token: str = ""
@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     schedule_time: str = "08:00"           # 24h format
     max_capital_myr: float = 100.0
     bot_enabled: bool = True
+    supported_coins: list = ["BTC", "ETH", "SOL", "XRP", "LTC"]
 
     # Database
     database_url: str = "sqlite:///./investment_ai.db"

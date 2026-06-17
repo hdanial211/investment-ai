@@ -32,6 +32,13 @@ class DCALayeringStrategy(bt.Strategy):
         ('trailing_gap_pct', 0.01), # Trailing stop gap 1.0%
         ('progress_callback', None), # Callback for live progress
         ('total_len', 0), # Pass total length explicitly
+        ('enable_dca', True), # Toggle DCA Layering vs Pure Scalping
+        ('stop_loss_pct', -0.004), # Hard Stop Loss for Pure Scalping Mode
+        ('rl_model', None),
+        ('df_features', None),
+        ('feature_cols', None),
+        ('use_martingale', False),
+        ('use_dynamic_tp', False)
     )
 
     def __init__(self):
@@ -56,11 +63,52 @@ class DCALayeringStrategy(bt.Strategy):
         if self.order:
             return
 
-        current_signal = self.signal[0]
+        timestamp = self.data.datetime.datetime(0).strftime('%Y-%m-%d %H:%M:%S')
         current_price = self.data.close[0]
         cash = self.broker.get_cash()
-        timestamp = self.data.datetime.datetime(0).strftime('%Y-%m-%d %H:%M:%S')
-
+        
+        # 1. Evaluate Signal
+        rl_action = 0
+        xgb_signal = self.data.ai_signal[0]
+        
+        if self.p.rl_model is not None:
+            import numpy as np
+            idx = len(self) - 1
+            start_idx = max(0, idx - 15 + 1)
+            end_idx = idx + 1
+            window_df = self.p.df_features.iloc[start_idx:end_idx]
+            features = window_df[self.p.feature_cols].values.astype(np.float32)
+            
+            pad_len = 15 - len(features)
+            if pad_len > 0:
+                features = np.pad(features, ((pad_len, 0), (0, 0)), mode='edge')
+                
+            unrealized_profit = 0.0
+            pos = 0
+            time_held = 0
+            if self.position.size > 0:
+                pos = 1
+                if self.last_buy_price:
+                    unrealized_profit = (current_price - self.last_buy_price) / self.last_buy_price
+                time_held = 10 # Approx placeholder
+                
+            state_vars = np.array([pos, unrealized_profit, time_held], dtype=np.float32)
+            state_vars_repeated = np.tile(state_vars, (15, 1))
+            
+            obs = np.concatenate((features, state_vars_repeated), axis=1)
+            obs = np.nan_to_num(obs, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
+            
+            action, _ = self.p.rl_model.predict(obs, deterministic=True)
+            rl_action = action
+            
+        if self.p.rl_model is not None and xgb_signal == 1:
+            # Ensemble OR logic
+            current_signal = 1
+        elif self.p.rl_model is not None:
+            current_signal = rl_action
+        else:
+            current_signal = xgb_signal
+        
         # Phase 1: Not in position. Wait for AI signal to enter Layer 1.
         if not self.position:
             if current_signal == 1:
@@ -86,8 +134,20 @@ class DCALayeringStrategy(bt.Strategy):
                 self.max_profit_pct = total_profit_pct
             
             # 1. Take Profit / Trailing Stop Condition
+            # Dynamic TP Calculation
+            active_tp = self.p.take_profit_pct
+            if self.p.use_dynamic_tp:
+                if self.current_sequence_layers == 1:
+                    active_tp = 0.0025
+                elif self.current_sequence_layers == 2:
+                    active_tp = 0.0030
+                elif self.current_sequence_layers == 3:
+                    active_tp = 0.0035
+                elif self.current_sequence_layers >= 4:
+                    active_tp = 0.0040
+
             # Hard TP (Sell ALL)
-            if total_profit_pct >= self.p.take_profit_pct:
+            if total_profit_pct >= active_tp:
                 size = self.position.size
                 self.order = self.close() # Close entire position
                 self.layer_count = 0
@@ -116,32 +176,54 @@ class DCALayeringStrategy(bt.Strategy):
                         self.p.progress_callback({"type": "trade", "message": f"[{timestamp}] 🔴 " + msg})
                     return
                 
-            # 2. Check if we maxed out the current tranche
-            if self.current_sequence_layers >= self.p.max_layers_per_signal:
-                if current_signal == 1:
-                    if cash >= self.p.trade_size_fiat:
-                        size = self.p.trade_size_fiat / current_price
+            # Pure Scalping Mode (Stop Loss Hit)
+            if not self.p.enable_dca:
+                if total_profit_pct <= self.p.stop_loss_pct:
+                    size = self.position.size
+                    self.order = self.close()
+                    self.layer_count = 0
+                    self.current_sequence_layers = 0
+                    self.last_buy_price = None
+                    self.max_profit_pct = 0.0
+                    msg = f"STOP LOSS HIT at RM{current_price:,.2f} | Loss: {total_profit_pct*100:.2f}% | Bal: RM{self.broker.getvalue():,.2f}"
+                    logger.debug(msg)
+                    if self.p.progress_callback:
+                        self.p.progress_callback({"type": "trade", "message": f"[{timestamp}] ⚠️ " + msg})
+                    return
+                
+            # 2. Signal-Based Layering (If AI throws a new signal, just buy!)
+            if current_signal == 1 and self.last_buy_price is not None:
+                drop_from_last_buy = (current_price - self.last_buy_price) / self.last_buy_price
+                if drop_from_last_buy <= self.p.drop_threshold and self.layer_count < self.p.max_layers_per_signal: 
+                    target_size_fiat = self.p.trade_size_fiat
+                    if self.p.use_martingale:
+                        target_size_fiat = self.p.trade_size_fiat * 1  # Reset to 1x multiplier for fresh AI signal
+                    if cash >= target_size_fiat:
+                        size = target_size_fiat / current_price
                         self.order = self.buy(size=size)
                         self.layer_count += 1
-                        self.current_sequence_layers = 1 # Start new tranche!
+                        self.current_sequence_layers = 1 # RESET sequence so TP resets to 0.25%
                         self.last_buy_price = current_price
-                        msg = f"NEW TRANCHE BY AI SIGNAL at RM{current_price:,.2f} | Total Layers: {self.layer_count} | Bal: RM{self.broker.getvalue():,.2f}"
+                        msg = f"AI SIGNAL LAYER TRIGGERED (RESET SEQ) at RM{current_price:,.2f} | Total Layers: {self.layer_count} | Bal: RM{self.broker.getvalue():,.2f}"
                         logger.debug(msg)
                         if self.p.progress_callback:
-                            self.p.progress_callback({"type": "trade", "message": f"[{timestamp}] 🟢 " + msg})
-                return # Don't evaluate DCA drops if we are maxed out
+                            self.p.progress_callback({"type": "trade", "message": f"[{timestamp}] 🔵 " + msg})
+                    return
                 
-            # 3. DCA Layering Condition (only if sequence < max)
-            if self.last_buy_price is not None:
+            # 3. DCA Layering Condition (only if total layers < max AND DCA is enabled)
+            if self.p.enable_dca and self.last_buy_price is not None:
                 drop_from_last_buy = (current_price - self.last_buy_price) / self.last_buy_price
-                if drop_from_last_buy <= self.p.drop_threshold:
-                    if cash >= self.p.trade_size_fiat:
-                        size = self.p.trade_size_fiat / current_price
+                if drop_from_last_buy <= self.p.drop_threshold and self.layer_count < self.p.max_layers_per_signal:
+                    target_size_fiat = self.p.trade_size_fiat
+                    if self.p.use_martingale:
+                        target_size_fiat = self.p.trade_size_fiat * (2 ** self.current_sequence_layers) # 2x, 4x, 8x
+                    if cash >= target_size_fiat:
+                        size = target_size_fiat / current_price
                         self.order = self.buy(size=size) # Add to existing position
                         self.layer_count += 1
-                        self.current_sequence_layers += 1
+                        self.current_sequence_layers += 1 # Increment sequence so TP increases
                         self.last_buy_price = current_price
-                        msg = f"DCA LAYER {self.current_sequence_layers}/{self.p.max_layers_per_signal} TRIGGERED at RM{current_price:,.2f} | Drop: {drop_from_last_buy*100:.2f}% | Bal: RM{self.broker.getvalue():,.2f}"
+                        msg = f"DCA LAYER {self.layer_count}/{self.p.max_layers_per_signal} TRIGGERED at RM{current_price:,.2f} | Drop: {drop_from_last_buy*100:.2f}% | Bal: RM{self.broker.getvalue():,.2f}"
                         logger.debug(msg)
                         if self.p.progress_callback:
                             self.p.progress_callback({"type": "trade", "message": f"[{timestamp}] 🔵 " + msg})
@@ -158,8 +240,9 @@ class DCALayeringStrategy(bt.Strategy):
 
 def run_dca_backtest(csv_path, model_path, initial_cash=100000.0, trade_size_fiat=4000.0, commission=0.000, 
                      drop_threshold=-0.05, take_profit_pct=0.10, max_layers_per_signal=6,
-                     trailing_activation_pct=0.03, trailing_gap_pct=0.01, progress_callback=None):
-    logger.info("Preparing data and AI predictions...")
+                     trailing_activation_pct=0.03, trailing_gap_pct=0.01, progress_callback=None,
+                     enable_dca=True, stop_loss_pct=-0.004, ai_type="xgboost", use_martingale=False, use_dynamic_tp=False):
+    logger.info(f"Preparing data and {ai_type} AI predictions...")
     
     df = pd.read_csv(csv_path)
     # Using full dataset as requested
@@ -172,9 +255,8 @@ def run_dca_backtest(csv_path, model_path, initial_cash=100000.0, trade_size_fia
     if 'timestamp' in df_features.columns:
         df_features.set_index('timestamp', inplace=True)
     
-    # Load XGBoost model
+    # Load model (dynamically below)
     import joblib
-    model_obj = joblib.load(model_path)
     bb_cols = [c for c in df_features.columns if c.startswith('BB')]
     macd_cols = [c for c in df_features.columns if c.startswith('MACD')]
     stoch_cols = [c for c in df_features.columns if c.startswith('STOCH')]
@@ -185,19 +267,32 @@ def run_dca_backtest(csv_path, model_path, initial_cash=100000.0, trade_size_fia
         feature_cols.append(vwap_col)
         
     import numpy as np
-    logger.info("Loading XGBoost model...")
-    X = df_features[feature_cols]
-    probs = model_obj.predict_proba(X)
-    signals = np.zeros(len(probs))
     
-    # Model Baharu: Triple Barrier (Binary). Kelas 1 ialah "Golden Entry".
-    # Memandangkan AI ini sudah cukup bijak (53% win rate semula jadi), kita hanya 
-    # baling pukat apabila ia sekurang-kurangnya 60% pasti (Gabungan Kualiti & Kekerapan)
-    signals[probs[:, 1] > 0.60] = 1
-    # We ignore sell signals (-1) because DCA relies purely on Take Profit math.
-    
-    df_features['ai_signal'] = signals
-    
+    rl_model = None
+    if ai_type == "xgboost" or ai_type == "ensemble":
+        logger.info("Loading XGBoost model...")
+        model_obj = joblib.load(model_path.replace("ppo_lstm", "xgboost_scalping").replace(".zip", "_1y.pkl")) if ai_type=="ensemble" else joblib.load(model_path)
+        X = df_features[feature_cols]
+        probs = model_obj.predict_proba(X)
+        signals = np.zeros(len(probs))
+        signals[probs[:, 1] > 0.60] = 1
+        df_features['ai_signal'] = signals
+    else:
+        df_features['ai_signal'] = 0
+        
+    if ai_type == "rl_lstm" or ai_type == "ensemble":
+        logger.info("Loading RL+LSTM model...")
+        from stable_baselines3 import PPO
+        try:
+            rl_path = model_path if ai_type == "rl_lstm" else model_path.replace("xgboost_scalping", "ppo_lstm").replace("_1y.pkl", ".zip")
+            if rl_path.endswith('.zip'):
+                rl_model = PPO.load(rl_path[:-4])
+            else:
+                rl_model = PPO.load(rl_path)
+        except Exception as e:
+            logger.error(f"Failed to load RL model: {e}")
+            rl_model = None
+        
     # Setup Backtrader
     cerebro = bt.Cerebro()
     total_len = len(df_features)
@@ -210,7 +305,14 @@ def run_dca_backtest(csv_path, model_path, initial_cash=100000.0, trade_size_fia
         trailing_activation_pct=trailing_activation_pct,
         trailing_gap_pct=trailing_gap_pct,
         progress_callback=progress_callback,
-        total_len=total_len
+        total_len=total_len,
+        enable_dca=enable_dca,
+        stop_loss_pct=stop_loss_pct,
+        rl_model=rl_model,
+        df_features=df_features,
+        feature_cols=feature_cols,
+        use_martingale=use_martingale,
+        use_dynamic_tp=use_dynamic_tp
     )
     
     data = PandasDataWithSignal(dataname=df_features)

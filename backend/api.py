@@ -6,7 +6,7 @@ import threading
 import time
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from shared import engine_state
+from shared import engine_state, global_state
 import hata_api
 
 load_dotenv()
@@ -24,9 +24,11 @@ class AutoToggle(BaseModel):
     is_auto: bool
 
 class AmountSetting(BaseModel):
+    coin: str
     amount: float
 
 class BacktestParams(BaseModel):
+    coin: str = "ETH"
     initial_cash: float = 100000.0
     trade_size_fiat: float = 4000.0
     max_layers: int = 6
@@ -34,47 +36,58 @@ class BacktestParams(BaseModel):
     take_profit_pct: float = 0.10
     trailing_activation_pct: float = 0.03
     trailing_gap_pct: float = 0.01
+    enable_dca: bool = True
+    ai_type: str = "xgboost"
 
 @app.get("/api/state")
 def get_state():
-    return engine_state
+    return {
+        "global": global_state,
+        "coins": engine_state
+    }
 
 @app.post("/api/toggle-auto")
 def toggle_auto(toggle: AutoToggle):
-    engine_state["is_auto"] = toggle.is_auto
-    return {"status": "success", "is_auto": engine_state["is_auto"]}
+    global_state["is_auto"] = toggle.is_auto
+    return {"status": "success", "is_auto": global_state["is_auto"]}
 
 @app.post("/api/set-amount")
 def set_amount(setting: AmountSetting):
-    if setting.amount >= 10.0: # Minimum RM10
-        engine_state["trade_amount_myr"] = setting.amount
-    return {"status": "success", "trade_amount_myr": engine_state["trade_amount_myr"]}
+    if setting.amount >= 10.0 and setting.coin in engine_state:
+        engine_state[setting.coin]["trade_amount_myr"] = setting.amount
+    return {"status": "success", "trade_amount_myr": engine_state[setting.coin]["trade_amount_myr"]}
+
+class ManualAction(BaseModel):
+    coin: str
 
 @app.post("/api/manual-buy")
-def manual_buy():
-    # Logic to trigger Hata API Buy
-    # For now, we simulate layering
-    price = engine_state["current_price"]
+def manual_buy(action: ManualAction):
+    coin = action.coin
+    if coin not in engine_state:
+        raise HTTPException(status_code=400, detail="Invalid coin")
+        
+    price = engine_state[coin]["current_price"]
     if price <= 0:
         raise HTTPException(status_code=400, detail="Price not available")
     
-    amount = engine_state["trade_amount_myr"]
+    amount = engine_state[coin]["trade_amount_myr"]
     layer = {
-        "id": len(engine_state["layers"]) + 1,
+        "id": len(engine_state[coin]["layers"]) + 1,
         "entry_price": price,
         "amount_myr": amount,
         "take_profit": price * 1.006,
         "status": "OPEN"
     }
-    engine_state["layers"].append(layer)
-    engine_state["balance_myr"] -= amount
+    engine_state[coin]["layers"].append(layer)
+    global_state["balance_myr"] -= amount
     return {"status": "success", "layer": layer}
 
 @app.post("/api/panic-sell")
-def panic_sell():
-    engine_state["layers"] = []
-    # Simulate closing all at market
-    return {"status": "success", "message": "All positions closed"}
+def panic_sell(action: ManualAction):
+    coin = action.coin
+    if coin in engine_state:
+        engine_state[coin]["layers"] = []
+    return {"status": "success", "message": f"All positions closed for {coin}"}
 
 from fastapi import WebSocket, WebSocketDisconnect
 import asyncio
@@ -98,11 +111,19 @@ async def websocket_backtest(websocket: WebSocket):
         def run_backtest_thread():
             try:
                 base_dir = os.path.dirname(os.path.dirname(__file__))
-                data_path = os.path.join(base_dir, 'data', 'ETH_USDT_1m.csv')
-                model_path = os.path.join(base_dir, 'models', 'xgboost_scalping_ETH_1y.pkl')
+                coin_symbol = params.coin.upper()
+                data_path = os.path.join(base_dir, 'data', f'{coin_symbol}_USDT_1m.csv')
+                
+                # Choose model based on ai_type
+                if params.ai_type == "rl_lstm":
+                    model_path = os.path.join(base_dir, 'models', f'ppo_lstm_{coin_symbol}.zip')
+                else:
+                    model_path = os.path.join(base_dir, 'models', f'xgboost_scalping_{coin_symbol}_1y.pkl')
+                
+                logger.info(f"Using Model: {model_path} ({params.ai_type})")
                 
                 if not os.path.exists(data_path) or not os.path.exists(model_path):
-                    progress_callback({"type": "error", "message": "Data or model not found"})
+                    progress_callback({"type": "error", "message": f"Data or model for {coin_symbol} not found"})
                     return
 
                 drop_threshold_val = -abs(params.drop_threshold)
@@ -118,7 +139,9 @@ async def websocket_backtest(websocket: WebSocket):
                     max_layers_per_signal=params.max_layers,
                     trailing_activation_pct=params.trailing_activation_pct,
                     trailing_gap_pct=params.trailing_gap_pct,
-                    progress_callback=progress_callback
+                    progress_callback=progress_callback,
+                    enable_dca=params.enable_dca,
+                    ai_type=params.ai_type
                 )
                 progress_callback({"type": "complete", "metrics": metrics})
             except Exception as e:
@@ -145,7 +168,7 @@ def update_balance_loop():
         try:
             myr_balance = hata_api.get_myr_balance()
             if myr_balance is not None:
-                engine_state["balance_myr"] = myr_balance
+                global_state["balance_myr"] = myr_balance
         except Exception as e:
             print(f"Failed to update balance loop: {e}")
         time.sleep(15) # Fetch every 15 seconds

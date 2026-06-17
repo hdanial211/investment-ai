@@ -77,3 +77,85 @@ def get_myr_balance() -> float:
         print(f"Error fetching Hata API balance: {e}")
         # Return fallback value or None to let caller handle
         return 0.0
+
+def get_ticker(symbol: str = "ETH_MYR") -> dict:
+    """Fetch current market price (ticker)"""
+    # Note: Using generic endpoint, adjust based on Hata docs if different
+    endpoint = "/orderbook/sapi/ticker"
+    url = f"{BASE_URL}{endpoint}"
+    params = {"symbol": symbol}
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        if "data" in data and "last" in data["data"]:
+            return float(data["data"]["last"])
+        elif isinstance(data, list) and len(data) > 0:
+            return float(data[0].get("last", 0.0))
+        return 0.0
+    except Exception as e:
+        print(f"Error fetching ticker for {symbol}: {e}")
+        return 0.0
+
+def place_limit_order(symbol: str, side: str, price: float, quantity: float) -> dict:
+    """Place a Limit Maker Order"""
+    if not HATA_API_KEY or not HATA_API_SECRET:
+        print(f"SIMULATED: Placed Limit {side} for {quantity} {symbol} at RM{price}")
+        return {"status": "simulated", "orderId": "sim_123", "price": price}
+
+    endpoint = "/orderbook/sapi/order"
+    timestamp = str(int(time.time()))
+    
+    params = {
+        "timestamp": timestamp,
+        "symbol": symbol,
+        "side": side.upper(), # BUY or SELL
+        "type": "LIMIT",
+        "timeInForce": "GTC",
+        "price": str(price),
+        "quantity": str(quantity)
+    }
+    
+    signature = _generate_signature(params, HATA_API_SECRET)
+    headers = {
+        "X-API-KEY": HATA_API_KEY,
+        "Signature": signature
+    }
+    url = f"{BASE_URL}{endpoint}"
+    
+    try:
+        response = requests.post(url, data=params, headers=headers, timeout=10)
+        response.raise_for_status()
+        print(f"Order Success: Limit {side} {quantity} {symbol} at RM{price}")
+        return response.json()
+    except Exception as e:
+        print(f"Error placing Limit {side} Order: {e}")
+        return {"status": "error", "message": str(e)}
+
+def cancel_order(symbol: str, order_id: str) -> dict:
+    """Cancel an open order"""
+    if not HATA_API_KEY:
+        print(f"SIMULATED: Cancelled Order {order_id}")
+        return {"status": "simulated_cancelled"}
+        
+    endpoint = "/orderbook/sapi/order"
+    timestamp = str(int(time.time()))
+    params = {
+        "timestamp": timestamp,
+        "symbol": symbol,
+        "orderId": order_id
+    }
+    signature = _generate_signature(params, HATA_API_SECRET)
+    headers = {
+        "X-API-KEY": HATA_API_KEY,
+        "Signature": signature
+    }
+    url = f"{BASE_URL}{endpoint}"
+    
+    try:
+        response = requests.delete(url, params=params, headers=headers, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"Error cancelling order {order_id}: {e}")
+        return {"status": "error"}

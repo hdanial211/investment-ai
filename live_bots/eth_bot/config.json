@@ -1,0 +1,14 @@
+{
+  "coin": "ETH",
+  "currency": "USDT",
+  "interval": "1m",
+  "trade_size_fiat": 20.0,
+  "max_layers": 15,
+  "drop_threshold_pct": 0.006,
+  "trailing_activation_pct": 0.005,
+  "trailing_gap_pct": 0.0015,
+  "model_path": "../../models/xgboost_scalping_ETH_1y.pkl",
+  "min_confidence": 0.60,
+  "use_limit_orders": true,
+  "poll_interval_seconds": 60
+}

@@ -24,8 +24,11 @@ class CryptoTradingEnv(gym.Env):
         
         # Observation space: all features + current position (0 or 1) + unrealized profit + time held
         self.obs_shape = len(self.feature_cols) + 3
+        self.window_size = 15 # LSTM needs a sequence of past data
+        
+        # Space shape is (window_size, num_features)
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(self.obs_shape,), dtype=np.float32
+            low=-np.inf, high=np.inf, shape=(self.window_size, self.obs_shape), dtype=np.float32
         )
         
         # Hyperparameters for Scalping
@@ -52,15 +55,29 @@ class CryptoTradingEnv(gym.Env):
         return self._get_obs(), {}
 
     def _get_obs(self):
-        row = self.df.iloc[self.current_step]
-        features = row[self.feature_cols].values.astype(np.float32)
+        # Calculate window indices
+        start_idx = max(0, self.current_step - self.window_size + 1)
+        end_idx = self.current_step + 1
         
-        current_price = row['close']
+        window_df = self.df.iloc[start_idx:end_idx]
+        features = window_df[self.feature_cols].values.astype(np.float32)
+        
+        # Pad if start_idx was < 0 (not enough history at the start)
+        pad_len = self.window_size - len(features)
+        if pad_len > 0:
+            features = np.pad(features, ((pad_len, 0), (0, 0)), mode='edge')
+            
+        current_price = self.df.iloc[self.current_step]['close']
         unrealized_profit = 0.0
         if self.position == 1:
             unrealized_profit = (current_price - self.entry_price) / self.entry_price
             
-        obs = np.append(features, [self.position, unrealized_profit, self.time_held])
+        # State variables to append to EACH timestep in the window
+        # (This helps LSTM know the CURRENT state of the agent contextually)
+        state_vars = np.array([self.position, unrealized_profit, self.time_held], dtype=np.float32)
+        state_vars_repeated = np.tile(state_vars, (self.window_size, 1))
+        
+        obs = np.concatenate((features, state_vars_repeated), axis=1)
         return np.nan_to_num(obs, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
 
     def step(self, action):

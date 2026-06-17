@@ -4,13 +4,16 @@ import './BacktestSimulator.css'
 
 export default function BacktestSimulator() {
   const [params, setParams] = useState({
+    coin: 'ETH',
     initial_cash: 100000.0,
     trade_size_fiat: 4000.0,
     max_layers: 6,
     drop_threshold: 5.0, // UI shows positive %, api expects float
     take_profit_pct: 10.0,
     trailing_activation_pct: 3.0,
-    trailing_gap_pct: 1.0
+    trailing_gap_pct: 1.0,
+    enable_dca: true,
+    ai_type: "xgboost"
   })
 
   const [loading, setLoading] = useState(false)
@@ -54,13 +57,16 @@ export default function BacktestSimulator() {
     setLogs([])
     
     const payload = {
+      coin: params.coin,
       initial_cash: params.initial_cash,
       trade_size_fiat: params.trade_size_fiat,
       max_layers: params.max_layers,
       drop_threshold: params.drop_threshold / 100, // convert % to float
       take_profit_pct: params.take_profit_pct / 100,
       trailing_activation_pct: params.trailing_activation_pct / 100,
-      trailing_gap_pct: params.trailing_gap_pct / 100
+      trailing_gap_pct: params.trailing_gap_pct / 100,
+      enable_dca: params.enable_dca,
+      ai_type: params.ai_type
     }
 
     const ws = new WebSocket('ws://127.0.0.1:8000/api/backtest-stream')
@@ -114,21 +120,59 @@ export default function BacktestSimulator() {
         <div className="panel sim-input-panel">
           <h3>Tetapan Modal & DCA</h3>
           <div className="input-group">
+            <label>Pilih Koin</label>
+            <select name="coin" value={params.coin} onChange={(e) => setParams({...params, coin: e.target.value})} disabled={loading} className="w-full p-2 rounded bg-gray-800 text-white border border-gray-700">
+              <option value="BTC">BTC (Bitcoin)</option>
+              <option value="ETH">ETH (Ethereum)</option>
+              <option value="SOL">SOL (Solana)</option>
+              <option value="XRP">XRP (Ripple)</option>
+              <option value="LTC">LTC (Litecoin)</option>
+            </select>
+          </div>
+          <div className="input-group">
             <label>Modal Keseluruhan (RM)</label>
             <input type="number" name="initial_cash" value={params.initial_cash} onChange={handleChange} disabled={loading} />
           </div>
+
           <div className="input-group">
-            <label>Saiz 1 Layer (RM)</label>
-            <input type="number" name="trade_size_fiat" value={params.trade_size_fiat} onChange={handleChange} disabled={loading} />
+            <label>Model AI</label>
+            <select name="ai_type" value={params.ai_type} onChange={handleChange} disabled={loading} className="w-full p-2 rounded bg-gray-800 text-white border border-gray-700">
+              <option value="xgboost">XGBoost (Triple Barrier)</option>
+              <option value="rl_lstm">AlphaZero (RL + LSTM)</option>
+            </select>
           </div>
+
           <div className="input-group">
-            <label>Maksimum Layer (1 Kitaran)</label>
-            <input type="number" name="max_layers" value={params.max_layers} onChange={handleChange} disabled={loading} />
+            <label>Gunakan Teknik DCA Layering?</label>
+            <select name="enable_dca" value={params.enable_dca ? "yes" : "no"} onChange={(e) => setParams({...params, enable_dca: e.target.value === "yes"})} disabled={loading} className="w-full p-2 rounded bg-gray-800 text-white border border-gray-700">
+              <option value="yes">Ya (AI + Layering Keselamatan)</option>
+              <option value="no">Tidak (Uji Pure Scalping AI Sahaja - Hard SL)</option>
+            </select>
           </div>
-          <div className="input-group">
-            <label>Jarak Jatuh DCA (%)</label>
-            <input type="number" name="drop_threshold" value={params.drop_threshold} onChange={handleChange} disabled={loading} />
-          </div>
+
+          {params.enable_dca && (
+            <>
+              <div className="input-group">
+                <label>Saiz 1 Layer (RM)</label>
+                <input type="number" name="trade_size_fiat" value={params.trade_size_fiat} onChange={handleChange} disabled={loading} />
+              </div>
+              <div className="input-group">
+                <label>Maksimum Layer (1 Kitaran)</label>
+                <input type="number" name="max_layers" value={params.max_layers} onChange={handleChange} disabled={loading} />
+              </div>
+              <div className="input-group">
+                <label>Jarak Jatuh DCA (%)</label>
+                <input type="number" name="drop_threshold" value={params.drop_threshold} onChange={handleChange} disabled={loading} />
+              </div>
+            </>
+          )}
+
+          {!params.enable_dca && (
+            <div className="input-group">
+              <label>Saiz Dagangan (RM)</label>
+              <input type="number" name="trade_size_fiat" value={params.trade_size_fiat} onChange={handleChange} disabled={loading} />
+            </div>
+          )}
 
           <h3 className="mt-4">Tetapan Trailing Stop / TP</h3>
           <div className="input-group">
