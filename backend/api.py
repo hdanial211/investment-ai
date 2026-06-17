@@ -21,6 +21,7 @@ app.add_middleware(
 )
 
 class AutoToggle(BaseModel):
+    coin: str
     is_auto: bool
 
 class AmountSetting(BaseModel):
@@ -48,8 +49,9 @@ def get_state():
 
 @app.post("/api/toggle-auto")
 def toggle_auto(toggle: AutoToggle):
-    global_state["is_auto"] = toggle.is_auto
-    return {"status": "success", "is_auto": global_state["is_auto"]}
+    if toggle.coin in engine_state:
+        engine_state[toggle.coin]["is_auto"] = toggle.is_auto
+    return {"status": "success", "is_auto": engine_state[toggle.coin]["is_auto"]}
 
 @app.post("/api/set-amount")
 def set_amount(setting: AmountSetting):

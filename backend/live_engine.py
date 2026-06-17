@@ -120,7 +120,7 @@ async def process_kline(coin_id, kline):
                 shared.engine_state[coin_id]["last_signal"] = 1
                 
                 # If Auto mode is ON, execute trade
-                if shared.global_state["is_auto"]:
+                if shared.engine_state[coin_id]["is_auto"]:
                     logger.info(f"[{coin_id}] Auto Mode ON: Executing Buy!")
                     # TODO: Hata API logic
             else:

@@ -121,7 +121,7 @@ export default function BacktestSimulator() {
           <h3>Tetapan Modal & DCA</h3>
           <div className="input-group">
             <label>Pilih Koin</label>
-            <select name="coin" value={params.coin} onChange={(e) => setParams({...params, coin: e.target.value})} disabled={loading} className="w-full p-2 rounded bg-gray-800 text-white border border-gray-700">
+            <select name="coin" value={params.coin} onChange={(e) => setParams({...params, coin: e.target.value})} disabled={loading} className="sim-select">
               <option value="BTC">BTC (Bitcoin)</option>
               <option value="ETH">ETH (Ethereum)</option>
               <option value="SOL">SOL (Solana)</option>
@@ -136,7 +136,7 @@ export default function BacktestSimulator() {
 
           <div className="input-group">
             <label>Model AI</label>
-            <select name="ai_type" value={params.ai_type} onChange={handleChange} disabled={loading} className="w-full p-2 rounded bg-gray-800 text-white border border-gray-700">
+            <select name="ai_type" value={params.ai_type} onChange={handleChange} disabled={loading} className="sim-select">
               <option value="xgboost">XGBoost (Triple Barrier)</option>
               <option value="rl_lstm">AlphaZero (RL + LSTM)</option>
             </select>
@@ -144,7 +144,7 @@ export default function BacktestSimulator() {
 
           <div className="input-group">
             <label>Gunakan Teknik DCA Layering?</label>
-            <select name="enable_dca" value={params.enable_dca ? "yes" : "no"} onChange={(e) => setParams({...params, enable_dca: e.target.value === "yes"})} disabled={loading} className="w-full p-2 rounded bg-gray-800 text-white border border-gray-700">
+            <select name="enable_dca" value={params.enable_dca ? "yes" : "no"} onChange={(e) => setParams({...params, enable_dca: e.target.value === "yes"})} disabled={loading} className="sim-select">
               <option value="yes">Ya (AI + Layering Keselamatan)</option>
               <option value="no">Tidak (Uji Pure Scalping AI Sahaja - Hard SL)</option>
             </select>

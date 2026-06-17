@@ -39,7 +39,10 @@ function App() {
 
   const toggleAuto = async () => {
     try {
-      await axios.post('http://localhost:8000/api/toggle-auto', { is_auto: !state.global.is_auto })
+      await axios.post('http://localhost:8000/api/toggle-auto', { 
+        coin: selectedCoin,
+        is_auto: !(coinData.is_auto || false)
+      })
     } catch (err) {
       console.error(err)
     }
@@ -110,9 +113,9 @@ function App() {
           </button>
         </div>
 
-        <div className={`status-indicator ${state.global.is_auto ? 'auto' : 'manual'}`}>
-          <div className={`led ${state.global.is_auto ? 'on' : 'off'}`}></div>
-          <span>{state.global.is_auto ? 'AUTO TRADING ACTIVE' : 'MANUAL MODE'}</span>
+        <div className={`status-indicator ${coinData.is_auto ? 'auto' : 'manual'}`}>
+          <div className={`led ${coinData.is_auto ? 'on' : 'off'}`}></div>
+          <span>{coinData.is_auto ? `AUTO TRADING (${selectedCoin})` : `MANUAL MODE (${selectedCoin})`}</span>
         </div>
       </header>
 
@@ -291,10 +294,10 @@ function App() {
 
                 <div className="button-group">
                   <button 
-                    className={`btn-action btn-auto-toggle ${state.global.is_auto ? 'active' : ''}`} 
+                    className={`btn-action btn-auto-toggle ${coinData.is_auto ? 'active' : ''}`} 
                     onClick={toggleAuto}
                   >
-                    <Power size={18} /> {state.global.is_auto ? 'HENTIKAN AUTO TRADING' : 'AKTIFKAN AUTO TRADING'}
+                    <Power size={18} /> {coinData.is_auto ? `HENTIKAN AUTO (${selectedCoin})` : `AKTIFKAN AUTO (${selectedCoin})`}
                   </button>
                   <button className="btn-action btn-manual-buy" onClick={manualBuy}>
                     TEMBAK RM {coinData.trade_amount_myr} ({selectedCoin}) SEKARANG

@@ -80,6 +80,22 @@
   border-color: var(--primary-neon);
 }
 
+.sim-select {
+  width: 100%;
+  padding: 8px;
+  border-radius: 6px;
+  background-color: rgba(0, 0, 0, 0.4);
+  color: white;
+  border: 1px solid var(--glass-border);
+  outline: none;
+  font-family: inherit;
+  margin-top: 5px;
+}
+
+.sim-select:focus {
+  border-color: var(--primary-neon);
+}
+
 .btn-run-sim {
   background: linear-gradient(45deg, var(--primary-neon), #00ff88);
   color: #000;

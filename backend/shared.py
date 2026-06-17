@@ -6,7 +6,6 @@
 
 global_state = {
     "balance_myr": 10000.00,
-    "is_auto": False,
     "usdt_myr_rate": 4.70,
 }
 
@@ -17,7 +16,8 @@ def create_coin_state():
         "confidence": 0.0,
         "layers": [],
         "total_pnl": 0.0,
-        "trade_amount_myr": 50.0
+        "trade_amount_myr": 50.0,
+        "is_auto": False
     }
 
 engine_state = {
