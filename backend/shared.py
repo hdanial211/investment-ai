@@ -16,7 +16,7 @@ def create_coin_state():
         "confidence": 0.0,
         "layers": [],
         "total_pnl": 0.0,
-        "trade_amount_myr": 50.0,
+        "allocated_capital_myr": 1000.0,
         "risk_level": 1,
         "is_auto": False
     }

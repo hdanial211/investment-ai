@@ -124,6 +124,7 @@ async def process_kline(coin_id, kline):
                     logger.info(f"[{coin_id}] Auto Mode ON: Processing Signal...")
                     risk_level = shared.engine_state[coin_id].get("risk_level", 1)
                     balance = shared.global_state["balance_myr"]
+                    allocated_cap = shared.engine_state[coin_id].get("allocated_capital_myr", 1000.0)
                     current_price = shared.engine_state[coin_id]["current_price"]
                     
                     # 1. Determine Dynamic Strategy Settings
@@ -152,7 +153,7 @@ async def process_kline(coin_id, kline):
                         tp_pct = 0.015
                         max_layers = 6
 
-                    trade_amount = balance * risk_pct
+                    trade_amount = allocated_cap * risk_pct
                     
                     # 2. Check if we can buy (Max Layers & Gap)
                     layers = shared.engine_state[coin_id]["layers"]

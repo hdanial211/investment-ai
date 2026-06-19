@@ -66,6 +66,17 @@ function App() {
     }
   }
 
+  const setCapital = async (amount) => {
+    try {
+      await axios.post('http://localhost:8000/api/set-capital', {
+        coin: selectedCoin,
+        capital: parseFloat(amount)
+      })
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
   const setRiskLevel = async (level) => {
     try {
       await axios.post('http://localhost:8000/api/set-risk-level', {
@@ -84,18 +95,20 @@ function App() {
     confidence: 0.0,
     layers: [],
     total_pnl: 0.0,
+    allocated_capital_myr: 1000.0,
     risk_level: 1
   }
 
-  // Calculate dynamic layer size based on balance and risk level
+  // Calculate dynamic layer size based on allocated capital and risk level
   const balance = state.global.balance_myr || 0;
+  const allocatedCap = coinData.allocated_capital_myr || 1000.0;
   const getRiskPercentage = (level) => {
     if (level === 3) return 0.25; // Tahap 3: 25%
     if (level === 2) return 0.10; // Tahap 2: 10%
     return 0.05;                  // Tahap 1: 5%
   };
   const currentRiskPct = getRiskPercentage(coinData.risk_level);
-  const calculatedTradeAmount = balance * currentRiskPct;
+  const calculatedTradeAmount = allocatedCap * currentRiskPct;
   const maxLayers = coinData.risk_level === 3 ? "2-3 Lapis" : coinData.risk_level === 2 ? "5 Lapis" : "6 Lapis";
   
   const getStrategyName = (coin, level) => {
@@ -280,6 +293,20 @@ function App() {
                 <h2>Kawalan Eksekusi Hata ({selectedCoin})</h2>
                 
                 <div className="amount-setting" style={{ marginBottom: '1.5rem' }}>
+                  <label>Modal Khas Diperuntukkan (RM)</label>
+                  <div className="amount-controls" style={{ marginBottom: '1rem' }}>
+                    <input 
+                      type="number" 
+                      className="amount-input"
+                      value={coinData.allocated_capital_myr || ''} 
+                      onChange={(e) => setCapital(e.target.value)}
+                      min="100"
+                      step="100"
+                      placeholder="Masukkan Modal untuk bot ini"
+                      style={{ width: '100%', fontSize: '1.2rem', padding: '10px' }}
+                    />
+                  </div>
+
                   <label>Tahap Risiko (Strategi & Saiz Dinamik)</label>
                   <div className="amount-controls" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
                     <button 
@@ -317,7 +344,7 @@ function App() {
                       <strong style={{ color: '#fff' }}>Saiz Trade Semasa: <span style={{ color: '#00e5ff' }}>RM {calculatedTradeAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></strong>
                     </p>
                     <p style={{ margin: '0', fontSize: '0.8rem', color: '#666' }}>
-                      *Dikira auto berdasarkan {currentRiskPct * 100}% dari baki Modal Hata (RM {balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                      *Dikira auto berdasarkan {currentRiskPct * 100}% dari Modal Diperuntukkan (RM {allocatedCap.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
                     </p>
                   </div>
                 </div>
