@@ -1,4 +1,4 @@
-# REKOD KEPUTUSAN BACKTEST (INVESTMENT AI) - ETH
+# REKOD KEPUTUSAN BACKTEST (INVESTMENT AI) - XRP
 Modal Permulaan Rujukan: RM 1,000
 Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 
@@ -15,11 +15,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 99.90% | Take Profit: 0.50%
 - Martingale: False | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 8060
-- Win Rate: 46.24% (3727 Menang / 4333 Kalah)
-- Untung Bersih: **+ RM -949.94**
-- Max Drawdown: **95.00%**
-- Baki Akaun: RM 50.06
+- Jumlah Trade: 4508
+- Win Rate: 45.98% (2073 Menang / 2435 Kalah)
+- Untung Bersih: **+ RM -538.16**
+- Max Drawdown: **53.88%**
+- Baki Akaun: RM 461.57
 
 ---
 
@@ -30,11 +30,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 99.90% | Take Profit: 1.00%
 - Martingale: False | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 6949
-- Win Rate: 30.51% (2120 Menang / 4829 Kalah)
-- Untung Bersih: **+ RM -894.77**
-- Max Drawdown: **89.79%**
-- Baki Akaun: RM 105.09
+- Jumlah Trade: 2673
+- Win Rate: 31.20% (834 Menang / 1839 Kalah)
+- Untung Bersih: **+ RM -328.23**
+- Max Drawdown: **32.95%**
+- Baki Akaun: RM 671.50
 
 ---
 
@@ -75,11 +75,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 1.00% | Take Profit: 1.00%
 - Martingale: False | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 104
-- Win Rate: 100.00% (104 Menang / 0 Kalah)
-- Untung Bersih: **+ RM 36.08**
-- Max Drawdown: **6.63%**
-- Baki Akaun: RM 973.63
+- Jumlah Trade: 30
+- Win Rate: 100.00% (30 Menang / 0 Kalah)
+- Untung Bersih: **+ RM 7.33**
+- Max Drawdown: **5.57%**
+- Baki Akaun: RM 959.56
 
 ---
 
@@ -90,11 +90,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 5.00% | Take Profit: 2.00%
 - Martingale: False | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 53
-- Win Rate: 100.00% (53 Menang / 0 Kalah)
-- Untung Bersih: **+ RM 72.01**
-- Max Drawdown: **16.58%**
-- Baki Akaun: RM 918.76
+- Jumlah Trade: 14
+- Win Rate: 100.00% (14 Menang / 0 Kalah)
+- Untung Bersih: **+ RM 14.98**
+- Max Drawdown: **14.77%**
+- Baki Akaun: RM 891.52
 
 ---
 
@@ -105,11 +105,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 0.50% | Take Profit: 0.50%
 - Martingale: False | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 453
-- Win Rate: 100.00% (453 Menang / 0 Kalah)
-- Untung Bersih: **+ RM 43.25**
-- Max Drawdown: **18.73%**
-- Baki Akaun: RM 868.57
+- Jumlah Trade: 106
+- Win Rate: 100.00% (106 Menang / 0 Kalah)
+- Untung Bersih: **+ RM 7.65**
+- Max Drawdown: **13.63%**
+- Baki Akaun: RM 898.85
 
 ---
 
@@ -120,11 +120,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 3.00% | Take Profit: 3.00%
 - Martingale: False | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 72
-- Win Rate: 100.00% (72 Menang / 0 Kalah)
-- Untung Bersih: **+ RM 73.01**
-- Max Drawdown: **15.37%**
-- Baki Akaun: RM 925.41
+- Jumlah Trade: 24
+- Win Rate: 100.00% (24 Menang / 0 Kalah)
+- Untung Bersih: **+ RM 16.00**
+- Max Drawdown: **13.19%**
+- Baki Akaun: RM 903.68
 
 ---
 
@@ -135,11 +135,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 2.00% | Take Profit: 1.50%
 - Martingale: False | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 77
-- Win Rate: 100.00% (77 Menang / 0 Kalah)
-- Untung Bersih: **+ RM 57.15**
-- Max Drawdown: **11.29%**
-- Baki Akaun: RM 950.21
+- Jumlah Trade: 22
+- Win Rate: 100.00% (22 Menang / 0 Kalah)
+- Untung Bersih: **+ RM 12.37**
+- Max Drawdown: **9.59%**
+- Baki Akaun: RM 930.64
 
 ---
 
@@ -150,11 +150,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 99.00% | Take Profit: 5.00%
 - Martingale: False | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 3398
-- Win Rate: 19.39% (659 Menang / 2739 Kalah)
-- Untung Bersih: **+ RM -900.21**
-- Max Drawdown: **90.05%**
-- Baki Akaun: RM 99.79
+- Jumlah Trade: 1435
+- Win Rate: 18.61% (267 Menang / 1168 Kalah)
+- Untung Bersih: **+ RM -383.15**
+- Max Drawdown: **38.96%**
+- Baki Akaun: RM 616.31
 
 ---
 
@@ -165,11 +165,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 5.00% | Take Profit: 2.00%
 - Martingale: False | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 53
-- Win Rate: 100.00% (53 Menang / 0 Kalah)
-- Untung Bersih: **+ RM 14.40**
-- Max Drawdown: **5.48%**
-- Baki Akaun: RM 969.37
+- Jumlah Trade: 14
+- Win Rate: 100.00% (14 Menang / 0 Kalah)
+- Untung Bersih: **+ RM 3.00**
+- Max Drawdown: **4.34%**
+- Baki Akaun: RM 969.42
 
 ---
 
@@ -180,11 +180,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 0.50% | Take Profit: 0.20%
 - Martingale: False | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 707
-- Win Rate: 52.33% (370 Menang / 337 Kalah)
-- Untung Bersih: **+ RM 10.53**
-- Max Drawdown: **13.56%**
-- Baki Akaun: RM 886.15
+- Jumlah Trade: 214
+- Win Rate: 59.81% (128 Menang / 86 Kalah)
+- Untung Bersih: **+ RM 2.38**
+- Max Drawdown: **10.54%**
+- Baki Akaun: RM 913.39
 
 ---
 
@@ -195,11 +195,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 0.30% | Take Profit: 0.40%
 - Martingale: False | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 421
-- Win Rate: 100.00% (421 Menang / 0 Kalah)
-- Untung Bersih: **+ RM 30.50**
-- Max Drawdown: **9.96%**
-- Baki Akaun: RM 937.31
+- Jumlah Trade: 136
+- Win Rate: 100.00% (136 Menang / 0 Kalah)
+- Untung Bersih: **+ RM 7.19**
+- Max Drawdown: **7.99%**
+- Baki Akaun: RM 939.03
 
 ---
 
@@ -210,11 +210,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 0.80% | Take Profit: 99.00%
 - Martingale: False | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 308
-- Win Rate: 96.43% (297 Menang / 11 Kalah)
-- Untung Bersih: **+ RM 43.52**
-- Max Drawdown: **10.31%**
-- Baki Akaun: RM 946.53
+- Jumlah Trade: 77
+- Win Rate: 98.70% (76 Menang / 1 Kalah)
+- Untung Bersih: **+ RM 7.99**
+- Max Drawdown: **8.46%**
+- Baki Akaun: RM 935.86
 
 ---
 
@@ -225,11 +225,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 0.50% | Take Profit: 0.40%
 - Martingale: False | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 240
-- Win Rate: 100.00% (240 Menang / 0 Kalah)
-- Untung Bersih: **+ RM 61.74**
-- Max Drawdown: **16.26%**
-- Baki Akaun: RM 904.57
+- Jumlah Trade: 105
+- Win Rate: 100.00% (105 Menang / 0 Kalah)
+- Untung Bersih: **+ RM 21.26**
+- Max Drawdown: **13.76%**
+- Baki Akaun: RM 900.36
 
 ---
 
@@ -240,11 +240,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 1.00% | Take Profit: 0.50%
 - Martingale: False | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 169
-- Win Rate: 100.00% (169 Menang / 0 Kalah)
-- Untung Bersih: **+ RM 91.06**
-- Max Drawdown: **19.03%**
-- Baki Akaun: RM 901.85
+- Jumlah Trade: 61
+- Win Rate: 100.00% (61 Menang / 0 Kalah)
+- Untung Bersih: **+ RM 26.42**
+- Max Drawdown: **16.41%**
+- Baki Akaun: RM 881.37
 
 ---
 
@@ -255,11 +255,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 1.00% | Take Profit: 0.30%
 - Martingale: True | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 345
-- Win Rate: 100.00% (345 Menang / 0 Kalah)
-- Untung Bersih: **+ RM 4.11**
-- Max Drawdown: **1.71%**
-- Baki Akaun: RM 988.49
+- Jumlah Trade: 127
+- Win Rate: 100.00% (127 Menang / 0 Kalah)
+- Untung Bersih: **+ RM 1.21**
+- Max Drawdown: **4.38%**
+- Baki Akaun: RM 963.61
 
 ---
 
@@ -270,11 +270,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 5.00% | Take Profit: 1.00%
 - Martingale: True | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 99
-- Win Rate: 100.00% (99 Menang / 0 Kalah)
-- Untung Bersih: **+ RM 10.67**
-- Max Drawdown: **2.60%**
-- Baki Akaun: RM 987.14
+- Jumlah Trade: 32
+- Win Rate: 100.00% (32 Menang / 0 Kalah)
+- Untung Bersih: **+ RM 2.92**
+- Max Drawdown: **2.62%**
+- Baki Akaun: RM 980.80
 
 ---
 
@@ -285,11 +285,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 0.80% | Take Profit: 0.50%
 - Martingale: True | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 186
-- Win Rate: 100.00% (186 Menang / 0 Kalah)
-- Untung Bersih: **+ RM 11.26**
-- Max Drawdown: **2.73%**
-- Baki Akaun: RM 986.18
+- Jumlah Trade: 73
+- Win Rate: 100.00% (73 Menang / 0 Kalah)
+- Untung Bersih: **+ RM 4.69**
+- Max Drawdown: **8.23%**
+- Baki Akaun: RM 933.92
 
 ---
 
@@ -300,11 +300,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 1.00% | Take Profit: 1.00%
 - Martingale: True | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 104
-- Win Rate: 100.00% (104 Menang / 0 Kalah)
-- Untung Bersih: **+ RM 36.08**
-- Max Drawdown: **6.63%**
-- Baki Akaun: RM 973.63
+- Jumlah Trade: 31
+- Win Rate: 100.00% (31 Menang / 0 Kalah)
+- Untung Bersih: **+ RM 11.37**
+- Max Drawdown: **17.39%**
+- Baki Akaun: RM 861.01
 
 ---
 
@@ -315,11 +315,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 0.50% | Take Profit: 0.40%
 - Martingale: True | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 332
-- Win Rate: 100.00% (332 Menang / 0 Kalah)
-- Untung Bersih: **+ RM 3.69**
-- Max Drawdown: **1.10%**
-- Baki Akaun: RM 993.70
+- Jumlah Trade: 135
+- Win Rate: 100.00% (135 Menang / 0 Kalah)
+- Untung Bersih: **+ RM 1.81**
+- Max Drawdown: **0.85%**
+- Baki Akaun: RM 994.64
 
 ---
 
@@ -330,11 +330,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 1.00% | Take Profit: 0.20%
 - Martingale: True | Dynamic TP: True
 **Keputusan:**
-- Jumlah Trade: 444
-- Win Rate: 99.55% (442 Menang / 2 Kalah)
-- Untung Bersih: **+ RM 3.27**
-- Max Drawdown: **1.71%**
-- Baki Akaun: RM 987.66
+- Jumlah Trade: 154
+- Win Rate: 97.40% (150 Menang / 4 Kalah)
+- Untung Bersih: **+ RM 1.00**
+- Max Drawdown: **1.33%**
+- Baki Akaun: RM 989.78
 
 ---
 
@@ -345,11 +345,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 0.50% | Take Profit: 0.20%
 - Martingale: True | Dynamic TP: True
 **Keputusan:**
-- Jumlah Trade: 357
-- Win Rate: 99.44% (355 Menang / 2 Kalah)
-- Untung Bersih: **+ RM 5.76**
-- Max Drawdown: **2.75%**
-- Baki Akaun: RM 980.55
+- Jumlah Trade: 165
+- Win Rate: 96.97% (160 Menang / 5 Kalah)
+- Untung Bersih: **+ RM 3.97**
+- Max Drawdown: **2.16%**
+- Baki Akaun: RM 985.45
 
 ---
 
@@ -360,11 +360,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 3.00% | Take Profit: 0.25%
 - Martingale: True | Dynamic TP: True
 **Keputusan:**
-- Jumlah Trade: 359
-- Win Rate: 99.72% (358 Menang / 1 Kalah)
-- Untung Bersih: **+ RM 4.67**
-- Max Drawdown: **2.66%**
-- Baki Akaun: RM 980.63
+- Jumlah Trade: 89
+- Win Rate: 96.63% (86 Menang / 3 Kalah)
+- Untung Bersih: **+ RM 0.94**
+- Max Drawdown: **3.22%**
+- Baki Akaun: RM 973.61
 
 ---
 
@@ -375,11 +375,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 1.00% | Take Profit: 99.00%
 - Martingale: True | Dynamic TP: True
 **Keputusan:**
-- Jumlah Trade: 394
-- Win Rate: 99.49% (392 Menang / 2 Kalah)
-- Untung Bersih: **+ RM 5.47**
-- Max Drawdown: **2.74%**
-- Baki Akaun: RM 980.39
+- Jumlah Trade: 152
+- Win Rate: 97.37% (148 Menang / 4 Kalah)
+- Untung Bersih: **+ RM 1.96**
+- Max Drawdown: **2.14%**
+- Baki Akaun: RM 983.88
 
 ---
 
@@ -390,11 +390,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 0.80% | Take Profit: 0.20%
 - Martingale: True | Dynamic TP: True
 **Keputusan:**
-- Jumlah Trade: 513
-- Win Rate: 99.61% (511 Menang / 2 Kalah)
-- Untung Bersih: **+ RM 2.50**
-- Max Drawdown: **1.24%**
-- Baki Akaun: RM 991.23
+- Jumlah Trade: 164
+- Win Rate: 97.56% (160 Menang / 4 Kalah)
+- Untung Bersih: **+ RM 1.04**
+- Max Drawdown: **0.97%**
+- Baki Akaun: RM 992.83
 
 ---
 
@@ -405,11 +405,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 1.00% | Take Profit: 99.00%
 - Martingale: False | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 140
-- Win Rate: 100.00% (140 Menang / 0 Kalah)
-- Untung Bersih: **+ RM 43.92**
-- Max Drawdown: **9.56%**
-- Baki Akaun: RM 954.31
+- Jumlah Trade: 33
+- Win Rate: 100.00% (33 Menang / 0 Kalah)
+- Untung Bersih: **+ RM 8.30**
+- Max Drawdown: **8.01%**
+- Baki Akaun: RM 939.88
 
 ---
 
@@ -420,11 +420,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 0.80% | Take Profit: 99.00%
 - Martingale: False | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 540
-- Win Rate: 61.48% (332 Menang / 208 Kalah)
-- Untung Bersih: **+ RM 26.67**
-- Max Drawdown: **13.02%**
-- Baki Akaun: RM 906.23
+- Jumlah Trade: 126
+- Win Rate: 64.29% (81 Menang / 45 Kalah)
+- Untung Bersih: **+ RM 6.03**
+- Max Drawdown: **10.51%**
+- Baki Akaun: RM 916.82
 
 ---
 
@@ -435,11 +435,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 1.00% | Take Profit: 99.00%
 - Martingale: False | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 68
-- Win Rate: 100.00% (68 Menang / 0 Kalah)
-- Untung Bersih: **+ RM 44.41**
-- Max Drawdown: **9.40%**
-- Baki Akaun: RM 956.53
+- Jumlah Trade: 17
+- Win Rate: 100.00% (17 Menang / 0 Kalah)
+- Untung Bersih: **+ RM 5.46**
+- Max Drawdown: **7.78%**
+- Baki Akaun: RM 940.32
 
 ---
 
@@ -450,11 +450,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 1.00% | Take Profit: 99.00%
 - Martingale: True | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 217
-- Win Rate: 92.17% (200 Menang / 17 Kalah)
-- Untung Bersih: **+ RM 11.86**
-- Max Drawdown: **2.73%**
-- Baki Akaun: RM 986.78
+- Jumlah Trade: 63
+- Win Rate: 92.06% (58 Menang / 5 Kalah)
+- Untung Bersih: **+ RM 2.76**
+- Max Drawdown: **8.23%**
+- Baki Akaun: RM 932.18
 
 ---
 
@@ -465,11 +465,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 3.00% | Take Profit: 99.00%
 - Martingale: False | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 235
-- Win Rate: 92.34% (217 Menang / 18 Kalah)
-- Untung Bersih: **+ RM 30.33**
-- Max Drawdown: **9.64%**
-- Baki Akaun: RM 941.17
+- Jumlah Trade: 55
+- Win Rate: 90.91% (50 Menang / 5 Kalah)
+- Untung Bersih: **+ RM 6.87**
+- Max Drawdown: **7.92%**
+- Baki Akaun: RM 939.61
 
 ---
 
@@ -480,11 +480,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 0.80% | Take Profit: 0.60%
 - Martingale: False | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 232
-- Win Rate: 100.00% (232 Menang / 0 Kalah)
-- Untung Bersih: **+ RM 31.77**
-- Max Drawdown: **9.97%**
-- Baki Akaun: RM 938.93
+- Jumlah Trade: 60
+- Win Rate: 100.00% (60 Menang / 0 Kalah)
+- Untung Bersih: **+ RM 7.28**
+- Max Drawdown: **7.89%**
+- Baki Akaun: RM 940.28
 
 ---
 
@@ -495,11 +495,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 5.00% | Take Profit: 2.00%
 - Martingale: False | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 36
-- Win Rate: 100.00% (36 Menang / 0 Kalah)
-- Untung Bersih: **+ RM 190.12**
-- Max Drawdown: **28.89%**
-- Baki Akaun: RM 878.26
+- Jumlah Trade: 14
+- Win Rate: 100.00% (14 Menang / 0 Kalah)
+- Untung Bersih: **+ RM 74.89**
+- Max Drawdown: **25.70%**
+- Baki Akaun: RM 838.90
 
 ---
 
@@ -510,11 +510,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 0.20% | Take Profit: 0.50%
 - Martingale: False | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 687
-- Win Rate: 100.00% (687 Menang / 0 Kalah)
-- Untung Bersih: **+ RM 11.98**
-- Max Drawdown: **4.36%**
-- Baki Akaun: RM 978.89
+- Jumlah Trade: 316
+- Win Rate: 100.00% (316 Menang / 0 Kalah)
+- Untung Bersih: **+ RM 5.88**
+- Max Drawdown: **2.77%**
+- Baki Akaun: RM 999.30
 
 ---
 
@@ -525,11 +525,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 2.00% | Take Profit: 0.50%
 - Martingale: True | Dynamic TP: True
 **Keputusan:**
-- Jumlah Trade: 454
-- Win Rate: 99.78% (453 Menang / 1 Kalah)
-- Untung Bersih: **+ RM 3.18**
-- Max Drawdown: **1.67%**
-- Baki Akaun: RM 988.11
+- Jumlah Trade: 107
+- Win Rate: 98.13% (105 Menang / 2 Kalah)
+- Untung Bersih: **+ RM 0.58**
+- Max Drawdown: **1.63%**
+- Baki Akaun: RM 986.70
 
 ---
 
@@ -540,11 +540,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 0.60% | Take Profit: 99.00%
 - Martingale: False | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 334
-- Win Rate: 95.81% (320 Menang / 14 Kalah)
-- Untung Bersih: **+ RM 27.23**
-- Max Drawdown: **9.71%**
-- Baki Akaun: RM 937.50
+- Jumlah Trade: 97
+- Win Rate: 94.85% (92 Menang / 5 Kalah)
+- Untung Bersih: **+ RM 5.92**
+- Max Drawdown: **7.84%**
+- Baki Akaun: RM 939.61
 
 ---
 
@@ -555,11 +555,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 2.00% | Take Profit: 1.00%
 - Martingale: False | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 138
-- Win Rate: 100.00% (138 Menang / 0 Kalah)
-- Untung Bersih: **+ RM 39.59**
-- Max Drawdown: **12.48%**
-- Baki Akaun: RM 923.84
+- Jumlah Trade: 32
+- Win Rate: 100.00% (32 Menang / 0 Kalah)
+- Untung Bersih: **+ RM 6.78**
+- Max Drawdown: **10.36%**
+- Baki Akaun: RM 919.22
 
 ---
 
@@ -570,11 +570,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 0.20% | Take Profit: 0.30%
 - Martingale: True | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 373
-- Win Rate: 100.00% (373 Menang / 0 Kalah)
-- Untung Bersih: **+ RM 1.55**
-- Max Drawdown: **0.69%**
-- Baki Akaun: RM 995.27
+- Jumlah Trade: 173
+- Win Rate: 100.00% (173 Menang / 0 Kalah)
+- Untung Bersih: **+ RM 2.56**
+- Max Drawdown: **0.77%**
+- Baki Akaun: RM 997.95
 
 ---
 
@@ -585,11 +585,11 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 99.90% | Take Profit: 1.00%
 - Martingale: False | Dynamic TP: False
 **Keputusan:**
-- Jumlah Trade: 5048
-- Win Rate: 32.01% (1616 Menang / 3432 Kalah)
-- Untung Bersih: **+ RM -602.58**
-- Max Drawdown: **60.47%**
-- Baki Akaun: RM 397.28
+- Jumlah Trade: 2673
+- Win Rate: 31.20% (834 Menang / 1839 Kalah)
+- Untung Bersih: **+ RM -328.23**
+- Max Drawdown: **32.95%**
+- Baki Akaun: RM 671.50
 
 ---
 
@@ -600,9 +600,9 @@ Yuran Hata Exchange: 0.25% Taker / 0.00% Maker (Total: 0.25% per round trip)
 - Gap Layering: 0.30% | Take Profit: 0.20%
 - Martingale: False | Dynamic TP: True
 **Keputusan:**
-- Jumlah Trade: 592
-- Win Rate: 99.32% (588 Menang / 4 Kalah)
-- Untung Bersih: **+ RM 11.75**
-- Max Drawdown: **6.81%**
-- Baki Akaun: RM 949.15
+- Jumlah Trade: 181
+- Win Rate: 98.90% (179 Menang / 2 Kalah)
+- Untung Bersih: **+ RM 4.03**
+- Max Drawdown: **5.39%**
+- Baki Akaun: RM 958.07
 

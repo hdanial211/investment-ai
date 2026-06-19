@@ -14,11 +14,11 @@ function App() {
       usdt_myr_rate: 4.70
     },
     coins: {
-      ETH: { current_price: 0.0, last_signal: 0.0, confidence: 0.0, layers: [], total_pnl: 0.0, trade_amount_myr: 50.0 },
-      BTC: { current_price: 0.0, last_signal: 0.0, confidence: 0.0, layers: [], total_pnl: 0.0, trade_amount_myr: 50.0 },
-      SOL: { current_price: 0.0, last_signal: 0.0, confidence: 0.0, layers: [], total_pnl: 0.0, trade_amount_myr: 50.0 },
-      XRP: { current_price: 0.0, last_signal: 0.0, confidence: 0.0, layers: [], total_pnl: 0.0, trade_amount_myr: 50.0 },
-      LTC: { current_price: 0.0, last_signal: 0.0, confidence: 0.0, layers: [], total_pnl: 0.0, trade_amount_myr: 50.0 }
+      ETH: { current_price: 0.0, last_signal: 0.0, confidence: 0.0, layers: [], total_pnl: 0.0, risk_level: 1 },
+      BTC: { current_price: 0.0, last_signal: 0.0, confidence: 0.0, layers: [], total_pnl: 0.0, risk_level: 1 },
+      SOL: { current_price: 0.0, last_signal: 0.0, confidence: 0.0, layers: [], total_pnl: 0.0, risk_level: 1 },
+      XRP: { current_price: 0.0, last_signal: 0.0, confidence: 0.0, layers: [], total_pnl: 0.0, risk_level: 1 },
+      LTC: { current_price: 0.0, last_signal: 0.0, confidence: 0.0, layers: [], total_pnl: 0.0, risk_level: 1 }
     }
   })
 
@@ -66,11 +66,11 @@ function App() {
     }
   }
 
-  const setAmount = async (amount) => {
+  const setRiskLevel = async (level) => {
     try {
-      await axios.post('http://localhost:8000/api/set-amount', {
+      await axios.post('http://localhost:8000/api/set-risk-level', {
         coin: selectedCoin,
-        amount: parseFloat(amount)
+        risk_level: parseInt(level)
       })
     } catch (err) {
       console.error(err)
@@ -84,8 +84,28 @@ function App() {
     confidence: 0.0,
     layers: [],
     total_pnl: 0.0,
-    trade_amount_myr: 50.0
+    risk_level: 1
   }
+
+  // Calculate dynamic layer size based on balance and risk level
+  const balance = state.global.balance_myr || 0;
+  const getRiskPercentage = (level) => {
+    if (level === 3) return 0.25; // Tahap 3: 25%
+    if (level === 2) return 0.10; // Tahap 2: 10%
+    return 0.05;                  // Tahap 1: 5%
+  };
+  const currentRiskPct = getRiskPercentage(coinData.risk_level);
+  const calculatedTradeAmount = balance * currentRiskPct;
+  const maxLayers = coinData.risk_level === 3 ? "2-3 Lapis" : coinData.risk_level === 2 ? "5 Lapis" : "6 Lapis";
+  
+  const getStrategyName = (coin, level) => {
+    if (level === 3) {
+      if (coin === 'ETH' || coin === 'SOL') return "The Whale Imitator (Gap 5%)";
+      return "Heavy Scalping (Gap 1%)";
+    }
+    if (level === 2) return "Scalp & Run + Trailing (Gap 0.5%)";
+    return "DCA Asas / Deep Value (Gap 2%-5%)";
+  };
 
   // Calculate overall PnL across all coins
   const totalPnL = Object.values(state.coins).reduce((sum, c) => sum + (c.total_pnl || 0), 0)
@@ -259,36 +279,46 @@ function App() {
               <section className="panel control-panel">
                 <h2>Kawalan Eksekusi Hata ({selectedCoin})</h2>
                 
-                <div className="amount-setting">
-                  <label>Saiz Entry (RM)</label>
-                  <div className="amount-controls">
+                <div className="amount-setting" style={{ marginBottom: '1.5rem' }}>
+                  <label>Tahap Risiko (Strategi & Saiz Dinamik)</label>
+                  <div className="amount-controls" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
                     <button 
-                      className={`amount-btn ${coinData.trade_amount_myr === 50 ? 'active' : ''}`} 
-                      onClick={() => setAmount(50)}
+                      className={`amount-btn ${coinData.risk_level === 1 ? 'active' : ''}`} 
+                      onClick={() => setRiskLevel(1)}
+                      style={{ fontSize: '1rem', padding: '10px' }}
                     >
-                      50
+                      Tahap 1<br/><small>(Konservatif / 5%)</small>
                     </button>
                     <button 
-                      className={`amount-btn ${coinData.trade_amount_myr === 100 ? 'active' : ''}`} 
-                      onClick={() => setAmount(100)}
+                      className={`amount-btn ${coinData.risk_level === 2 ? 'active' : ''}`} 
+                      onClick={() => setRiskLevel(2)}
+                      style={{ fontSize: '1rem', padding: '10px' }}
                     >
-                      100
+                      Tahap 2<br/><small>(Seimbang / 10%)</small>
                     </button>
                     <button 
-                      className={`amount-btn ${coinData.trade_amount_myr === 500 ? 'active' : ''}`} 
-                      onClick={() => setAmount(500)}
+                      className={`amount-btn ${coinData.risk_level === 3 ? 'active' : ''}`} 
+                      onClick={() => setRiskLevel(3)}
+                      style={{ fontSize: '1rem', padding: '10px' }}
                     >
-                      500
+                      Tahap 3<br/><small>(Agresif / 25%)</small>
                     </button>
-                    <input 
-                      type="number" 
-                      className="amount-input"
-                      value={coinData.trade_amount_myr || ''} 
-                      onChange={(e) => setAmount(e.target.value)}
-                      min="10"
-                      step="10"
-                      placeholder="Custom"
-                    />
+                  </div>
+                  
+                  <div style={{ marginTop: '1.5rem', background: '#111', padding: '15px', borderRadius: '8px', border: '1px solid #333' }}>
+                    <h4 style={{ color: '#00e5ff', marginBottom: '10px' }}>Tetapan Individu Aktif ({selectedCoin})</h4>
+                    <p style={{ margin: '5px 0', fontSize: '0.9rem' }}>
+                      <strong style={{ color: '#aaa' }}>Strategi:</strong> {getStrategyName(selectedCoin, coinData.risk_level)}
+                    </p>
+                    <p style={{ margin: '5px 0', fontSize: '0.9rem' }}>
+                      <strong style={{ color: '#aaa' }}>Kapasiti Maksimum:</strong> {maxLayers}
+                    </p>
+                    <p style={{ margin: '15px 0 5px 0', fontSize: '0.95rem' }}>
+                      <strong style={{ color: '#fff' }}>Saiz Trade Semasa: <span style={{ color: '#00e5ff' }}>RM {calculatedTradeAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></strong>
+                    </p>
+                    <p style={{ margin: '0', fontSize: '0.8rem', color: '#666' }}>
+                      *Dikira auto berdasarkan {currentRiskPct * 100}% dari baki Modal Hata (RM {balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                    </p>
                   </div>
                 </div>
 
@@ -300,7 +330,7 @@ function App() {
                     <Power size={18} /> {coinData.is_auto ? `HENTIKAN AUTO (${selectedCoin})` : `AKTIFKAN AUTO (${selectedCoin})`}
                   </button>
                   <button className="btn-action btn-manual-buy" onClick={manualBuy}>
-                    TEMBAK RM {coinData.trade_amount_myr} ({selectedCoin}) SEKARANG
+                    TEMBAK RM {calculatedTradeAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({selectedCoin}) SEKARANG
                   </button>
                   <button className="btn-action btn-panic-sell" onClick={panicSell}>
                     <ShieldAlert size={18} /> PANIC SELL SEMUA {selectedCoin}!

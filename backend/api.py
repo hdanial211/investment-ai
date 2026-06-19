@@ -53,11 +53,15 @@ def toggle_auto(toggle: AutoToggle):
         engine_state[toggle.coin]["is_auto"] = toggle.is_auto
     return {"status": "success", "is_auto": engine_state[toggle.coin]["is_auto"]}
 
-@app.post("/api/set-amount")
-def set_amount(setting: AmountSetting):
-    if setting.amount >= 10.0 and setting.coin in engine_state:
-        engine_state[setting.coin]["trade_amount_myr"] = setting.amount
-    return {"status": "success", "trade_amount_myr": engine_state[setting.coin]["trade_amount_myr"]}
+class RiskLevelSetting(BaseModel):
+    coin: str
+    risk_level: int
+
+@app.post("/api/set-risk-level")
+def set_risk_level(setting: RiskLevelSetting):
+    if setting.risk_level in [1, 2, 3] and setting.coin in engine_state:
+        engine_state[setting.coin]["risk_level"] = setting.risk_level
+    return {"status": "success", "risk_level": engine_state[setting.coin]["risk_level"]}
 
 class ManualAction(BaseModel):
     coin: str
@@ -72,7 +76,22 @@ def manual_buy(action: ManualAction):
     if price <= 0:
         raise HTTPException(status_code=400, detail="Price not available")
     
-    amount = engine_state[coin]["trade_amount_myr"]
+    risk_level = engine_state[coin].get("risk_level", 1)
+    
+    # Calculate amount dynamically based on global balance and risk_level
+    balance = global_state["balance_myr"]
+    if risk_level == 3:
+        risk_pct = 0.25
+    elif risk_level == 2:
+        risk_pct = 0.10
+    else:
+        risk_pct = 0.05
+        
+    amount = balance * risk_pct
+    
+    if amount > balance:
+        raise HTTPException(status_code=400, detail="Insufficient balance")
+
     layer = {
         "id": len(engine_state[coin]["layers"]) + 1,
         "entry_price": price,

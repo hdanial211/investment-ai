@@ -17,6 +17,7 @@ def create_coin_state():
         "layers": [],
         "total_pnl": 0.0,
         "trade_amount_myr": 50.0,
+        "risk_level": 1,
         "is_auto": False
     }
 

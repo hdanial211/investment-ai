@@ -121,20 +121,80 @@ async def process_kline(coin_id, kline):
                 
                 # If Auto mode is ON, execute trade
                 if shared.engine_state[coin_id]["is_auto"]:
-                    logger.info(f"[{coin_id}] Auto Mode ON: Executing Buy!")
-                    # TODO: Hata API logic
+                    logger.info(f"[{coin_id}] Auto Mode ON: Processing Signal...")
+                    risk_level = shared.engine_state[coin_id].get("risk_level", 1)
+                    balance = shared.global_state["balance_myr"]
+                    current_price = shared.engine_state[coin_id]["current_price"]
+                    
+                    # 1. Determine Dynamic Strategy Settings
+                    if risk_level == 3:
+                        risk_pct = 0.25
+                        if coin_id in ['ETH', 'SOL']:
+                            # Whale Imitator
+                            gap_pct = 0.05
+                            tp_pct = 0.02
+                            max_layers = 2
+                        else:
+                            # Heavy Scalping
+                            gap_pct = 0.01
+                            tp_pct = 0.005
+                            max_layers = 3
+                    elif risk_level == 2:
+                        # Scalp & Run / Trailing
+                        risk_pct = 0.10
+                        gap_pct = 0.005
+                        tp_pct = 0.004
+                        max_layers = 5
+                    else:
+                        # DCA Asas
+                        risk_pct = 0.05
+                        gap_pct = 0.02
+                        tp_pct = 0.015
+                        max_layers = 6
+
+                    trade_amount = balance * risk_pct
+                    
+                    # 2. Check if we can buy (Max Layers & Gap)
+                    layers = shared.engine_state[coin_id]["layers"]
+                    can_buy = True
+                    
+                    if len(layers) >= max_layers:
+                        can_buy = False
+                        logger.info(f"[{coin_id}] Max layers reached ({max_layers}). Skipping.")
+                    elif len(layers) > 0:
+                        last_entry = layers[-1]["entry_price"]
+                        # We only buy if price dropped by gap_pct from the last entry
+                        if current_price > last_entry * (1.0 - gap_pct):
+                            can_buy = False
+                            logger.info(f"[{coin_id}] Gap not reached yet (needs -{gap_pct*100}%). Skipping.")
+                    
+                    if can_buy and trade_amount <= balance and current_price > 0:
+                        # Limit Order Logic for 0% Fee
+                        logger.info(f"[{coin_id}] Executing LIMIT ORDER BUY size: RM {trade_amount:.2f}")
+                        layer = {
+                            "id": len(layers) + 1,
+                            "entry_price": current_price,  # Assuming Limit order fills at current price
+                            "amount_myr": trade_amount,
+                            "take_profit": current_price * (1.0 + tp_pct),
+                            "status": "OPEN"
+                        }
+                        shared.engine_state[coin_id]["layers"].append(layer)
+                        shared.global_state["balance_myr"] -= trade_amount
+                        
             else:
                 shared.engine_state[coin_id]["last_signal"] = 0
                 
-        # Handle Layering Logic (Check Take Profits)
+        # Handle Layering Logic (Check Take Profits - Passive Limit Sell)
         layers = shared.engine_state[coin_id]["layers"]
         active_layers = []
         for l in layers:
+            # Check Limit Sell
             if shared.engine_state[coin_id]["current_price"] >= l["take_profit"]:
-                logger.info(f"[{coin_id}] TAKE PROFIT HIT for layer {l['id']}!")
-                profit_myr = l["amount_myr"] * 1.006
+                logger.info(f"[{coin_id}] LIMIT SELL FILLED (Take Profit) for layer {l['id']}!")
+                # Maker fee is 0%, so we return full capital + full profit
+                profit_myr = l["amount_myr"] * (l["take_profit"] / l["entry_price"])
                 shared.global_state["balance_myr"] += profit_myr
-                shared.engine_state[coin_id]["total_pnl"] += l["amount_myr"] * 0.006
+                shared.engine_state[coin_id]["total_pnl"] += profit_myr - l["amount_myr"]
             else:
                 active_layers.append(l)
         shared.engine_state[coin_id]["layers"] = active_layers
