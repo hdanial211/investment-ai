@@ -176,6 +176,7 @@ async def process_kline(coin_id, kline):
                         }
                         shared.engine_state[coin_id]["layers"].append(layer)
                         shared.global_state["balance_myr"] -= trade_amount
+                        shared.save_state()
                         
             else:
                 shared.engine_state[coin_id]["last_signal"] = 0
@@ -183,6 +184,7 @@ async def process_kline(coin_id, kline):
         # Handle Layering Logic (Check Take Profits - Passive Limit Sell)
         layers = shared.engine_state[coin_id]["layers"]
         active_layers = []
+        state_changed = False
         for l in layers:
             # Check Limit Sell
             if shared.engine_state[coin_id]["current_price"] >= l["take_profit"]:
@@ -191,9 +193,15 @@ async def process_kline(coin_id, kline):
                 profit_myr = l["amount_myr"] * (l["take_profit"] / l["entry_price"])
                 shared.global_state["balance_myr"] += profit_myr
                 shared.engine_state[coin_id]["total_pnl"] += profit_myr - l["amount_myr"]
+                state_changed = True
             else:
                 active_layers.append(l)
-        shared.engine_state[coin_id]["layers"] = active_layers
+        
+        if state_changed:
+            shared.engine_state[coin_id]["layers"] = active_layers
+            shared.save_state()
+        else:
+            shared.engine_state[coin_id]["layers"] = active_layers
 
 
 async def start_ws():

@@ -51,6 +51,7 @@ def get_state():
 def toggle_auto(toggle: AutoToggle):
     if toggle.coin in engine_state:
         engine_state[toggle.coin]["is_auto"] = toggle.is_auto
+        shared.save_state()
     return {"status": "success", "is_auto": engine_state[toggle.coin]["is_auto"]}
 
 class RiskLevelSetting(BaseModel):
@@ -61,6 +62,7 @@ class RiskLevelSetting(BaseModel):
 def set_risk_level(setting: RiskLevelSetting):
     if setting.risk_level in [1, 2, 3] and setting.coin in engine_state:
         engine_state[setting.coin]["risk_level"] = setting.risk_level
+        shared.save_state()
     return {"status": "success", "risk_level": engine_state[setting.coin]["risk_level"]}
 
 class AmountSetting(BaseModel):
@@ -71,6 +73,7 @@ class AmountSetting(BaseModel):
 def set_amount(setting: AmountSetting):
     if setting.amount >= 10.0 and setting.coin in engine_state:
         engine_state[setting.coin]["trade_amount_myr"] = setting.amount
+        shared.save_state()
     return {"status": "success", "trade_amount_myr": engine_state[setting.coin]["trade_amount_myr"]}
 
 class ManualAction(BaseModel):
@@ -103,6 +106,7 @@ def manual_buy(action: ManualAction):
     }
     engine_state[coin]["layers"].append(layer)
     global_state["balance_myr"] -= amount
+    shared.save_state()
     return {"status": "success", "layer": layer}
 
 @app.post("/api/panic-sell")
@@ -110,6 +114,7 @@ def panic_sell(action: ManualAction):
     coin = action.coin
     if coin in engine_state:
         engine_state[coin]["layers"] = []
+        shared.save_state()
     return {"status": "success", "message": f"All positions closed for {coin}"}
 
 from fastapi import WebSocket, WebSocketDisconnect
