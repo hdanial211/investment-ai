@@ -108,12 +108,14 @@ def place_limit_order(symbol: str, side: str, price: float, quantity: float) -> 
     endpoint = "/orderbook/sapi/orders/create"
     timestamp = str(int(time.time()))
     
+    hata_side = "true" if side.upper() == "BUY" else "false"
+    clean_symbol = symbol.replace("_", "").upper()
+    
     params = {
         "timestamp": timestamp,
-        "symbol": symbol,
-        "side": side.upper(), # BUY or SELL
-        "type": "LIMIT",
-        "timeInForce": "GTC",
+        "symbol": clean_symbol,
+        "side": hata_side,
+        "type": "limit",
         "price": str(price),
         "quantity": str(quantity)
     }
