@@ -124,12 +124,11 @@ async def process_kline(coin_id, kline):
                     logger.info(f"[{coin_id}] Auto Mode ON: Processing Signal...")
                     risk_level = shared.engine_state[coin_id].get("risk_level", 1)
                     balance = shared.global_state["balance_myr"]
-                    allocated_cap = shared.engine_state[coin_id].get("allocated_capital_myr", 1000.0)
+                    trade_amount = shared.engine_state[coin_id].get("trade_amount_myr", 50.0)
                     current_price = shared.engine_state[coin_id]["current_price"]
                     
                     # 1. Determine Dynamic Strategy Settings
                     if risk_level == 3:
-                        risk_pct = 0.25
                         if coin_id in ['ETH', 'SOL']:
                             # Whale Imitator
                             gap_pct = 0.05
@@ -142,18 +141,14 @@ async def process_kline(coin_id, kline):
                             max_layers = 3
                     elif risk_level == 2:
                         # Scalp & Run / Trailing
-                        risk_pct = 0.10
                         gap_pct = 0.005
                         tp_pct = 0.004
                         max_layers = 5
                     else:
                         # DCA Asas
-                        risk_pct = 0.05
                         gap_pct = 0.02
                         tp_pct = 0.015
                         max_layers = 6
-
-                    trade_amount = allocated_cap * risk_pct
                     
                     # 2. Check if we can buy (Max Layers & Gap)
                     layers = shared.engine_state[coin_id]["layers"]

@@ -66,11 +66,11 @@ function App() {
     }
   }
 
-  const setCapital = async (amount) => {
+  const setAmount = async (amount) => {
     try {
-      await axios.post('http://localhost:8000/api/set-capital', {
+      await axios.post('http://localhost:8000/api/set-amount', {
         coin: selectedCoin,
-        capital: parseFloat(amount)
+        amount: parseFloat(amount)
       })
     } catch (err) {
       console.error(err)
@@ -95,20 +95,11 @@ function App() {
     confidence: 0.0,
     layers: [],
     total_pnl: 0.0,
-    allocated_capital_myr: 1000.0,
+    trade_amount_myr: 250.0,
     risk_level: 1
   }
 
-  // Calculate dynamic layer size based on allocated capital and risk level
-  const balance = state.global.balance_myr || 0;
-  const allocatedCap = coinData.allocated_capital_myr || 1000.0;
-  const getRiskPercentage = (level) => {
-    if (level === 3) return 0.25; // Tahap 3: 25%
-    if (level === 2) return 0.10; // Tahap 2: 10%
-    return 0.05;                  // Tahap 1: 5%
-  };
-  const currentRiskPct = getRiskPercentage(coinData.risk_level);
-  const calculatedTradeAmount = allocatedCap * currentRiskPct;
+  const tradeAmount = coinData.trade_amount_myr || 250.0;
   const maxLayers = coinData.risk_level === 3 ? "2-3 Lapis" : coinData.risk_level === 2 ? "5 Lapis" : "6 Lapis";
   
   const getStrategyName = (coin, level) => {
@@ -293,21 +284,21 @@ function App() {
                 <h2>Kawalan Eksekusi Hata ({selectedCoin})</h2>
                 
                 <div className="amount-setting" style={{ marginBottom: '1.5rem' }}>
-                  <label>Modal Khas Diperuntukkan (RM)</label>
+                  <label>Saiz Setiap Trade / Lapis (RM)</label>
                   <div className="amount-controls" style={{ marginBottom: '1rem' }}>
                     <input 
                       type="number" 
                       className="amount-input"
-                      value={coinData.allocated_capital_myr || ''} 
-                      onChange={(e) => setCapital(e.target.value)}
-                      min="100"
-                      step="100"
-                      placeholder="Masukkan Modal untuk bot ini"
+                      value={coinData.trade_amount_myr || ''} 
+                      onChange={(e) => setAmount(e.target.value)}
+                      min="10"
+                      step="10"
+                      placeholder="Masukkan Saiz per Lapis (Cth: 250)"
                       style={{ width: '100%', fontSize: '1.2rem', padding: '10px' }}
                     />
                   </div>
 
-                  <label>Tahap Risiko (Strategi & Saiz Dinamik)</label>
+                  <label>Tahap Risiko (Pilihan Strategi Pasif)</label>
                   <div className="amount-controls" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
                     <button 
                       className={`amount-btn ${coinData.risk_level === 1 ? 'active' : ''}`} 
@@ -341,10 +332,10 @@ function App() {
                       <strong style={{ color: '#aaa' }}>Kapasiti Maksimum:</strong> {maxLayers}
                     </p>
                     <p style={{ margin: '15px 0 5px 0', fontSize: '0.95rem' }}>
-                      <strong style={{ color: '#fff' }}>Saiz Trade Semasa: <span style={{ color: '#00e5ff' }}>RM {calculatedTradeAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></strong>
+                      <strong style={{ color: '#fff' }}>Saiz Trade Ditetapkan: <span style={{ color: '#00e5ff' }}>RM {tradeAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></strong>
                     </p>
                     <p style={{ margin: '0', fontSize: '0.8rem', color: '#666' }}>
-                      *Dikira auto berdasarkan {currentRiskPct * 100}% dari Modal Diperuntukkan (RM {allocatedCap.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                      *Bot akan masuk posisi sebanyak RM {tradeAmount} pada setiap layer (maksimum {maxLayers}).
                     </p>
                   </div>
                 </div>
@@ -357,7 +348,7 @@ function App() {
                     <Power size={18} /> {coinData.is_auto ? `HENTIKAN AUTO (${selectedCoin})` : `AKTIFKAN AUTO (${selectedCoin})`}
                   </button>
                   <button className="btn-action btn-manual-buy" onClick={manualBuy}>
-                    TEMBAK RM {calculatedTradeAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({selectedCoin}) SEKARANG
+                    TEMBAK RM {tradeAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({selectedCoin}) SEKARANG
                   </button>
                   <button className="btn-action btn-panic-sell" onClick={panicSell}>
                     <ShieldAlert size={18} /> PANIC SELL SEMUA {selectedCoin}!

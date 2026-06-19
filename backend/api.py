@@ -63,15 +63,15 @@ def set_risk_level(setting: RiskLevelSetting):
         engine_state[setting.coin]["risk_level"] = setting.risk_level
     return {"status": "success", "risk_level": engine_state[setting.coin]["risk_level"]}
 
-class CapitalSetting(BaseModel):
+class AmountSetting(BaseModel):
     coin: str
-    capital: float
+    amount: float
 
-@app.post("/api/set-capital")
-def set_capital(setting: CapitalSetting):
-    if setting.capital >= 100.0 and setting.coin in engine_state:
-        engine_state[setting.coin]["allocated_capital_myr"] = setting.capital
-    return {"status": "success", "allocated_capital_myr": engine_state[setting.coin]["allocated_capital_myr"]}
+@app.post("/api/set-amount")
+def set_amount(setting: AmountSetting):
+    if setting.amount >= 10.0 and setting.coin in engine_state:
+        engine_state[setting.coin]["trade_amount_myr"] = setting.amount
+    return {"status": "success", "trade_amount_myr": engine_state[setting.coin]["trade_amount_myr"]}
 
 class ManualAction(BaseModel):
     coin: str
@@ -88,18 +88,8 @@ def manual_buy(action: ManualAction):
     
     risk_level = engine_state[coin].get("risk_level", 1)
     
-    # Calculate amount dynamically based on allocated capital and risk_level
+    amount = engine_state[coin].get("trade_amount_myr", 50.0)
     balance = global_state["balance_myr"]
-    allocated_cap = engine_state[coin].get("allocated_capital_myr", 1000.0)
-    
-    if risk_level == 3:
-        risk_pct = 0.25
-    elif risk_level == 2:
-        risk_pct = 0.10
-    else:
-        risk_pct = 0.05
-        
-    amount = allocated_cap * risk_pct
     
     if amount > balance:
         raise HTTPException(status_code=400, detail="Insufficient balance in Hata")
