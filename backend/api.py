@@ -98,6 +98,9 @@ def manual_buy(action: ManualAction):
     quantity = amount / price
     import hata_api
     hata_res = hata_api.place_limit_order(f"{coin}_MYR", "BUY", price, quantity)
+    
+    if hata_res.get("status") == "error":
+        raise HTTPException(status_code=500, detail=f"Hata API Error: {hata_res.get('message')}")
 
     layer = {
         "id": len(engine_state[coin]["layers"]) + 1,

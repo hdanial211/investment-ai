@@ -105,7 +105,7 @@ def place_limit_order(symbol: str, side: str, price: float, quantity: float) -> 
         print(f"SIMULATED: Placed Limit {side} for {quantity} {symbol} at RM{price}")
         return {"status": "simulated", "orderId": "sim_123", "price": price}
 
-    endpoint = "/orderbook/sapi/order"
+    endpoint = "/orderbook/api/v2/order"
     timestamp = str(int(time.time()))
     
     params = {

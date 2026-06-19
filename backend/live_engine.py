@@ -195,22 +195,25 @@ async def process_kline(coin_id, kline):
                         import hata_api
                         hata_res = hata_api.place_limit_order(f"{coin_id}_MYR", "BUY", current_price, quantity)
                         
-                        layer = {
-                            "id": len(layers) + 1,
-                            "entry_price": current_price,
-                            "amount_myr": trade_amount,
-                            "quantity": quantity,
-                            "take_profit": current_price * (1.0 + tp_pct),
-                            "status": "OPEN",
-                            "hata_buy_res": hata_res
-                        }
-                        shared.engine_state[coin_id]["layers"].append(layer)
-                        shared.global_state["balance_myr"] -= trade_amount
-                        shared.save_state()
-                        
-                        # PLACING PASSIVE LIMIT SELL IMMEDIATELY (Maker 0% fee)
-                        logger.info(f"[{coin_id}] Placing Passive LIMIT SELL for TP at {layer['take_profit']:.2f}")
-                        hata_api.place_limit_order(f"{coin_id}_MYR", "SELL", layer['take_profit'], quantity)
+                        if hata_res.get("status") == "error":
+                            logger.error(f"[{coin_id}] Hata API Error! Skipping internal layer creation. Msg: {hata_res.get('message')}")
+                        else:
+                            layer = {
+                                "id": len(layers) + 1,
+                                "entry_price": current_price,
+                                "amount_myr": trade_amount,
+                                "quantity": quantity,
+                                "take_profit": current_price * (1.0 + tp_pct),
+                                "status": "OPEN",
+                                "hata_buy_res": hata_res
+                            }
+                            shared.engine_state[coin_id]["layers"].append(layer)
+                            shared.global_state["balance_myr"] -= trade_amount
+                            shared.save_state()
+                            
+                            # PLACING PASSIVE LIMIT SELL IMMEDIATELY (Maker 0% fee)
+                            logger.info(f"[{coin_id}] Placing Passive LIMIT SELL for TP at {layer['take_profit']:.2f}")
+                            hata_api.place_limit_order(f"{coin_id}_MYR", "SELL", layer['take_profit'], quantity)
                         
             else:
                 shared.engine_state[coin_id]["last_signal"] = 0
