@@ -11,7 +11,14 @@ function App() {
     global: {
       balance_myr: 10000.0,
       is_auto: false,
-      usdt_myr_rate: 4.70
+      usdt_myr_rate: 4.70,
+      frozen_myr: 0.0,
+      guardian_status: {
+        status: "safe",
+        analysis: "Memulakan Enjin Penjaga AI...",
+        recommendation: "Tiada tindakan diperlukan."
+      },
+      guardian_last_update: "Never"
     },
     coins: {
       ETH: { current_price: 0.0, last_signal: 0.0, confidence: 0.0, layers: [], total_pnl: 0.0, risk_level: 1 },
@@ -280,6 +287,50 @@ function App() {
                     <h3>Untung Bersih ({selectedCoin})</h3>
                     <p className={`value ${coinData.total_pnl >= 0 ? 'profit' : 'loss'}`} style={{ fontSize: '1.4rem' }}>
                       RM {coinData.total_pnl >= 0 ? '+' : ''}{coinData.total_pnl ? coinData.total_pnl.toFixed(2) : '0.00'}
+                    </p>
+                  </div>
+                </div>
+              </section>
+
+              <section className="panel guardian-panel" style={{ background: 'rgba(10, 25, 41, 0.7)', border: '1px solid #1e4976' }}>
+                <div className="panel-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                    🛡️ Enjin Penjaga AI <span style={{ fontSize: '0.75rem', color: '#888' }}>(Groq)</span>
+                  </h2>
+                  <span style={{ fontSize: '0.8rem', color: '#888' }}>
+                    Kemas kini: {state.global.guardian_last_update || "Never"}
+                  </span>
+                </div>
+                
+                <div style={{ marginTop: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div className={`status-dot ${state.global.guardian_status?.status || "safe"}`} style={{
+                      width: '12px',
+                      height: '12px',
+                      borderRadius: '50%',
+                      background: state.global.guardian_status?.status === "safe" ? "#00e676" : state.global.guardian_status?.status === "warning" ? "#ffb300" : "#ff1744",
+                      boxShadow: state.global.guardian_status?.status === "safe" ? "0 0 10px #00e676" : state.global.guardian_status?.status === "warning" ? "0 0 10px #ffb300" : "0 0 10px #ff1744"
+                    }}></div>
+                    <span style={{
+                      fontWeight: 'bold',
+                      fontSize: '1rem',
+                      color: state.global.guardian_status?.status === "safe" ? "#00e676" : state.global.guardian_status?.status === "warning" ? "#ffb300" : "#ff1744"
+                    }}>
+                      {state.global.guardian_status?.status === "safe" ? "STATUS: SELAMAT" : state.global.guardian_status?.status === "warning" ? "STATUS: AMARAN" : "STATUS: TINDAKAN DIPERLUKAN"}
+                    </span>
+                  </div>
+
+                  <div style={{ background: 'rgba(0,0,0,0.3)', padding: '12px', borderRadius: '6px', border: '1px solid #222' }}>
+                    <h4 style={{ color: '#aaa', margin: '0 0 6px 0', fontSize: '0.85rem' }}>Analisis AI:</h4>
+                    <p style={{ margin: 0, fontSize: '0.9rem', lineHeight: '1.4', color: '#eee' }}>
+                      {state.global.guardian_status?.analysis || "Sedang menganalisis keadaan akaun dan pasaran..."}
+                    </p>
+                  </div>
+
+                  <div style={{ background: 'rgba(0,0,0,0.3)', padding: '12px', borderRadius: '6px', border: '1px solid #222' }}>
+                    <h4 style={{ color: '#aaa', margin: '0 0 6px 0', fontSize: '0.85rem' }}>Syor AI:</h4>
+                    <p style={{ margin: 0, fontSize: '0.9rem', lineHeight: '1.4', color: '#eee' }}>
+                      {state.global.guardian_status?.recommendation || "Tiada tindakan diperlukan."}
                     </p>
                   </div>
                 </div>

@@ -7,6 +7,13 @@
 global_state = {
     "balance_myr": 10000.00,
     "usdt_myr_rate": 4.70,
+    "frozen_myr": 0.00,
+    "guardian_status": {
+        "status": "safe",
+        "analysis": "Sistem sedang memulakan Enjin Penjaga AI (Groq)...",
+        "recommendation": "Tiada tindakan diperlukan buat masa ini."
+    },
+    "guardian_last_update": "Never"
 }
 
 import json

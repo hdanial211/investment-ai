@@ -361,9 +361,76 @@ async def process_kline(coin_id, kline):
         pass
 
 
+async def run_guardian_watchdog_loop():
+    import requests
+    from datetime import datetime
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+    if not GROQ_API_KEY:
+        logger.warning("GROQ_API_KEY not found in environment. AI Guardian Watchdog is disabled.")
+        return
+
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    while True:
+        try:
+            # 1. Format the current state for Groq (excluding the guardian status itself)
+            stripped_global = {k: v for k, v in shared.global_state.items() if k not in ["guardian_status", "guardian_last_update"]}
+            state_to_analyze = {
+                "global": stripped_global,
+                "coins": shared.engine_state
+            }
+
+            payload = {
+                "model": "llama-3.1-8b-instant",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are a professional crypto trading bot guardian watchdog. You analyze the active trading layers, coin signals, confidence levels, prices, and account balance state, and provide safety recommendations in Malay. You must return your response in JSON format matching the schema: {\"status\": \"safe\" | \"warning\" | \"action_required\", \"analysis\": \"string\", \"recommendation\": \"string\"}. Keep analysis and recommendations short, precise, and professional. Highlight any warnings or stuck orders if they exist."
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Here is the current real-time state of my trading bot:\n{json.dumps(state_to_analyze, indent=2)}"
+                    }
+                ],
+                "response_format": {
+                    "type": "json_object"
+                }
+            }
+
+            def perform_request():
+                return requests.post(url, json=payload, headers=headers, timeout=12)
+
+            loop = asyncio.get_running_loop()
+            res = await loop.run_in_executor(None, perform_request)
+
+            if res.status_code == 200:
+                data = res.json()
+                content_str = data["choices"][0]["message"]["content"]
+                parsed_content = json.loads(content_str)
+                
+                # Validate keys
+                if "status" in parsed_content and "analysis" in parsed_content and "recommendation" in parsed_content:
+                    shared.global_state["guardian_status"] = parsed_content
+                    shared.global_state["guardian_last_update"] = datetime.now().strftime("%H:%M:%S")
+                    logger.info(f"AI Guardian Watchdog updated successfully at {shared.global_state['guardian_last_update']}")
+            else:
+                logger.error(f"Groq API error in watchdog: {res.status_code} - {res.text}")
+
+        except Exception as e:
+            logger.error(f"Error in run_guardian_watchdog_loop: {e}")
+
+        await asyncio.sleep(60)
+
+
 async def start_ws():
     # Start Hata MYR price update loop in background
     asyncio.create_task(update_hata_prices_loop())
+    # Start AI Guardian Watchdog loop in background
+    asyncio.create_task(run_guardian_watchdog_loop())
     
     while True:
         try:
