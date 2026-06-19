@@ -6,7 +6,8 @@ import threading
 import time
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from shared import engine_state, global_state
+from shared import engine_state, global_state, save_state
+import shared
 import hata_api
 
 load_dotenv()
