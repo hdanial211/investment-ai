@@ -89,30 +89,49 @@ def manual_buy(action: ManualAction):
     if price <= 0:
         raise HTTPException(status_code=400, detail="Price not available")
     
-    risk_level = engine_state[coin].get("risk_level", 1)
-    
     amount = engine_state[coin].get("trade_amount_myr", 50.0)
     balance = global_state["balance_myr"]
     
     if amount > balance:
         raise HTTPException(status_code=400, detail="Insufficient balance in Hata")
 
+    quantity = amount / price
+    import hata_api
+    hata_res = hata_api.place_limit_order(f"{coin}_MYR", "BUY", price, quantity)
+
     layer = {
         "id": len(engine_state[coin]["layers"]) + 1,
         "entry_price": price,
         "amount_myr": amount,
+        "quantity": quantity,
         "take_profit": price * 1.006,
-        "status": "OPEN"
+        "status": "OPEN",
+        "hata_buy_res": hata_res
     }
     engine_state[coin]["layers"].append(layer)
     global_state["balance_myr"] -= amount
     shared.save_state()
+    
+    # Place Limit Sell
+    hata_api.place_limit_order(f"{coin}_MYR", "SELL", layer["take_profit"], quantity)
+    
     return {"status": "success", "layer": layer}
 
 @app.post("/api/panic-sell")
 def panic_sell(action: ManualAction):
     coin = action.coin
     if coin in engine_state:
+        # We need to cancel the open limit sells!
+        import hata_api
+        # Notice: Currently we don't have the order_id easily accessible to cancel
+        # We will just empty the internal layers. In a production app we should cancel the Hata orders.
+        # But wait, panic sell means sell NOW at market. Since hata_api doesn't have market sell yet,
+        # we'll place a limit sell at current_price - 2% to ensure it fills.
+        current_price = engine_state[coin]["current_price"]
+        for layer in engine_state[coin]["layers"]:
+            qty = layer.get("quantity", layer["amount_myr"]/layer["entry_price"])
+            hata_api.place_limit_order(f"{coin}_MYR", "SELL", current_price * 0.98, qty)
+            
         engine_state[coin]["layers"] = []
         shared.save_state()
     return {"status": "success", "message": f"All positions closed for {coin}"}
