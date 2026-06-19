@@ -112,7 +112,8 @@ def manual_buy(action: ManualAction):
         "take_profit": price * 1.006,
         "status": "PENDING_BUY",
         "buy_order_id": str(order_id),
-        "hata_buy_res": hata_res
+        "hata_buy_res": hata_res,
+        "created_at": time.time()
     }
     engine_state[coin]["layers"].append(layer)
     shared.save_state()

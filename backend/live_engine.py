@@ -8,6 +8,8 @@ import joblib
 import os
 import sys
 
+import time
+
 # Import shared state
 import shared
 
@@ -157,7 +159,16 @@ async def update_hata_prices_loop():
                                         logger.info(f"[{coin_id}] Buy order {buy_id} was {order_status}. Removing layer.")
                                         coin_changed = True
                                     else:
-                                        active_layers.append(l)
+                                        # Order is still active. Check if it is expired/stuck (> 5 minutes)
+                                        created_at = l.get("created_at", float(order_data.get("time", time.time())))
+                                        import time
+                                        if time.time() - created_at > 300:
+                                            logger.info(f"[{coin_id}] Buy order {buy_id} is stuck for > 5 mins. Cancelling automatically.")
+                                            cancel_res = hata_api.cancel_order(f"{coin_id}_MYR", buy_id)
+                                            logger.info(f"[{coin_id}] Cancel result: {cancel_res}")
+                                            coin_changed = True
+                                        else:
+                                            active_layers.append(l)
                                 else:
                                     active_layers.append(l)
                             else:
@@ -347,7 +358,8 @@ async def process_kline(coin_id, kline):
                                 "take_profit": current_price * (1.0 + tp_pct),
                                 "status": "PENDING_BUY",
                                 "buy_order_id": str(order_id),
-                                "hata_buy_res": hata_res
+                                "hata_buy_res": hata_res,
+                                "created_at": time.time()
                             }
                             shared.engine_state[coin_id]["layers"].append(layer)
                             shared.save_state()
