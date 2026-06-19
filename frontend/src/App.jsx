@@ -295,7 +295,7 @@ function App() {
               <section className="panel guardian-panel" style={{ background: 'rgba(10, 25, 41, 0.7)', border: '1px solid #1e4976' }}>
                 <div className="panel-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-                    🛡️ Enjin Penjaga AI <span style={{ fontSize: '0.75rem', color: '#888' }}>(Groq)</span>
+                    ⚙️ Status Sistem Bot <span style={{ fontSize: '0.75rem', color: '#888' }}>(Autonomi)</span>
                   </h2>
                   <span style={{ fontSize: '0.8rem', color: '#888' }}>
                     Kemas kini: {state.global.guardian_last_update || "Never"}
