@@ -112,12 +112,12 @@ def place_limit_order(symbol: str, side: str, price: float, quantity: float) -> 
     clean_symbol = symbol.replace("_", "").upper()
     
     params = {
-        "timestamp": timestamp,
-        "symbol": clean_symbol,
-        "side": hata_side,
-        "type": "limit",
+        "is_buy": "true" if side.upper() == "BUY" else "false",
+        "pair": clean_symbol,
         "price": str(price),
-        "quantity": str(quantity)
+        "qty": str(quantity),
+        "timestamp": timestamp,
+        "type": "limit"
     }
     
     signature = _generate_signature(params, HATA_API_SECRET)
