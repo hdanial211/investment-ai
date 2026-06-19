@@ -227,5 +227,6 @@ def start_server():
     t1 = threading.Thread(target=live_engine.run, daemon=True)
     t1.start()
 
+# Force reload to pick up bot state updates
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
