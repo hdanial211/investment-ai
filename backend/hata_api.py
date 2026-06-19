@@ -105,7 +105,7 @@ def place_limit_order(symbol: str, side: str, price: float, quantity: float) -> 
         print(f"SIMULATED: Placed Limit {side} for {quantity} {symbol} at RM{price}")
         return {"status": "simulated", "orderId": "sim_123", "price": price}
 
-    endpoint = "/orderbook/api/v2/order"
+    endpoint = "/orderbook/sapi/orders/create"
     timestamp = str(int(time.time()))
     
     params = {
@@ -126,7 +126,7 @@ def place_limit_order(symbol: str, side: str, price: float, quantity: float) -> 
     url = f"{BASE_URL}{endpoint}"
     
     try:
-        response = requests.post(url, data=params, headers=headers, timeout=10)
+        response = requests.post(url, json=params, headers=headers, timeout=10)
         response.raise_for_status()
         print(f"Order Success: Limit {side} {quantity} {symbol} at RM{price}")
         return response.json()
