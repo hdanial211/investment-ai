@@ -4,6 +4,7 @@ import hmac
 import hashlib
 import requests
 import urllib.parse
+import json
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -12,11 +13,17 @@ HATA_API_KEY = os.getenv("HATA_API_KEY", "")
 HATA_API_SECRET = os.getenv("HATA_API_SECRET", "")
 BASE_URL = "https://my-api.hata.io" # For Malaysia accounts
 
-def _generate_signature(params: dict, secret: str) -> str:
+def _generate_signature(params: dict, secret: str, is_post: bool = False) -> str:
     # Sort parameters alphabetically by key
     sorted_params = dict(sorted(params.items()))
-    # Construct query string
-    query_string = urllib.parse.urlencode(sorted_params)
+    
+    if is_post:
+        # Hata API requires hashing the exact raw JSON string payload with no spaces
+        query_string = json.dumps(sorted_params, separators=(',', ':'))
+    else:
+        # Construct query string for GET requests
+        query_string = urllib.parse.urlencode(sorted_params)
+        
     # Generate HMAC SHA256 signature
     signature = hmac.new(
         secret.encode('utf-8'),
@@ -99,6 +106,14 @@ def get_ticker(symbol: str = "ETH_MYR") -> float:
         print(f"Error fetching ticker for {symbol}: {e}")
         return 0.0
 
+COIN_SCALES = {
+    "BTC": {"qty": 5, "price": 0},
+    "ETH": {"qty": 4, "price": 0},
+    "SOL": {"qty": 3, "price": 1},
+    "LTC": {"qty": 3, "price": 1},
+    "XRP": {"qty": 1, "price": 3}
+}
+
 def place_limit_order(symbol: str, side: str, price: float, quantity: float) -> dict:
     """Place a Limit Maker Order"""
     if not HATA_API_KEY or not HATA_API_SECRET:
@@ -110,17 +125,25 @@ def place_limit_order(symbol: str, side: str, price: float, quantity: float) -> 
     
     hata_side = "true" if side.upper() == "BUY" else "false"
     clean_symbol = symbol.replace("_", "").upper()
+    base_coin = symbol.split("_")[0] if "_" in symbol else clean_symbol.replace("MYR", "")
+    
+    qty_scale = COIN_SCALES.get(base_coin, {}).get("qty", 4)
+    price_scale = COIN_SCALES.get(base_coin, {}).get("price", 2)
+    
+    # Format according to exact scale
+    fmt_price = f"{price:.{price_scale}f}"
+    fmt_qty = f"{quantity:.{qty_scale}f}"
     
     params = {
-        "is_buy": "true" if side.upper() == "BUY" else "false",
+        "is_buy": hata_side,
         "pair": clean_symbol,
-        "price": str(price),
-        "qty": str(quantity),
+        "price": fmt_price,
+        "qty": fmt_qty,
         "timestamp": timestamp,
         "type": "limit"
     }
     
-    signature = _generate_signature(params, HATA_API_SECRET)
+    signature = _generate_signature(params, HATA_API_SECRET, is_post=True)
     headers = {
         "X-API-KEY": HATA_API_KEY,
         "Signature": signature
@@ -129,7 +152,11 @@ def place_limit_order(symbol: str, side: str, price: float, quantity: float) -> 
     
     try:
         response = requests.post(url, json=params, headers=headers, timeout=10)
-        response.raise_for_status()
+        if response.status_code != 200:
+            err_msg = response.text
+            print(f"Error placing Limit {side} Order: {err_msg}")
+            return {"status": "error", "message": err_msg}
+            
         print(f"Order Success: Limit {side} {quantity} {symbol} at RM{price}")
         return response.json()
     except Exception as e:
