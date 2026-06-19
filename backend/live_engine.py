@@ -160,8 +160,12 @@ async def update_hata_prices_loop():
                                         coin_changed = True
                                     else:
                                         # Order is still active. Check if it is expired/stuck (> 5 minutes)
-                                        created_at = l.get("created_at", float(order_data.get("time", time.time())))
-                                        import time
+                                        # Patch missing created_at: stamp with NOW so countdown starts fresh
+                                        if "created_at" not in l:
+                                            l["created_at"] = time.time()
+                                            coin_changed = True
+                                            logger.info(f"[{coin_id}] Patched missing created_at for buy order {buy_id}. Countdown starts now.")
+                                        created_at = l["created_at"]
                                         if time.time() - created_at > 300:
                                             logger.info(f"[{coin_id}] Buy order {buy_id} is stuck for > 5 mins. Cancelling automatically.")
                                             cancel_res = hata_api.cancel_order(f"{coin_id}_MYR", buy_id)
