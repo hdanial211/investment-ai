@@ -70,10 +70,12 @@ hata_prices = {
 }
 
 async def update_hata_prices_loop():
+    import hata_api
+    import requests
     while True:
         try:
+            # 1. Fetch Hata Prices
             def fetch_prices():
-                import requests
                 res = requests.get("https://my-api.hata.io/orderbook/api/v2/exchange-info", timeout=5)
                 res.raise_for_status()
                 return res.json().get("data", [])
@@ -86,8 +88,146 @@ async def update_hata_prices_loop():
                 quote = item.get("quote")
                 if quote == "MYR" and base in hata_prices:
                     hata_prices[base] = float(item.get("price", 0.0))
+            
+            # 2. Fetch Hata Balance (Available and Frozen) & Exchange Rate
+            def fetch_balance_and_rate():
+                bal_res = hata_api.get_myr_balance() # returns (avail, frozen)
+                rate = 4.70
+                try:
+                    hata_eth = hata_prices.get("ETH", 0.0)
+                    if hata_eth <= 0:
+                        hata_eth = hata_api.get_ticker("ETH_MYR")
+                    
+                    bin_res = requests.get("https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT", timeout=5).json()
+                    bin_eth = float(bin_res.get("price", 0.0))
+                    if hata_eth > 0 and bin_eth > 0:
+                        rate = hata_eth / bin_eth
+                except Exception as re:
+                    logger.error(f"Error calculating exchange rate: {re}")
+                return bal_res, rate
+                
+            bal_res, rate = await loop.run_in_executor(None, fetch_balance_and_rate)
+            if bal_res:
+                avail, froz = bal_res
+                shared.global_state["balance_myr"] = avail
+                shared.global_state["frozen_myr"] = froz
+            shared.global_state["usdt_myr_rate"] = rate
+            
+            # 3. Check Pending Orders Status
+            def check_orders():
+                state_changed = False
+                for coin_id in shared.engine_state:
+                    layers = shared.engine_state[coin_id].get("layers", [])
+                    active_layers = []
+                    coin_changed = False
+                    for l in layers:
+                        status = l.get("status", "OPEN")
+                        
+                        if status == "PENDING_BUY":
+                            buy_id = l.get("buy_order_id")
+                            if buy_id:
+                                res = hata_api.get_order_status(buy_id)
+                                order_data = res.get("data")
+                                if order_data:
+                                    order_status = order_data.get("status")
+                                    if order_status == "fulfilled":
+                                        logger.info(f"[{coin_id}] Buy order {buy_id} fulfilled! Verifying balance before placing Limit SELL at {l['take_profit']:.4f}")
+                                        exec_qty = float(order_data.get("exec_qty", l["quantity"]))
+                                        adj_qty = exec_qty * 0.996
+                                        
+                                        # Check actual token balance
+                                        avail_bal, froz_bal = hata_api.get_token_balance(coin_id)
+                                        if avail_bal < adj_qty:
+                                            logger.warning(f"[{coin_id}] Cannot place Limit SELL order of size {adj_qty:.4f}. Available balance ({avail_bal:.4f}) is insufficient. Keeping layer status as OPEN to retry later.")
+                                            l["status"] = "OPEN"
+                                        else:
+                                            sell_res = hata_api.place_limit_order(f"{coin_id}_MYR", "SELL", l["take_profit"], adj_qty)
+                                            if sell_res.get("status") == "success":
+                                                sell_id = sell_res.get("data", {}).get("id")
+                                                l["status"] = "PENDING_SELL"
+                                                l["sell_order_id"] = str(sell_id)
+                                                l["hata_sell_res"] = sell_res
+                                                logger.info(f"[{coin_id}] Limit SELL order {sell_id} placed successfully.")
+                                            else:
+                                                l["status"] = "OPEN"
+                                                logger.error(f"[{coin_id}] Failed to place Limit SELL for filled buy {buy_id}: {sell_res}")
+                                        coin_changed = True
+                                        active_layers.append(l)
+                                    elif order_status in ["cancelled", "rejected"]:
+                                        logger.info(f"[{coin_id}] Buy order {buy_id} was {order_status}. Removing layer.")
+                                        coin_changed = True
+                                    else:
+                                        active_layers.append(l)
+                                else:
+                                    active_layers.append(l)
+                            else:
+                                l["status"] = "OPEN"
+                                coin_changed = True
+                                active_layers.append(l)
+                                
+                        elif status == "PENDING_SELL":
+                            sell_id = l.get("sell_order_id")
+                            if sell_id:
+                                res = hata_api.get_order_status(sell_id)
+                                order_data = res.get("data")
+                                if order_data:
+                                    order_status = order_data.get("status")
+                                    if order_status == "fulfilled":
+                                        profit_myr = l["amount_myr"] * (l["take_profit"] / l["entry_price"])
+                                        actual_pnl = profit_myr - l["amount_myr"]
+                                        shared.engine_state[coin_id]["total_pnl"] += actual_pnl
+                                        logger.info(f"[{coin_id}] Sell order {sell_id} fulfilled! Profit: +RM {actual_pnl:.2f}. Removing layer.")
+                                        coin_changed = True
+                                    elif order_status in ["cancelled", "rejected"]:
+                                        logger.warning(f"[{coin_id}] Sell order {sell_id} was {order_status}! Reverting status to OPEN to retry sell.")
+                                        l["status"] = "OPEN"
+                                        coin_changed = True
+                                        active_layers.append(l)
+                                    else:
+                                        active_layers.append(l)
+                                else:
+                                    active_layers.append(l)
+                            else:
+                                l["status"] = "OPEN"
+                                coin_changed = True
+                                active_layers.append(l)
+                                
+                        elif status == "OPEN":
+                            exec_qty = l.get("quantity")
+                            adj_qty = exec_qty * 0.996
+                            
+                            # Check actual token balance
+                            avail_bal, froz_bal = hata_api.get_token_balance(coin_id)
+                            if avail_bal < adj_qty:
+                                logger.warning(f"[{coin_id}] Retry: Cannot place Limit SELL of size {adj_qty:.4f}. Available balance ({avail_bal:.4f}) is insufficient. Is another order locking the assets?")
+                                active_layers.append(l)
+                            else:
+                                logger.info(f"[{coin_id}] Retrying Limit SELL placement for layer {l['id']}.")
+                                sell_res = hata_api.place_limit_order(f"{coin_id}_MYR", "SELL", l["take_profit"], adj_qty)
+                                if sell_res.get("status") == "success":
+                                    sell_id = sell_res.get("data", {}).get("id")
+                                    l["status"] = "PENDING_SELL"
+                                    l["sell_order_id"] = str(sell_id)
+                                    l["hata_sell_res"] = sell_res
+                                    logger.info(f"[{coin_id}] Limit SELL order {sell_id} placed successfully on retry.")
+                                else:
+                                    logger.error(f"[{coin_id}] Retry Limit SELL placement failed: {sell_res}")
+                                coin_changed = True
+                                active_layers.append(l)
+                        else:
+                            active_layers.append(l)
+                    
+                    if coin_changed:
+                        shared.engine_state[coin_id]["layers"] = active_layers
+                        state_changed = True
+                
+                if state_changed:
+                    shared.save_state()
+            
+            await loop.run_in_executor(None, check_orders)
+            
         except Exception as e:
-            logger.error(f"Failed to update Hata prices: {e}")
+            logger.error(f"Failed in update_hata_prices_loop: {e}")
         await asyncio.sleep(10)
 
 async def process_kline(coin_id, kline):
@@ -198,46 +338,27 @@ async def process_kline(coin_id, kline):
                         if hata_res.get("status") == "error":
                             logger.error(f"[{coin_id}] Hata API Error! Skipping internal layer creation. Msg: {hata_res.get('message')}")
                         else:
+                            order_id = hata_res.get("data", {}).get("id")
                             layer = {
                                 "id": len(layers) + 1,
                                 "entry_price": current_price,
                                 "amount_myr": trade_amount,
                                 "quantity": quantity,
                                 "take_profit": current_price * (1.0 + tp_pct),
-                                "status": "OPEN",
+                                "status": "PENDING_BUY",
+                                "buy_order_id": str(order_id),
                                 "hata_buy_res": hata_res
                             }
                             shared.engine_state[coin_id]["layers"].append(layer)
-                            shared.global_state["balance_myr"] -= trade_amount
                             shared.save_state()
                             
-                            # PLACING PASSIVE LIMIT SELL IMMEDIATELY (Maker 0% fee)
-                            logger.info(f"[{coin_id}] Placing Passive LIMIT SELL for TP at {layer['take_profit']:.2f}")
-                            hata_api.place_limit_order(f"{coin_id}_MYR", "SELL", layer['take_profit'], quantity)
+                            logger.info(f"[{coin_id}] Layer recorded with status PENDING_BUY (ID: {order_id}). Waiting for fill.")
                         
             else:
                 shared.engine_state[coin_id]["last_signal"] = 0
                 
-        # Handle Layering Logic (Check Take Profits - Passive Limit Sell)
-        layers = shared.engine_state[coin_id]["layers"]
-        active_layers = []
-        state_changed = False
-        for l in layers:
-            # Check Limit Sell
-            if shared.engine_state[coin_id]["current_price"] >= l["take_profit"]:
-                logger.info(f"[{coin_id}] LIMIT SELL FILLED (Take Profit) for layer {l['id']}!")
-                profit_myr = l["amount_myr"] * (l["take_profit"] / l["entry_price"])
-                shared.global_state["balance_myr"] += profit_myr
-                shared.engine_state[coin_id]["total_pnl"] += profit_myr - l["amount_myr"]
-                state_changed = True
-            else:
-                active_layers.append(l)
-        
-        if state_changed:
-            shared.engine_state[coin_id]["layers"] = active_layers
-            shared.save_state()
-        else:
-            shared.engine_state[coin_id]["layers"] = active_layers
+        # Layers logic is now completely handled asynchronously by the background update_hata_prices_loop
+        pass
 
 
 async def start_ws():

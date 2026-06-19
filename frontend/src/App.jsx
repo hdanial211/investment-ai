@@ -262,6 +262,11 @@ function App() {
                   <div className="stat-box">
                     <h3>Baki Hata Wallet</h3>
                     <p className="value">RM {state.global.balance_myr ? state.global.balance_myr.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}</p>
+                    {state.global.frozen_myr > 0 && (
+                      <span className="frozen-label" style={{ fontSize: '0.85rem', color: '#ffb300', display: 'block', marginTop: '4px' }}>
+                        (Terkunci: RM {state.global.frozen_myr.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                      </span>
+                    )}
                   </div>
                   <div className="stat-box">
                     <h3>Untung Bersih (Semua)</h3>

@@ -32,11 +32,11 @@ def _generate_signature(params: dict, secret: str, is_post: bool = False) -> str
     ).hexdigest()
     return signature
 
-def get_myr_balance() -> float:
-    """Fetch the real MYR balance from Hata API"""
+def get_myr_balance() -> tuple:
+    """Fetch the real MYR balance (available, frozen) from Hata API"""
     if not HATA_API_KEY or not HATA_API_SECRET:
         print("Warning: HATA_API_KEY or HATA_API_SECRET not found. Using simulated balance.")
-        return 10000.00
+        return 10000.00, 0.00
         
     endpoint = "/orderbook/sapi/balance"
     timestamp = str(int(time.time()))
@@ -60,30 +60,101 @@ def get_myr_balance() -> float:
         response.raise_for_status()
         data = response.json()
         
-        # Parse balance from response (assuming structure has balance or available_balance)
-        # We might need to inspect the response structure if it's different.
-        # Usually it returns a list of balances or a single object.
         print("Hata API Balance Response:", data)
         
         if isinstance(data, list):
             for item in data:
                 if item.get("symbol") == "MYR":
-                    return float(item.get("available", 0.0))
+                    return float(item.get("available", 0.0)), float(item.get("frozen", 0.0))
         elif isinstance(data, dict):
-            # If it returns a dict with 'available'
             if "available" in data:
-                return float(data["available"])
+                return float(data.get("available", 0.0)), float(data.get("frozen", 0.0))
             elif "data" in data and isinstance(data["data"], list):
                  for item in data["data"]:
                     if item.get("symbol") == "MYR":
-                        return float(item.get("available", 0.0))
+                        return float(item.get("available", 0.0)), float(item.get("frozen", 0.0))
                         
-        return 0.0 # Default if parsing fails
+        return 0.0, 0.0
         
     except Exception as e:
         print(f"Error fetching Hata API balance: {e}")
-        # Return fallback value or None to let caller handle
-        return 0.0
+        return 0.0, 0.0
+
+def get_token_balance(symbol: str) -> tuple:
+    """Fetch the real token balance (available, frozen) from Hata API"""
+    if not HATA_API_KEY or not HATA_API_SECRET:
+        return 0.0, 0.0
+        
+    endpoint = "/orderbook/sapi/balance"
+    timestamp = str(int(time.time()))
+    
+    params = {
+        "timestamp": timestamp,
+        "token_symbol": symbol.upper()
+    }
+    
+    signature = _generate_signature(params, HATA_API_SECRET)
+    headers = {
+        "X-API-KEY": HATA_API_KEY,
+        "Signature": signature
+    }
+    url = f"{BASE_URL}{endpoint}"
+    
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        if isinstance(data, list):
+            for item in data:
+                if item.get("symbol") == symbol.upper():
+                    return float(item.get("available", 0.0)), float(item.get("frozen", 0.0))
+        elif isinstance(data, dict):
+            if "available" in data:
+                return float(data.get("available", 0.0)), float(data.get("frozen", 0.0))
+            elif "data" in data and isinstance(data["data"], list):
+                 for item in data["data"]:
+                    if item.get("symbol") == symbol.upper():
+                        return float(item.get("available", 0.0)), float(item.get("frozen", 0.0))
+                        
+        return 0.0, 0.0
+    except Exception as e:
+        print(f"Error fetching Hata API balance for {symbol}: {e}")
+        return 0.0, 0.0
+
+def get_order_status(order_id: str) -> dict:
+    """Fetch order status/details from Hata API"""
+    if not HATA_API_KEY or not HATA_API_SECRET:
+        # Simulated mode: assume all orders are fulfilled
+        return {"status": "success", "data": {"status": "fulfilled"}}
+        
+    endpoint = "/orderbook/sapi/order"
+    timestamp = str(int(time.time()))
+    
+    params = {
+        "order_id": str(order_id),
+        "timestamp": timestamp
+    }
+    
+    signature = _generate_signature(params, HATA_API_SECRET)
+    
+    headers = {
+        "X-API-KEY": HATA_API_KEY,
+        "Signature": signature
+    }
+    
+    url = f"{BASE_URL}{endpoint}"
+    
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            print(f"Error fetching order status for {order_id}: {response.text}")
+            return {"status": "error", "message": response.text}
+    except Exception as e:
+        print(f"Error fetching order status for {order_id}: {e}")
+        return {"status": "error", "message": str(e)}
 
 def get_ticker(symbol: str = "ETH_MYR") -> float:
     """Fetch current market price (ticker) from exchange-info"""
@@ -164,19 +235,23 @@ def place_limit_order(symbol: str, side: str, price: float, quantity: float) -> 
         return {"status": "error", "message": str(e)}
 
 def cancel_order(symbol: str, order_id: str) -> dict:
-    """Cancel an open order"""
-    if not HATA_API_KEY:
+    """Cancel an open order on Hata"""
+    if not HATA_API_KEY or not HATA_API_SECRET:
         print(f"SIMULATED: Cancelled Order {order_id}")
         return {"status": "simulated_cancelled"}
         
-    endpoint = "/orderbook/sapi/order"
+    endpoint = "/orderbook/sapi/orders/cancel"
     timestamp = str(int(time.time()))
+    clean_symbol = symbol.replace("_", "").upper()
+    
     params = {
-        "timestamp": timestamp,
-        "symbol": symbol,
-        "orderId": order_id
+        "order_id": str(order_id),
+        "pair": clean_symbol,
+        "timestamp": timestamp
     }
-    signature = _generate_signature(params, HATA_API_SECRET)
+    
+    signature = _generate_signature(params, HATA_API_SECRET, is_post=True)
+    
     headers = {
         "X-API-KEY": HATA_API_KEY,
         "Signature": signature
@@ -184,9 +259,12 @@ def cancel_order(symbol: str, order_id: str) -> dict:
     url = f"{BASE_URL}{endpoint}"
     
     try:
-        response = requests.delete(url, params=params, headers=headers, timeout=10)
-        response.raise_for_status()
-        return response.json()
+        response = requests.post(url, json=params, headers=headers, timeout=10)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            print(f"Error cancelling order {order_id}: {response.text}")
+            return {"status": "error", "message": response.text}
     except Exception as e:
         print(f"Error cancelling order {order_id}: {e}")
-        return {"status": "error"}
+        return {"status": "error", "message": str(e)}

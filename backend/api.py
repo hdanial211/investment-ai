@@ -103,22 +103,28 @@ def manual_buy(action: ManualAction):
     if hata_res.get("status") == "error":
         raise HTTPException(status_code=500, detail=f"Hata API Error: {hata_res.get('message')}")
 
+    order_id = hata_res.get("data", {}).get("id")
     layer = {
         "id": len(engine_state[coin]["layers"]) + 1,
         "entry_price": price,
         "amount_myr": amount,
         "quantity": quantity,
         "take_profit": price * 1.006,
-        "status": "OPEN",
+        "status": "PENDING_BUY",
+        "buy_order_id": str(order_id),
         "hata_buy_res": hata_res
     }
     engine_state[coin]["layers"].append(layer)
-    global_state["balance_myr"] -= amount
     shared.save_state()
     
-    # Place Limit Sell
-    hata_api.place_limit_order(f"{coin}_MYR", "SELL", layer["take_profit"], quantity)
-    
+    # Instantly update balance in global_state to reflect frozen amount
+    try:
+        res = hata_api.get_myr_balance()
+        if res:
+            global_state["balance_myr"], global_state["frozen_myr"] = res
+    except Exception:
+        pass
+        
     return {"status": "success", "layer": layer}
 
 @app.post("/api/panic-sell")
@@ -214,32 +220,12 @@ async def websocket_backtest(websocket: WebSocket):
         traceback.print_exc()
         print(f"WebSocket error: {e}")
 
-def update_balance_loop():
-    while True:
-        try:
-            myr_balance = hata_api.get_myr_balance()
-            if myr_balance is not None:
-                global_state["balance_myr"] = myr_balance
-                
-            # Dynamically calculate exchange rate (Hata ETH MYR / Binance ETH USDT)
-            hata_eth = hata_api.get_ticker("ETH_MYR")
-            binance_eth = engine_state.get("ETH", {}).get("current_price", 0.0)
-            if hata_eth > 0 and binance_eth > 0:
-                global_state["usdt_myr_rate"] = hata_eth / binance_eth
-        except Exception as e:
-            print(f"Failed to update balance loop: {e}")
-        time.sleep(15) # Fetch every 15 seconds
-
 @app.on_event("startup")
 def start_server():
-    # Start live engine in background
+    # Start live engine in background (which includes WS and price/balance loops)
     import live_engine
     t1 = threading.Thread(target=live_engine.run, daemon=True)
     t1.start()
-    
-    # Start balance fetch loop
-    t2 = threading.Thread(target=update_balance_loop, daemon=True)
-    t2.start()
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
