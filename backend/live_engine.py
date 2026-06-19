@@ -37,6 +37,29 @@ for sym in SYMBOLS:
 klines_dict = {sym.replace("usdt", "").upper(): [] for sym in SYMBOLS}
 MAX_KLINES = 150 # Enough for EMA_21, VWAP, etc.
 
+def prefetch_historical_data():
+    import requests
+    for sym in SYMBOLS:
+        coin_id = sym.replace("usdt", "").upper()
+        try:
+            url = f"https://api.binance.com/api/v3/klines?symbol={sym.upper()}&interval=1m&limit={MAX_KLINES}"
+            res = requests.get(url, timeout=10)
+            data = res.json()
+            for k in data:
+                klines_dict[coin_id].append({
+                    'timestamp': pd.to_datetime(k[0], unit='ms'),
+                    'open': float(k[1]),
+                    'high': float(k[2]),
+                    'low': float(k[3]),
+                    'close': float(k[4]),
+                    'volume': float(k[5])
+                })
+            logger.info(f"[{coin_id}] Prefetched {len(data)} historical candles.")
+        except Exception as e:
+            logger.error(f"[{coin_id}] Failed to prefetch historical data: {e}")
+
+prefetch_historical_data()
+
 # Hata MYR prices cache
 hata_prices = {
     "ETH": 0.0,
