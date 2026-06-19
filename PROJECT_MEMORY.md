@@ -1,0 +1,270 @@
+# 🧠 INVESTMENT AI — PROJECT MEMORY FILE
+> Dikemas kini: 2026-06-20 | Versi Semasa: **v5.3.0**
+> GitHub: https://github.com/hdanial211/investment-ai
+> Lokasi Projek: `e:\PROJECTS\SEMUA PROJECT\INVESTMENT AI`
+
+---
+
+## 📁 STRUKTUR PROJEK
+
+```
+INVESTMENT AI/
+├── backend/                    ← Python FastAPI + Bot Engine
+│   ├── live_engine.py          ★ ENJIN UTAMA BOT (WebSocket + Order Logic)
+│   ├── shared.py               ★ State global bot (bot_state.json loader)
+│   ├── api.py                  ★ FastAPI server (port 8000)
+│   ├── hata_api.py             ★ Wrapper Hata Exchange API
+│   ├── bot_state.json          ★ Memori bot (layers, PnL, settings per coin)
+│   ├── config.py               Settings umum
+│   ├── features/
+│   │   └── indicators.py       Kiraan EMA, RSI, MACD, BB, VWAP, dll.
+│   ├── backtest/
+│   │   └── dca_engine.py       Enjin backtesting DCA
+│   ├── models/                 XGBoost .pkl models (per coin)
+│   └── .env                    API keys (JANGAN share/commit)
+├── frontend/
+│   └── src/
+│       ├── App.jsx             ★ Dashboard React utama
+│       ├── App.css             Styling dashboard
+│       └── BacktestSimulator.jsx  Tab simulator backtest
+├── Start_Bot.bat               ★ Cara start bot (double-click ini)
+├── models/                     XGBoost + PPO LSTM models
+└── data/                       CSV historical data (COIN_USDT_1m.csv)
+```
+
+---
+
+## 🚀 CARA START BOT
+
+**Double-click `Start_Bot.bat`** — ini akan buka 2 terminal:
+1. **Terminal 1**: Backend Python (`uvicorn api:app --reload --port 8000`)
+2. **Terminal 2**: Frontend Vite (`npm run dev` → http://localhost:5173)
+
+> ⚠️ JANGAN tutup terminal. Minimize sahaja.
+> Live engine berjalan **di dalam** backend (bukan proses berasingan).
+
+---
+
+## ⚙️ SENI BINA SISTEM (v5.3.0)
+
+### Aliran Bot Penuh
+
+```
+Start_Bot.bat
+    → uvicorn api:app (port 8000)
+        → api.py @startup → start live_engine.run() dalam thread
+
+live_engine.py:
+    1. startup_recovery()     ← Sync semua layers dengan Hata API (bila restart)
+    2. update_hata_prices_loop() ← Background task (setiap 60 saat)
+    3. Binance WebSocket       ← Candle 1 minit untuk semua 5 coins
+```
+
+### Loop 60 Saat (`update_hata_prices_loop`)
+1. Fetch harga Hata MYR untuk 5 coins
+2. Fetch baki wallet Hata (available + frozen MYR)
+3. Kira kadar pertukaran USDT/MYR (dari Hata ETH vs Binance ETH)
+4. **Semak semua PENDING orders** (BUY + SELL) untuk semua 5 coins:
+   - PENDING_BUY filled → place LIMIT SELL
+   - PENDING_BUY > 5 min → auto-cancel (guna `time.time()`)
+   - PENDING_SELL filled → catat PnL + **auto-layer baru di entry×0.99**
+5. Compute system status (lokal, tanpa API luar)
+
+### Signal XGBoost (setiap candle 1 min)
+- Confidence > 60% → cuba place Limit BUY
+- **Syarat cegah double-buy**: jangan beli jika ada PENDING_BUY aktif
+- **Syarat layering**: harga semasa mesti ≤ last_entry × 0.99 (1% bawah)
+- Semak max_layers (ikut risk level)
+
+### Auto-DCA Layer (`_place_next_layer`)
+- Dicetuskan bila PENDING_SELL fill
+- Letak terus Limit BUY di `last_entry × 0.99`
+- Berlaku untuk **semua 5 coins** (ETH, BTC, SOL, XRP, LTC)
+- TP% ikut risk level coin berkenaan
+
+### Startup Recovery (`startup_recovery`)
+- Jalan **sekali sahaja** masa bot start
+- Check semua layers dalam `bot_state.json` vs Hata API
+- Fill yang terlepas → place SELL
+- Cancelled → buang layer
+- Stuck > 5 min → auto-cancel
+- Missing `created_at` → patch dengan masa sekarang
+
+---
+
+## 💰 COINS & STRATEGI
+
+| Coin | Max Layers | Risk Level | TP% | Gap Entry |
+|------|-----------|------------|-----|-----------|
+| ETH  | 3 | 3 (Agresif) | 0.5% | 1% |
+| BTC  | 3 | 3 (Agresif) | 0.5% | 1% |
+| SOL  | 3 | 3 (Agresif) | 0.5% | 1% |
+| XRP  | 3 | 3 (Agresif) | 0.5% | 1% |
+| LTC  | 3 | 3 (Agresif) | 0.5% | 1% |
+
+**Risk Level:**
+- Level 1: DCA Asas, max 6 layers, TP 1.5%, gap 2%
+- Level 2: Scalp & Run, max 5 layers, TP 0.4%, gap 0.5%
+- Level 3: Heavy Scalping, max 3 layers, TP 0.5%, gap 1%
+
+---
+
+## 🔌 API KEYS & CONFIG
+
+**File**: `backend/.env`
+```
+HATA_API_KEY=<semak dalam backend/.env>
+HATA_API_SECRET=<semak dalam backend/.env>
+GROQ_API_KEY=<tidak dipakai lagi sejak v5.3.0>
+```
+
+**Hata Exchange API:**
+- Base URL: `https://my-api.hata.io`
+- Auth: `X-API-KEY` + `Signature` (HMAC-SHA256)
+- POST requests: signature guna raw JSON (sorted keys, no spaces)
+- GET requests: signature guna URL-encoded query string
+
+**Endpoints Hata yang dipakai:**
+```
+GET  /orderbook/sapi/balance          → Baki wallet
+GET  /orderbook/sapi/order            → Status order
+GET  /orderbook/api/v2/exchange-info  → Harga semua pasangan MYR
+POST /orderbook/sapi/orders/create    → Buat order baru
+POST /orderbook/sapi/orders/cancel    → Cancel order
+```
+
+**Decimal scaling Hata (wajib ikut):**
+```python
+COIN_SCALES = {
+    "BTC": {"qty": 5, "price": 0},
+    "ETH": {"qty": 4, "price": 0},
+    "SOL": {"qty": 3, "price": 1},
+    "LTC": {"qty": 3, "price": 1},
+    "XRP": {"qty": 1, "price": 3}
+}
+```
+
+---
+
+## 📊 STRUKTUR `bot_state.json`
+
+```json
+{
+  "ETH": {
+    "current_price": 7050.0,
+    "last_signal": 0,
+    "confidence": 40.76,
+    "layers": [
+      {
+        "id": 1,
+        "entry_price": 7000.0,
+        "amount_myr": 30.0,
+        "quantity": 0.004285,
+        "take_profit": 7035.0,
+        "status": "PENDING_SELL",      ← PENDING_BUY / PENDING_SELL / OPEN
+        "buy_order_id": "241439511",
+        "sell_order_id": "241473090",
+        "hata_buy_res": {...},
+        "hata_sell_res": {...},
+        "created_at": 1750000000.0     ← Unix timestamp (time.time())
+      }
+    ],
+    "total_pnl": 0.5,
+    "trade_amount_myr": 30.0,
+    "risk_level": 3,
+    "is_auto": true
+  }
+}
+```
+
+---
+
+## 🌐 FRONTEND DASHBOARD
+
+**URL**: http://localhost:5173
+**Framework**: React + Vite
+**API polling**: setiap 1 saat ke `GET http://localhost:8000/api/state`
+
+### API Endpoints Backend
+```
+GET  /api/state              → Semua state (global + coins)
+POST /api/toggle-auto        → On/Off auto trading per coin
+POST /api/set-risk-level     → Set risk level 1/2/3
+POST /api/set-amount         → Set saiz trade per lapis (RM)
+POST /api/manual-buy         → Manual buy sekarang
+POST /api/panic-sell         → Sell semua posisi coin tertentu
+WS   /api/backtest-stream    → Streaming hasil backtest
+```
+
+### Panel Dashboard
+1. **Coin Selector Bar** — 5 coins dengan harga, confidence, bilangan layers
+2. **Paparan Pasaran** — Harga Hata MYR + AI confidence meter
+3. **Posisi Layering** — Jadual semua layers aktif
+4. **Status Akaun & PnL** — Baki Hata, frozen, PnL semua coins
+5. **⚙️ Status Sistem Bot (Autonomi)** — Status lokal (Safe/Warning/Action Required)
+6. **Kawalan Eksekusi** — Toggle auto, set amount, risk level, manual buy, panic sell
+
+---
+
+## 🧬 AI MODEL
+
+**Type**: XGBoost (scikit-learn API)
+**File**: `models/xgboost_scalping_{COIN}_1y.pkl`
+**Trigger**: Setiap candle 1 minit dari Binance WebSocket (bila candle tutup `kline['x'] == True`)
+**Input features**: EMA_9, EMA_21, EMA_Trend, RSI_14, Volume_ROC, BB, MACD, STOCH, ATR, VWAP
+**Output**: `predict_proba()` → probability class 1 (Golden Entry)
+**Threshold**: > 0.60 (60%) = signal BUY
+
+**Binance WebSocket URL:**
+```
+wss://stream.binance.com:9443/stream?streams=btcusdt@kline_1m/ethusdt@kline_1m/solusdt@kline_1m/xrpusdt@kline_1m/ltcusdt@kline_1m
+```
+
+---
+
+## 🐛 BUG HISTORY & PENYELESAIAN
+
+| Versi | Masalah | Penyelesaian |
+|-------|---------|--------------|
+| v5.2.3 | Double process conflict (engine jalan 2x) | Consolidate — engine jalan dalam 1 thread di api.py |
+| v5.2.4 | XRP layer hilang dari memori | Reconstruct layer, terus place SELL |
+| v5.2.5 | Tiada AI Guardian | Tambah Groq (kemudian dibuang semula) |
+| v5.2.6 | Pesanan beli tersangkut | Auto-cancel selepas 5 minit |
+| v5.2.7 | Layer lama tiada `created_at` | Patch dengan `time.time()` bila detected |
+| v5.3.0 | Bot bergantung Groq AI | Buang Groq, guna logik sistem sendiri sepenuhnya |
+
+---
+
+## 📋 PERATURAN PENTING
+
+1. **Auto-cancel**: PENDING_BUY > 5 minit → cancel automatik (check setiap 60 saat)
+2. **Anti double-buy**: Jangan beli baru jika ada PENDING_BUY aktif untuk coin yang sama
+3. **1% gap rule**: Untuk layer baru, harga mesti ≤ last_entry × 0.99
+4. **Auto-DCA**: PENDING_SELL fill → terus letak BUY baru di entry × 0.99
+5. **Startup recovery**: Bot check Hata API untuk semua layers bila restart
+6. **Tidak pakai Groq**: Sistem sepenuhnya autonomi, tanpa API AI luar
+7. **Confidence threshold**: > 60% untuk trigger entry baru
+8. **Sell quantity**: `exec_qty × 0.996` (potong 0.4% untuk fee)
+
+---
+
+## 🔮 PERKARA YANG BOLEH DIPERTINGKATKAN (FUTURE IDEAS)
+
+- [ ] Trailing stop loss untuk PENDING_SELL
+- [ ] Dashboard stats: win rate, avg hold time
+- [ ] Notifikasi Telegram bila order fill
+- [ ] Backtest semula dengan logik 1% DCA baru
+- [ ] Cancel PENDING_SELL jika harga jatuh jauh dari TP (stop loss layer)
+
+---
+
+## 📝 CARA GUNA FILE INI DALAM CHAT BARU
+
+Paste arahan ini dalam chat baru:
+```
+Saya ada projek Investment AI crypto trading bot.
+Sila baca file memori projek ini dahulu sebelum buat apa-apa:
+e:\PROJECTS\SEMUA PROJECT\INVESTMENT AI\PROJECT_MEMORY.md
+
+Kemudian [nyatakan permintaan anda di sini]
+```
