@@ -1,4 +1,5 @@
 # shared.py
+import log_config
 import json
 import os
 import time

@@ -11,7 +11,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from features.indicators import calculate_features
 from rl.env import CryptoTradingEnv
 
-logging.basicConfig(level=logging.INFO)
+import log_config
 logger = logging.getLogger(__name__)
 
 def main():

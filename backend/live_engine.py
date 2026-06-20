@@ -1,3 +1,4 @@
+import log_config
 import asyncio
 import websockets
 import json

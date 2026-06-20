@@ -6,7 +6,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from data.binance_proxy import download_historical_data
 from models.ai_model import AIScalpingModel
 
-logging.basicConfig(level=logging.INFO)
+import log_config
 logger = logging.getLogger("TRAIN_ALL")
 
 COINS = ['BTC/USDT', 'SOL/USDT', 'LTC/USDT', 'XRP/USDT']

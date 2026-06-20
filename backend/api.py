@@ -1,5 +1,9 @@
+import log_config
+import logging
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+
+logger = logging.getLogger(__name__)
 import os
 import uvicorn
 import threading

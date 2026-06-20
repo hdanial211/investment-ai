@@ -337,7 +337,7 @@ def run_dca_backtest(csv_path, model_path, initial_cash=100000.0, trade_size_fia
     return metrics_dict
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    import log_config
     dataset_name = sys.argv[1] if len(sys.argv) > 1 else 'ETH_USDT_1m.csv'
     model_name = sys.argv[2] if len(sys.argv) > 2 else f"xgboost_scalping_ETH_1y.pkl"
     

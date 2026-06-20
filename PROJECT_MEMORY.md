@@ -1,5 +1,5 @@
 # 🧠 INVESTMENT AI — PROJECT MEMORY FILE
-> Dikemas kini: 2026-06-20 | Versi Semasa: **v5.3.2**
+> Dikemas kini: 2026-06-20 | Versi Semasa: **v5.3.3**
 > GitHub: https://github.com/hdanial211/investment-ai
 > Lokasi Projek: `e:\PROJECTS\SEMUA PROJECT\INVESTMENT AI`
 
@@ -233,6 +233,7 @@ wss://stream.binance.com:9443/stream?streams=btcusdt@kline_1m/ethusdt@kline_1m/s
 | v5.2.7 | Layer lama tiada `created_at` | Patch dengan `time.time()` bila detected |
 | v5.3.0 | Bot bergantung Groq AI | Buang Groq, guna logik sistem sendiri sepenuhnya |
 | v5.3.2 | Sell retry stuck due to precision mismatch and Taker fee deduction | Rounded buy qty in state, dynamic fee extraction from trades, float truncation and balance capping |
+| v5.3.3 | Logger output is not colored in terminal | Created custom formatter to color WARNING, ERROR, and CRITICAL messages in RED |
 
 ---
 

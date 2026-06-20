@@ -46,9 +46,11 @@ class HataWebSocket:
     def stop(self):
         self.is_running = False
 
-# Example usage
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    import sys
+    import os
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+    import log_config
     ws = HataWebSocket()
     try:
         asyncio.run(ws.connect())

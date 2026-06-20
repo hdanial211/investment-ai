@@ -12,7 +12,7 @@ from features.indicators import calculate_features
 from rl.env import CryptoTradingEnv
 from rl.lstm_policy import LSTMExtractor
 
-logging.basicConfig(level=logging.INFO)
+import log_config
 logger = logging.getLogger(__name__)
 
 SUPPORTED_COINS = ["BTC", "ETH", "SOL", "XRP", "LTC"]

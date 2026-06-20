@@ -62,7 +62,10 @@ class DataCollector:
         await ws.connect()
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    import sys
+    import os
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+    import log_config
     collector = DataCollector()
     try:
         asyncio.run(collector.start())
