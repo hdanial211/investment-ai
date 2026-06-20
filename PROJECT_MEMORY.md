@@ -1,5 +1,5 @@
 # 🧠 INVESTMENT AI — PROJECT MEMORY FILE
-> Dikemas kini: 2026-06-20 | Versi Semasa: **v5.3.3**
+> Dikemas kini: 2026-06-20 | Versi Semasa: **v5.3.4**
 > GitHub: https://github.com/hdanial211/investment-ai
 > Lokasi Projek: `e:\PROJECTS\SEMUA PROJECT\INVESTMENT AI`
 
@@ -234,6 +234,7 @@ wss://stream.binance.com:9443/stream?streams=btcusdt@kline_1m/ethusdt@kline_1m/s
 | v5.3.0 | Bot bergantung Groq AI | Buang Groq, guna logik sistem sendiri sepenuhnya |
 | v5.3.2 | Sell retry stuck due to precision mismatch and Taker fee deduction | Rounded buy qty in state, dynamic fee extraction from trades, float truncation and balance capping |
 | v5.3.3 | Logger output is not colored in terminal | Created custom formatter to color WARNING, ERROR, and CRITICAL messages in RED |
+| v5.3.4 | Tiada sistem Auto-Healing & Pemantauan | Membina monitor_healing.py untuk memeriksa kesihatan backend/frontend secara automatik, membersihkan proses tergantung dan memulakan semula perkhidmatan |
 
 ---
 
@@ -247,6 +248,7 @@ wss://stream.binance.com:9443/stream?streams=btcusdt@kline_1m/ethusdt@kline_1m/s
 6. **Tidak pakai Groq**: Sistem sepenuhnya autonomi, tanpa API AI luar
 7. **Confidence threshold**: > 60% untuk trigger entry baru
 8. **Sell quantity**: Dihitung secara dinamik berdasarkan trade fill & fi Hata. Jika baki kurang, bot akan auto-cap (truncate) mengikut baki sedia ada.
+9. **Auto-healing & Pemantauan**: Memantau backend (port 8000) dan frontend (port 5173) secara berkala dan memulakan semula perkhidmatan jika dikesan terhenti.
 
 ---
 
