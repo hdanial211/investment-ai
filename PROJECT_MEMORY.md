@@ -1,5 +1,5 @@
 # 🧠 INVESTMENT AI — PROJECT MEMORY FILE
-> Dikemas kini: 2026-06-21 | Versi Semasa: **v5.3.5**
+> Dikemas kini: 2026-06-21 | Versi Semasa: **v5.3.6**
 > GitHub: https://github.com/hdanial211/investment-ai
 > Lokasi Projek: `e:\PROJECTS\SEMUA PROJECT\INVESTMENT AI`
 
@@ -236,6 +236,7 @@ wss://stream.binance.com:9443/stream?streams=btcusdt@kline_1m/ethusdt@kline_1m/s
 | v5.3.3 | Logger output is not colored in terminal | Created custom formatter to color WARNING, ERROR, and CRITICAL messages in RED |
 | v5.3.4 | Tiada sistem Auto-Healing & Pemantauan | Membina monitor_healing.py untuk memeriksa kesihatan backend/frontend secara automatik, membersihkan proses tergantung dan memulakan semula perkhidmatan |
 | v5.3.5 | Pemantauan berkala (Hourly monitor) | Menjalankan pemantauan status sistem dagangan kripto secara automatik dan mengemaskini fail status bot_state.json |
+| v5.3.6 | Pemantauan berkala (Hourly monitor) | Menjalankan pemantauan status sistem dagangan kripto secara automatik dan mengemaskini fail status bot_state.json |
 
 ---
 

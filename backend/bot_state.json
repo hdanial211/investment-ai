@@ -1,8 +1,8 @@
 {
     "ETH": {
-        "current_price": 7215.0,
+        "current_price": 7200.0,
         "last_signal": 0,
-        "confidence": 53.362250328063965,
+        "confidence": 49.76402223110199,
         "layers": [],
         "total_pnl": 0.29999999999999716,
         "trade_amount_myr": 30.0,
@@ -10,9 +10,9 @@
         "is_auto": true
     },
     "BTC": {
-        "current_price": 265742.0,
-        "last_signal": 1,
-        "confidence": 76.90560221672058,
+        "current_price": 265542.0,
+        "last_signal": 0,
+        "confidence": 44.03308033943176,
         "layers": [
             {
                 "id": 1,
@@ -71,9 +71,9 @@
         "is_auto": true
     },
     "SOL": {
-        "current_price": 298.8,
+        "current_price": 297.0,
         "last_signal": 0,
-        "confidence": 36.958831548690796,
+        "confidence": 28.293153643608093,
         "layers": [
             {
                 "id": 1,
@@ -132,9 +132,9 @@
         "is_auto": true
     },
     "XRP": {
-        "current_price": 4.782,
+        "current_price": 4.757,
         "last_signal": 1,
-        "confidence": 60.29732823371887,
+        "confidence": 63.13328742980957,
         "layers": [
             {
                 "id": 1,
@@ -194,7 +194,7 @@
     "LTC": {
         "current_price": 183.0,
         "last_signal": 1,
-        "confidence": 65.0720477104187,
+        "confidence": 67.84586906433105,
         "layers": [
             {
                 "id": 1,
