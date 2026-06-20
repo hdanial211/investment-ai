@@ -74,6 +74,13 @@ hata_prices = {
 }
 
 
+def truncate_float(val: float, decimals: int) -> float:
+    """Truncate float value to a specific number of decimal places without rounding up."""
+    eps = 1e-9
+    factor = 10 ** decimals
+    return int((val + eps) * factor) / factor
+
+
 # ─────────────────────────────────────────────
 # Helper: Get strategy settings by risk level
 # ─────────────────────────────────────────────
@@ -105,7 +112,8 @@ def _place_next_layer(coin_id: str, last_entry_price: float):
     # 1% below last entry price
     next_entry = round(last_entry_price * 0.99, 6)
     trade_amount = shared.engine_state[coin_id].get("trade_amount_myr", 50.0)
-    quantity = trade_amount / next_entry
+    qty_scale = hata_api.COIN_SCALES.get(coin_id, {}).get("qty", 4)
+    quantity = round(trade_amount / next_entry, qty_scale)
     take_profit = round(next_entry * (1.0 + strategy["tp_pct"]), 6)
 
     logger.info(f"[{coin_id}] AUTO-LAYER: Placing Limit BUY at RM{next_entry:.4f} (1% below RM{last_entry_price:.4f})")
@@ -181,14 +189,29 @@ async def startup_recovery():
                         # Missed fill while bot was offline → place SELL now
                         logger.info(f"[{coin_id}] RECOVERY: Buy {buy_id} was already filled! Placing SELL...")
                         exec_qty = float(order_data.get("exec_qty", l["quantity"]))
-                        adj_qty = exec_qty * 0.996
+                        
+                        trades = order_data.get("trades", [])
+                        fee_total = 0.0
+                        for t in trades:
+                            if t.get("fee_asset") == coin_id:
+                                fee_total += float(t.get("fee", 0.0))
+                                
+                        if trades:
+                            actual_qty = exec_qty - fee_total
+                        else:
+                            actual_qty = exec_qty * 0.996
+                            
+                        qty_scale = hata_api.COIN_SCALES.get(coin_id, {}).get("qty", 4)
+                        adj_qty = truncate_float(actual_qty, qty_scale)
+                        l["sell_quantity"] = adj_qty
+                        
                         sell_res = hata_api.place_limit_order(f"{coin_id}_MYR", "SELL", l["take_profit"], adj_qty)
                         if sell_res.get("status") == "success":
                             sell_id = sell_res.get("data", {}).get("id")
                             l["status"] = "PENDING_SELL"
                             l["sell_order_id"] = str(sell_id)
                             l["hata_sell_res"] = sell_res
-                            logger.info(f"[{coin_id}] RECOVERY: SELL {sell_id} placed at RM{l['take_profit']:.4f}")
+                            logger.info(f"[{coin_id}] RECOVERY: SELL {sell_id} placed at RM{l['take_profit']:.4f} with quantity {adj_qty:.4f}")
                         else:
                             l["status"] = "OPEN"
                             logger.error(f"[{coin_id}] RECOVERY: Failed to place SELL: {sell_res}")
@@ -349,7 +372,18 @@ async def update_hata_prices_loop():
                                 if order_status == "fulfilled":
                                     logger.info(f"[{coin_id}] Buy {buy_id} FILLED! Placing Limit SELL at RM{l['take_profit']:.4f}")
                                     exec_qty = float(order_data.get("exec_qty", l["quantity"]))
-                                    adj_qty = exec_qty * 0.996
+                                    trades = order_data.get("trades", [])
+                                    fee_total = 0.0
+                                    for t in trades:
+                                        if t.get("fee_asset") == coin_id:
+                                            fee_total += float(t.get("fee", 0.0))
+                                    if trades:
+                                        actual_qty = exec_qty - fee_total
+                                    else:
+                                        actual_qty = exec_qty * 0.996
+                                    qty_scale = hata_api.COIN_SCALES.get(coin_id, {}).get("qty", 4)
+                                    adj_qty = truncate_float(actual_qty, qty_scale)
+                                    l["sell_quantity"] = adj_qty
 
                                     avail_bal, _ = hata_api.get_token_balance(coin_id)
                                     if avail_bal < adj_qty:
@@ -433,14 +467,26 @@ async def update_hata_prices_loop():
 
                         # ── OPEN (retry sell) ─────────────────────
                         elif status == "OPEN":
-                            exec_qty = l.get("quantity", 0)
-                            adj_qty = exec_qty * 0.996
+                            qty_scale = hata_api.COIN_SCALES.get(coin_id, {}).get("qty", 4)
+                            adj_qty = l.get("sell_quantity")
+                            if adj_qty is None:
+                                exec_qty = l.get("quantity", 0)
+                                adj_qty = truncate_float(exec_qty * 0.996, qty_scale)
+                                l["sell_quantity"] = adj_qty
+                                coin_changed = True
+                                
                             avail_bal, _ = hata_api.get_token_balance(coin_id)
                             if avail_bal < adj_qty:
-                                logger.warning(f"[{coin_id}] Retry SELL: Insufficient balance ({avail_bal:.4f} < {adj_qty:.4f}).")
+                                logger.warning(f"[{coin_id}] Available balance ({avail_bal:.4f}) is less than planned sell quantity ({adj_qty:.4f}). Capping sell quantity.")
+                                adj_qty = truncate_float(avail_bal, qty_scale)
+                                l["sell_quantity"] = adj_qty
+                                coin_changed = True
+                                
+                            if adj_qty <= 0:
+                                logger.error(f"[{coin_id}] Cannot place SELL order: truncated sell quantity is 0 (balance: {avail_bal:.4f}).")
                                 active_layers.append(l)
                             else:
-                                logger.info(f"[{coin_id}] Retrying Limit SELL for layer {l['id']}...")
+                                logger.info(f"[{coin_id}] Retrying Limit SELL for layer {l['id']} with quantity {adj_qty:.4f}...")
                                 sell_res = hata_api.place_limit_order(f"{coin_id}_MYR", "SELL", l["take_profit"], adj_qty)
                                 if sell_res.get("status") == "success":
                                     sell_id = sell_res.get("data", {}).get("id")
@@ -556,8 +602,9 @@ async def process_kline(coin_id, kline):
 
                     if can_buy and trade_amount <= balance and current_price > 0:
                         logger.info(f"[{coin_id}] Auto-executing LIMIT BUY RM{trade_amount:.2f} at RM{current_price:.4f}")
-                        quantity = trade_amount / current_price
                         import hata_api
+                        qty_scale = hata_api.COIN_SCALES.get(coin_id, {}).get("qty", 4)
+                        quantity = round(trade_amount / current_price, qty_scale)
                         hata_res = hata_api.place_limit_order(f"{coin_id}_MYR", "BUY", current_price, quantity)
 
                         if hata_res.get("status") == "error":

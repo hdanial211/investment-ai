@@ -1,5 +1,5 @@
 # 🧠 INVESTMENT AI — PROJECT MEMORY FILE
-> Dikemas kini: 2026-06-20 | Versi Semasa: **v5.3.0**
+> Dikemas kini: 2026-06-20 | Versi Semasa: **v5.3.2**
 > GitHub: https://github.com/hdanial211/investment-ai
 > Lokasi Projek: `e:\PROJECTS\SEMUA PROJECT\INVESTMENT AI`
 
@@ -232,6 +232,7 @@ wss://stream.binance.com:9443/stream?streams=btcusdt@kline_1m/ethusdt@kline_1m/s
 | v5.2.6 | Pesanan beli tersangkut | Auto-cancel selepas 5 minit |
 | v5.2.7 | Layer lama tiada `created_at` | Patch dengan `time.time()` bila detected |
 | v5.3.0 | Bot bergantung Groq AI | Buang Groq, guna logik sistem sendiri sepenuhnya |
+| v5.3.2 | Sell retry stuck due to precision mismatch and Taker fee deduction | Rounded buy qty in state, dynamic fee extraction from trades, float truncation and balance capping |
 
 ---
 
@@ -244,7 +245,7 @@ wss://stream.binance.com:9443/stream?streams=btcusdt@kline_1m/ethusdt@kline_1m/s
 5. **Startup recovery**: Bot check Hata API untuk semua layers bila restart
 6. **Tidak pakai Groq**: Sistem sepenuhnya autonomi, tanpa API AI luar
 7. **Confidence threshold**: > 60% untuk trigger entry baru
-8. **Sell quantity**: `exec_qty × 0.996` (potong 0.4% untuk fee)
+8. **Sell quantity**: Dihitung secara dinamik berdasarkan trade fill & fi Hata. Jika baki kurang, bot akan auto-cap (truncate) mengikut baki sedia ada.
 
 ---
 
