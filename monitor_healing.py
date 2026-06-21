@@ -73,6 +73,36 @@ def check_backend_api() -> bool:
         logger.warning(f"Backend API check failed: {e}")
     return False
 
+def is_backend_running() -> bool:
+    """Check if any backend python/uvicorn process is currently running."""
+    for proc in psutil.process_iter(['name', 'cmdline']):
+        try:
+            cmd = proc.info['cmdline']
+            if cmd:
+                cmd_str = " ".join(cmd).lower()
+                if "python" in proc.info['name'].lower() and ("api:app" in cmd_str or "api.py" in cmd_str):
+                    return True
+                if "cmd.exe" in proc.info['name'].lower() and "uvicorn api:app" in cmd_str:
+                    return True
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+    return False
+
+def is_frontend_running() -> bool:
+    """Check if any frontend Node/Vite process is currently running."""
+    for proc in psutil.process_iter(['name', 'cmdline']):
+        try:
+            cmd = proc.info['cmdline']
+            if cmd:
+                cmd_str = " ".join(cmd).lower()
+                if "node" in proc.info['name'].lower() and ("npm-cli.js" in cmd_str or "vite.js" in cmd_str or "npm run dev" in cmd_str):
+                    return True
+                if "cmd.exe" in proc.info['name'].lower() and "npm run dev" in cmd_str and "frontend" in cmd_str:
+                    return True
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+    return False
+
 def kill_backend_processes() -> int:
     """Find and terminate any existing backend processes to prevent port conflicts."""
     logger.info("Terminating existing backend processes...")
@@ -142,22 +172,42 @@ def monitor_and_heal():
     if backend_healthy:
         logger.info("[OK] Backend API is healthy and responding.")
     else:
-        logger.warning("[FAIL] Backend API is down or not responding. Initiating healing...")
-        kill_backend_processes()
-        time.sleep(2)
-        start_backend()
-        logger.info("[HEALED] Backend server restart command executed.")
+        if is_backend_running():
+            logger.info("Backend process is running but API is not responding. Waiting to see if it starts...")
+            for i in range(5):
+                time.sleep(2)
+                if check_backend_api():
+                    backend_healthy = True
+                    logger.info("[OK] Backend API became healthy after waiting.")
+                    break
+        
+        if not backend_healthy:
+            logger.warning("[FAIL] Backend API is down or not responding. Initiating healing...")
+            kill_backend_processes()
+            time.sleep(2)
+            start_backend()
+            logger.info("[HEALED] Backend server restart command executed.")
 
     # 2. Monitor Frontend
     frontend_healthy = check_port(FRONTEND_PORT)
     if frontend_healthy:
         logger.info("[OK] Frontend server is listening on port 5173.")
     else:
-        logger.warning("[FAIL] Frontend port 5173 is closed. Initiating healing...")
-        kill_frontend_processes()
-        time.sleep(2)
-        start_frontend()
-        logger.info("[HEALED] Frontend server restart command executed.")
+        if is_frontend_running():
+            logger.info("Frontend process is running but port 5173 is closed. Waiting to see if it starts...")
+            for i in range(5):
+                time.sleep(2)
+                if check_port(FRONTEND_PORT):
+                    frontend_healthy = True
+                    logger.info("[OK] Frontend server became healthy after waiting.")
+                    break
+
+        if not frontend_healthy:
+            logger.warning("[FAIL] Frontend port 5173 is closed. Initiating healing...")
+            kill_frontend_processes()
+            time.sleep(2)
+            start_frontend()
+            logger.info("[HEALED] Frontend server restart command executed.")
 
     logger.info("=" * 60)
     logger.info("AUTO-HEALING CYCLE COMPLETED")
