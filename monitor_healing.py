@@ -7,7 +7,19 @@ import urllib.request
 import subprocess
 import logging
 from datetime import datetime
-import psutil
+try:
+    import psutil
+except ImportError:
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    venv_python = os.path.join(base_dir, "backend", "venv", "Scripts", "python.exe")
+    if os.path.exists(venv_python) and sys.executable.lower() != os.path.abspath(venv_python).lower():
+        print(f"psutil not found. Re-running script with virtual env python: {venv_python}")
+        result = subprocess.run([venv_python] + sys.argv)
+        sys.exit(result.returncode)
+    else:
+        print("Error: psutil is not installed. Please run via the virtual environment or install it manually.")
+        sys.exit(1)
+
 
 # ─────────────────────────────────────────────
 # Configuration
