@@ -1,5 +1,5 @@
 # 🧠 INVESTMENT AI — PROJECT MEMORY FILE
-> Dikemas kini: 2026-06-21 | Versi Semasa: **v5.3.30**
+> Dikemas kini: 2026-06-21 | Versi Semasa: **v5.3.31**
 > GitHub: https://github.com/hdanial211/investment-ai
 > Lokasi Projek: `e:\PROJECTS\SEMUA PROJECT\INVESTMENT AI`
 
@@ -261,6 +261,7 @@ wss://stream.binance.com:9443/stream?streams=btcusdt@kline_1m/ethusdt@kline_1m/s
 | v5.3.28 | Pemantauan berkala (Hourly monitor) | Menjalankan pemantauan status sistem dagangan kripto secara automatik dan mengesahkan status aktif bagi 3 pasangan dagangan terbuka (BTC, XRP, LTC) |
 | v5.3.29 | Pemantauan berkala (Hourly monitor) | Menjalankan pemantauan status sistem dagangan kripto secara automatik dan mengesahkan status aktif bagi 3 pasangan dagangan terbuka (BTC, XRP, LTC) dengan LTC separa terisi |
 | v5.3.30 | Pemantauan berkala (Hourly monitor) | Menjalankan pemantauan status sistem dagangan kripto secara automatik dan mengesahkan penutupan posisi LTC yang mencapai sasaran take-profit |
+| v5.3.31 | Pemantauan berkala (Hourly monitor) | Menjalankan pemantauan status sistem dagangan kripto secara automatik dan mengesahkan status aktif bagi 2 pasangan dagangan terbuka (BTC, XRP) |
 
 ---
 
