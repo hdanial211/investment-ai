@@ -1,8 +1,8 @@
 {
     "ETH": {
-        "current_price": 7170.0,
+        "current_price": 7188.0,
         "last_signal": 0,
-        "confidence": 41.50697588920593,
+        "confidence": 38.891056180000305,
         "layers": [],
         "total_pnl": 0.29999999999999716,
         "trade_amount_myr": 30.0,
@@ -10,9 +10,9 @@
         "is_auto": true
     },
     "BTC": {
-        "current_price": 266221.0,
-        "last_signal": 0,
-        "confidence": 51.185137033462524,
+        "current_price": 266209.0,
+        "last_signal": 1,
+        "confidence": 79.92743253707886,
         "layers": [
             {
                 "id": 1,
@@ -71,9 +71,9 @@
         "is_auto": true
     },
     "SOL": {
-        "current_price": 306.2,
+        "current_price": 307.8,
         "last_signal": 0,
-        "confidence": 49.55226480960846,
+        "confidence": 23.64458292722702,
         "layers": [],
         "total_pnl": 0.29999999999999716,
         "trade_amount_myr": 30.0,
@@ -82,8 +82,8 @@
     },
     "XRP": {
         "current_price": 4.75,
-        "last_signal": 1,
-        "confidence": 75.77717900276184,
+        "last_signal": 0,
+        "confidence": 50.270068645477295,
         "layers": [
             {
                 "id": 1,
@@ -142,9 +142,39 @@
     },
     "LTC": {
         "current_price": 187.0,
-        "last_signal": 0,
-        "confidence": 15.181650221347809,
-        "layers": [],
+        "last_signal": 1,
+        "confidence": 64.56842422485352,
+        "layers": [
+            {
+                "id": 1,
+                "entry_price": 187.0,
+                "amount_myr": 30.0,
+                "quantity": 0.16,
+                "take_profit": 187.93499999999997,
+                "status": "PENDING_BUY",
+                "buy_order_id": "244197077",
+                "hata_buy_res": {
+                    "data": {
+                        "id": 244197077,
+                        "time": 1782054480,
+                        "stop_limit_price": "0",
+                        "pair_name": "LTCMYR",
+                        "price": "187",
+                        "orig_qty": "0.16",
+                        "exec_qty": "0",
+                        "quote_order_qty": "29.92",
+                        "cummul_quote_qty": "0",
+                        "is_buy": true,
+                        "post_only": false,
+                        "type": "limit",
+                        "status": "active",
+                        "client_order_id": "d8rvsk55193uv4h4bcn0"
+                    },
+                    "status": "success"
+                },
+                "created_at": 1782054480.649381
+            }
+        ],
         "total_pnl": 0.8499999999999872,
         "trade_amount_myr": 30.0,
         "risk_level": 3,
