@@ -1,8 +1,8 @@
 {
     "ETH": {
-        "current_price": 7144.0,
-        "last_signal": 1,
-        "confidence": 60.53471565246582,
+        "current_price": 7130.0,
+        "last_signal": 0,
+        "confidence": 57.7110230922699,
         "layers": [
             {
                 "id": 1,
@@ -61,9 +61,9 @@
         "is_auto": true
     },
     "BTC": {
-        "current_price": 265000.0,
-        "last_signal": 1,
-        "confidence": 74.43240284919739,
+        "current_price": 264230.0,
+        "last_signal": 0,
+        "confidence": 52.731508016586304,
         "layers": [
             {
                 "id": 1,
@@ -122,19 +122,70 @@
         "is_auto": true
     },
     "SOL": {
-        "current_price": 308.0,
-        "last_signal": 0,
-        "confidence": 34.0499073266983,
-        "layers": [],
+        "current_price": 301.1,
+        "last_signal": 1,
+        "confidence": 64.92407321929932,
+        "layers": [
+            {
+                "id": 1,
+                "entry_price": 308.0,
+                "amount_myr": 30.0,
+                "quantity": 0.097,
+                "take_profit": 309.53999999999996,
+                "status": "PENDING_SELL",
+                "buy_order_id": "244589783",
+                "hata_buy_res": {
+                    "data": {
+                        "id": 244589783,
+                        "time": 1782076200,
+                        "stop_limit_price": "0",
+                        "pair_name": "SOLMYR",
+                        "price": "308",
+                        "orig_qty": "0.097",
+                        "exec_qty": "0",
+                        "quote_order_qty": "29.876",
+                        "cummul_quote_qty": "0",
+                        "is_buy": true,
+                        "post_only": false,
+                        "type": "limit",
+                        "status": "active",
+                        "client_order_id": "d8s56a55193uv4ifji10"
+                    },
+                    "status": "success"
+                },
+                "created_at": 1782076200.6835604,
+                "sell_quantity": 0.096,
+                "sell_order_id": "244590725",
+                "hata_sell_res": {
+                    "data": {
+                        "id": 244590725,
+                        "time": 1782076221,
+                        "stop_limit_price": "0",
+                        "pair_name": "SOLMYR",
+                        "price": "309.5",
+                        "orig_qty": "0.096",
+                        "exec_qty": "0",
+                        "quote_order_qty": "29.712",
+                        "cummul_quote_qty": "0",
+                        "is_buy": false,
+                        "post_only": false,
+                        "type": "limit",
+                        "status": "active",
+                        "client_order_id": "d8s56fd5193uv4ifnmhg"
+                    },
+                    "status": "success"
+                }
+            }
+        ],
         "total_pnl": 0.29999999999999716,
         "trade_amount_myr": 30.0,
         "risk_level": 3,
         "is_auto": true
     },
     "XRP": {
-        "current_price": 4.732,
-        "last_signal": 0,
-        "confidence": 56.0830295085907,
+        "current_price": 4.707,
+        "last_signal": 1,
+        "confidence": 68.28805208206177,
         "layers": [
             {
                 "id": 1,
@@ -194,7 +245,7 @@
     "LTC": {
         "current_price": 187.1,
         "last_signal": 1,
-        "confidence": 72.1746027469635,
+        "confidence": 67.15750098228455,
         "layers": [
             {
                 "id": 1,
