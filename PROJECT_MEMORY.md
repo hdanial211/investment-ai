@@ -1,5 +1,5 @@
 # 🧠 INVESTMENT AI — PROJECT MEMORY FILE
-> Dikemas kini: 2026-06-21 | Versi Semasa: **v5.3.13**
+> Dikemas kini: 2026-06-21 | Versi Semasa: **v5.3.14**
 > GitHub: https://github.com/hdanial211/investment-ai
 > Lokasi Projek: `e:\PROJECTS\SEMUA PROJECT\INVESTMENT AI`
 
@@ -244,6 +244,7 @@ wss://stream.binance.com:9443/stream?streams=btcusdt@kline_1m/ethusdt@kline_1m/s
 | v5.3.11 | Pemantauan berkala (Hourly monitor) | Menjalankan pemantauan status sistem dagangan kripto secara automatik dan mengemaskini fail status bot_state.json |
 | v5.3.12 | Pemantau berkala (Hourly monitor) | Menjalankan pemantauan status sistem dagangan kripto secara automatik dan mengemaskini fail status bot_state.json |
 | v5.3.13 | Pemantauan berkala (Hourly monitor) | Menjalankan pemantauan status sistem dagangan kripto secara automatik dan mengesahkan status aktif bagi 4 pasangan dagangan pada Hata Exchange |
+| v5.3.14 | Pemantauan berkala (Hourly monitor) | Menjalankan pemantauan status sistem dagangan kripto secara automatik dan mengesahkan status aktif bagi 4 pasangan dagangan pada Hata Exchange |
 
 ---
 
