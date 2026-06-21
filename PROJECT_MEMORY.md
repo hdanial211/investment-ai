@@ -1,5 +1,5 @@
 # 🧠 INVESTMENT AI — PROJECT MEMORY FILE
-> Dikemas kini: 2026-06-21 | Versi Semasa: **v5.3.32**
+> Dikemas kini: 2026-06-22 | Versi Semasa: **v5.3.33**
 > GitHub: https://github.com/hdanial211/investment-ai
 > Lokasi Projek: `e:\PROJECTS\SEMUA PROJECT\INVESTMENT AI`
 
@@ -263,6 +263,7 @@ wss://stream.binance.com:9443/stream?streams=btcusdt@kline_1m/ethusdt@kline_1m/s
 | v5.3.30 | Pemantauan berkala (Hourly monitor) | Menjalankan pemantauan status sistem dagangan kripto secara automatik dan mengesahkan penutupan posisi LTC yang mencapai sasaran take-profit |
 | v5.3.31 | Pemantauan berkala (Hourly monitor) | Menjalankan pemantauan status sistem dagangan kripto secara automatik dan mengesahkan status aktif bagi 2 pasangan dagangan terbuka (BTC, XRP) |
 | v5.3.32 | Pemantauan berkala (Hourly monitor) | Menjalankan pemantauan status sistem dagangan kripto secara automatik dan mengesahkan pembatalan pesanan LTC yang tersangkut serta status aktif bagi 2 pasangan dagangan terbuka (BTC, XRP) |
+| v5.3.33 | Pemantauan berkala (Hourly monitor) & Optimasi Healing | Menjalankan pemantauan status sistem, mengoptimumkan check_port & URL backend dalam monitor_healing.py dengan IP 127.0.0.1 untuk mengelakkan kelengahan DNS, menambah socket lock (single-instance) untuk mengelakkan proses bertindih, serta memantau status pesanan LTC, BTC, XRP. |
 
 ---
 

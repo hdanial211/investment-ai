@@ -20,11 +20,20 @@ except ImportError:
         print("Error: psutil is not installed. Please run via the virtual environment or install it manually.")
         sys.exit(1)
 
+# Ensure single instance lock using local socket
+LOCK_PORT = 50123
+try:
+    _lock_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    _lock_socket.bind(("127.0.0.1", LOCK_PORT))
+except socket.error:
+    # Quiet exit if another monitoring script is already running
+    sys.exit(0)
+
 
 # ─────────────────────────────────────────────
 # Configuration
 # ─────────────────────────────────────────────
-BACKEND_URL = "http://localhost:8000/api/state"
+BACKEND_URL = "http://127.0.0.1:8000/api/state"
 FRONTEND_PORT = 5173
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 BACKEND_DIR = os.path.join(BASE_DIR, "backend")
@@ -44,9 +53,9 @@ logger = logging.getLogger("AutoHealing")
 
 def check_port(port: int) -> bool:
     """Check if a TCP port is open locally on localhost (IPv4/IPv6)."""
-    for host in ["localhost", "127.0.0.1", "::1"]:
+    for host in ["127.0.0.1", "::1"]:
         try:
-            s = socket.create_connection((host, port), timeout=1.5)
+            s = socket.create_connection((host, port), timeout=0.8)
             s.close()
             return True
         except Exception:
