@@ -2,7 +2,7 @@
     "ETH": {
         "current_price": 7228.0,
         "last_signal": 0,
-        "confidence": 52.72549390792847,
+        "confidence": 43.54805648326874,
         "layers": [
             {
                 "id": 1,
@@ -61,10 +61,61 @@
         "is_auto": true
     },
     "BTC": {
-        "current_price": 267071.0,
+        "current_price": 267449.0,
         "last_signal": 1,
-        "confidence": 72.09451794624329,
-        "layers": [],
+        "confidence": 75.9625494480133,
+        "layers": [
+            {
+                "id": 1,
+                "entry_price": 267449.0,
+                "amount_myr": 30.0,
+                "quantity": 0.00011,
+                "take_profit": 268786.245,
+                "status": "PENDING_SELL",
+                "buy_order_id": "245067694",
+                "hata_buy_res": {
+                    "data": {
+                        "id": 245067694,
+                        "time": 1782095040,
+                        "stop_limit_price": "0",
+                        "pair_name": "BTCMYR",
+                        "price": "267449",
+                        "orig_qty": "0.00011",
+                        "exec_qty": "0",
+                        "quote_order_qty": "29.41939",
+                        "cummul_quote_qty": "0",
+                        "is_buy": true,
+                        "post_only": false,
+                        "type": "limit",
+                        "status": "active",
+                        "client_order_id": "d8s9pg55193uv4kg6v5g"
+                    },
+                    "status": "success"
+                },
+                "created_at": 1782095040.4720302,
+                "sell_quantity": 0.0001,
+                "sell_order_id": "245067905",
+                "hata_sell_res": {
+                    "data": {
+                        "id": 245067905,
+                        "time": 1782095047,
+                        "stop_limit_price": "0",
+                        "pair_name": "BTCMYR",
+                        "price": "268786",
+                        "orig_qty": "0.0001",
+                        "exec_qty": "0",
+                        "quote_order_qty": "26.8786",
+                        "cummul_quote_qty": "0",
+                        "is_buy": false,
+                        "post_only": false,
+                        "type": "limit",
+                        "status": "active",
+                        "client_order_id": "d8s9pht5193uv4kg7qng"
+                    },
+                    "status": "success"
+                }
+            }
+        ],
         "total_pnl": 0.14999999999999858,
         "trade_amount_myr": 30.0,
         "risk_level": 3,
@@ -73,7 +124,7 @@
     "SOL": {
         "current_price": 308.5,
         "last_signal": 0,
-        "confidence": 56.33819103240967,
+        "confidence": 34.049174189567566,
         "layers": [
             {
                 "id": 1,
@@ -134,7 +185,7 @@
     "XRP": {
         "current_price": 4.735,
         "last_signal": 0,
-        "confidence": 55.49708008766174,
+        "confidence": 47.28351533412933,
         "layers": [
             {
                 "id": 1,
@@ -194,7 +245,7 @@
     "LTC": {
         "current_price": 187.9,
         "last_signal": 1,
-        "confidence": 61.0276997089386,
+        "confidence": 72.33803868293762,
         "layers": [
             {
                 "id": 1,
