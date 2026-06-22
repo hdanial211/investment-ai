@@ -1,8 +1,8 @@
 {
     "ETH": {
-        "current_price": 7130.0,
+        "current_price": 7073.0,
         "last_signal": 0,
-        "confidence": 57.7110230922699,
+        "confidence": 42.96153485774994,
         "layers": [
             {
                 "id": 1,
@@ -61,9 +61,9 @@
         "is_auto": true
     },
     "BTC": {
-        "current_price": 264230.0,
+        "current_price": 263412.0,
         "last_signal": 0,
-        "confidence": 52.731508016586304,
+        "confidence": 46.368762850761414,
         "layers": [
             {
                 "id": 1,
@@ -122,9 +122,9 @@
         "is_auto": true
     },
     "SOL": {
-        "current_price": 301.1,
-        "last_signal": 1,
-        "confidence": 64.92407321929932,
+        "current_price": 301.3,
+        "last_signal": 0,
+        "confidence": 31.315433979034424,
         "layers": [
             {
                 "id": 1,
@@ -183,9 +183,9 @@
         "is_auto": true
     },
     "XRP": {
-        "current_price": 4.707,
-        "last_signal": 1,
-        "confidence": 68.28805208206177,
+        "current_price": 4.67,
+        "last_signal": 0,
+        "confidence": 46.0870087146759,
         "layers": [
             {
                 "id": 1,
@@ -243,9 +243,9 @@
         "is_auto": true
     },
     "LTC": {
-        "current_price": 187.1,
-        "last_signal": 1,
-        "confidence": 67.15750098228455,
+        "current_price": 184.7,
+        "last_signal": 0,
+        "confidence": 57.801902294158936,
         "layers": [
             {
                 "id": 1,
@@ -293,6 +293,56 @@
                         "type": "limit",
                         "status": "active",
                         "client_order_id": "d8s2eat5193uv4hp5r6g"
+                    },
+                    "status": "success"
+                }
+            },
+            {
+                "id": 2,
+                "entry_price": 184.7,
+                "amount_myr": 30.0,
+                "quantity": 0.162,
+                "take_profit": 185.62349999999998,
+                "status": "PENDING_SELL",
+                "buy_order_id": "244828376",
+                "hata_buy_res": {
+                    "data": {
+                        "id": 244828376,
+                        "time": 1782086461,
+                        "stop_limit_price": "0",
+                        "pair_name": "LTCMYR",
+                        "price": "184.7",
+                        "orig_qty": "0.162",
+                        "exec_qty": "0",
+                        "quote_order_qty": "29.9214",
+                        "cummul_quote_qty": "0",
+                        "is_buy": true,
+                        "post_only": false,
+                        "type": "limit",
+                        "status": "active",
+                        "client_order_id": "d8s7mfd5193uv4jhn61g"
+                    },
+                    "status": "success"
+                },
+                "created_at": 1782086461.1296046,
+                "sell_quantity": 0.161,
+                "sell_order_id": "244829190",
+                "hata_sell_res": {
+                    "data": {
+                        "id": 244829190,
+                        "time": 1782086487,
+                        "stop_limit_price": "0",
+                        "pair_name": "LTCMYR",
+                        "price": "185.6",
+                        "orig_qty": "0.161",
+                        "exec_qty": "0",
+                        "quote_order_qty": "29.8816",
+                        "cummul_quote_qty": "0",
+                        "is_buy": false,
+                        "post_only": false,
+                        "type": "limit",
+                        "status": "active",
+                        "client_order_id": "d8s7mlt5193uv4jhq2t0"
                     },
                     "status": "success"
                 }
