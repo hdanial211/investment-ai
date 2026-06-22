@@ -2,7 +2,7 @@
     "ETH": {
         "current_price": 7320.0,
         "last_signal": 0,
-        "confidence": 47.47689962387085,
+        "confidence": 45.19151449203491,
         "layers": [],
         "total_pnl": 0.5999999999999943,
         "trade_amount_myr": 30.0,
@@ -134,7 +134,7 @@
     "XRP": {
         "current_price": 4.799,
         "last_signal": 0,
-        "confidence": 53.39953899383545,
+        "confidence": 53.68083715438843,
         "layers": [],
         "total_pnl": 1.0497331910352088,
         "trade_amount_myr": 30.0,
@@ -144,8 +144,38 @@
     "LTC": {
         "current_price": 189.0,
         "last_signal": 1,
-        "confidence": 67.37227439880371,
-        "layers": [],
+        "confidence": 63.61148953437805,
+        "layers": [
+            {
+                "id": 1,
+                "entry_price": 189.0,
+                "amount_myr": 30.0,
+                "quantity": 0.159,
+                "take_profit": 189.945,
+                "status": "PENDING_BUY",
+                "buy_order_id": "245760629",
+                "hata_buy_res": {
+                    "data": {
+                        "id": 245760629,
+                        "time": 1782133380,
+                        "stop_limit_price": "0",
+                        "pair_name": "LTCMYR",
+                        "price": "189",
+                        "orig_qty": "0.159",
+                        "exec_qty": "0",
+                        "quote_order_qty": "30.051",
+                        "cummul_quote_qty": "0",
+                        "is_buy": true,
+                        "post_only": false,
+                        "type": "limit",
+                        "status": "active",
+                        "client_order_id": "d8sj5155193uv4n0kfg0"
+                    },
+                    "status": "success"
+                },
+                "created_at": 1782133380.585056
+            }
+        ],
         "total_pnl": 1.1499999999999844,
         "trade_amount_myr": 30.0,
         "risk_level": 3,
