@@ -278,6 +278,25 @@ async def websocket_backtest(websocket: WebSocket):
         traceback.print_exc()
         print(f"WebSocket error: {e}")
 
+
+@app.post("/api/sync-history")
+def sync_trade_history():
+    """Manually trigger full trade history sync from Hata API"""
+    try:
+        import live_engine
+        live_engine._sync_trade_history()
+        
+        # Collect sync results
+        results = {}
+        for coin_id in engine_state:
+            history = engine_state[coin_id].get("trade_history", {})
+            results[coin_id] = history
+        
+        return {"status": "ok", "data": results}
+    except Exception as e:
+        logger.error(f"Sync history error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.on_event("startup")
 def start_server():
     # Start live engine in background (which includes WS and price/balance loops)

@@ -528,11 +528,118 @@ async def startup_recovery():
         if state_changed:
             shared.save_state()
 
+        # ★ Sync full trade history from Hata API for accurate P&L
+        _sync_trade_history()
+
         logger.info("=" * 60)
         logger.info("STARTUP RECOVERY: Complete. Bot is now live.")
         logger.info("=" * 60)
 
     await loop.run_in_executor(None, _recover)
+
+
+# ─────────────────────────────────────────────
+# Trade History Sync: Fetch ALL trades from Hata API
+# Calculates accurate P&L from actual buy/sell records
+# ─────────────────────────────────────────────
+def _sync_trade_history():
+    """Fetch complete trade history from Hata API for all coins.
+    Calculates accurate total P&L from actual executed trades."""
+    import hata_api
+    from datetime import datetime
+
+    logger.info("=" * 60)
+    logger.info("TRADE HISTORY SYNC: Starting full sync from Hata API...")
+    logger.info("=" * 60)
+
+    coins = ["BTC", "ETH", "SOL", "XRP", "LTC"]
+
+    for coin_id in coins:
+        pair = f"{coin_id}_MYR"
+        try:
+            # Fetch trade history (max 500 trades)
+            res = hata_api.get_trade_history(pair, limit=500)
+            trades = res.get("data", [])
+
+            if not trades:
+                logger.info(f"[{coin_id}] No trade history found.")
+                continue
+
+            # Calculate P&L from all trades
+            total_buy_cost = 0.0     # Total MYR spent on buys
+            total_buy_qty = 0.0      # Total coin bought
+            total_buy_fees = 0.0     # Total fees on buys (in MYR)
+            total_sell_revenue = 0.0 # Total MYR received from sells
+            total_sell_qty = 0.0     # Total coin sold
+            total_sell_fees = 0.0    # Total fees on sells (in MYR)
+            buy_count = 0
+            sell_count = 0
+
+            for t in trades:
+                side = t.get("side", "").upper()
+                price = float(t.get("price", 0))
+                qty = float(t.get("qty", 0))
+                quote_qty = float(t.get("quote_qty", price * qty))  # MYR amount
+                fee = float(t.get("fee", 0))
+                fee_asset = t.get("fee_asset", "")
+                is_maker = t.get("is_maker", False)
+
+                # Convert fee to MYR
+                if fee_asset == "MYR":
+                    fee_myr = fee
+                elif fee_asset == coin_id:
+                    fee_myr = fee * price
+                else:
+                    fee_myr = 0.0
+
+                if side == "BUY":
+                    total_buy_cost += quote_qty
+                    total_buy_qty += qty
+                    total_buy_fees += fee_myr
+                    buy_count += 1
+                elif side == "SELL":
+                    total_sell_revenue += quote_qty
+                    total_sell_qty += qty
+                    total_sell_fees += fee_myr
+                    sell_count += 1
+
+            # Net P&L = (sell revenue - sell fees) - (buy cost + buy fees in MYR not already counted)
+            # Note: buy fees are deducted from coin qty, not from MYR
+            # So the "lost" coin fee is implicitly lower sell revenue
+            total_fees = total_buy_fees + total_sell_fees
+            realized_pnl = total_sell_revenue - (total_buy_cost * (total_sell_qty / total_buy_qty)) if total_buy_qty > 0 and total_sell_qty > 0 else 0.0
+            
+            # Store sync data
+            shared.engine_state[coin_id]["trade_history"] = {
+                "buy_count": buy_count,
+                "sell_count": sell_count,
+                "total_trades": len(trades),
+                "total_buy_cost": round(total_buy_cost, 4),
+                "total_sell_revenue": round(total_sell_revenue, 4),
+                "total_buy_fees": round(total_buy_fees, 4),
+                "total_sell_fees": round(total_sell_fees, 4),
+                "total_fees": round(total_fees, 4),
+                "realized_pnl": round(realized_pnl, 4),
+                "last_sync": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "oldest_trade": trades[-1].get("created_at", "") if trades else "",
+                "newest_trade": trades[0].get("created_at", "") if trades else ""
+            }
+
+            # Update total_pnl with synced realized P&L (more accurate)
+            if realized_pnl != 0:
+                shared.engine_state[coin_id]["total_pnl"] = realized_pnl
+
+            logger.info(f"[{coin_id}] SYNC: {len(trades)} trades | "
+                        f"Buys: {buy_count} (RM{total_buy_cost:.2f}) | "
+                        f"Sells: {sell_count} (RM{total_sell_revenue:.2f}) | "
+                        f"Fees: RM{total_fees:.4f} | "
+                        f"Realized P&L: RM{realized_pnl:.2f}")
+
+        except Exception as e:
+            logger.error(f"[{coin_id}] SYNC ERROR: {e}")
+
+    shared.save_state()
+    logger.info("TRADE HISTORY SYNC: Complete.")
 
 
 # ─────────────────────────────────────────────

@@ -107,6 +107,17 @@ function App() {
     }
   }
 
+  const [syncing, setSyncing] = useState(false)
+  const syncHistory = async () => {
+    setSyncing(true)
+    try {
+      await axios.post('http://localhost:8000/api/sync-history')
+    } catch (err) {
+      console.error(err)
+    }
+    setSyncing(false)
+  }
+
   // Resolve current coin details safely
   const coinData = state.coins[selectedCoin] || {
     current_price: 0.0,
@@ -413,6 +424,69 @@ function App() {
                     </p>
                   </div>
                 </div>
+
+                {/* Trade History from Hata API */}
+                {coinData.trade_history && (
+                  <div style={{ 
+                    marginTop: '1rem', 
+                    background: 'rgba(0, 229, 255, 0.06)', 
+                    border: '1px solid rgba(0, 229, 255, 0.15)', 
+                    borderRadius: '8px', 
+                    padding: '12px 16px' 
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <h4 style={{ color: '#00e5ff', margin: 0, fontSize: '0.9rem' }}>📊 Sejarah Trade ({selectedCoin}) — Hata API</h4>
+                      <span style={{ fontSize: '0.7rem', color: '#666' }}>
+                        Sync: {coinData.trade_history.last_sync || 'Never'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', fontSize: '0.8rem' }}>
+                      <div>
+                        <span style={{ color: '#888' }}>Total Trades: </span>
+                        <span style={{ color: '#fff', fontWeight: 'bold' }}>{coinData.trade_history.total_trades || 0}</span>
+                      </div>
+                      <div>
+                        <span style={{ color: '#888' }}>Buys: </span>
+                        <span style={{ color: '#ffb300' }}>{coinData.trade_history.buy_count || 0} (RM{(coinData.trade_history.total_buy_cost || 0).toFixed(2)})</span>
+                      </div>
+                      <div>
+                        <span style={{ color: '#888' }}>Sells: </span>
+                        <span style={{ color: '#00e676' }}>{coinData.trade_history.sell_count || 0} (RM{(coinData.trade_history.total_sell_revenue || 0).toFixed(2)})</span>
+                      </div>
+                      <div>
+                        <span style={{ color: '#888' }}>Total Fees: </span>
+                        <span style={{ color: (coinData.trade_history.total_fees || 0) > 0 ? '#ffb300' : '#00e676' }}>
+                          RM{(coinData.trade_history.total_fees || 0).toFixed(4)}
+                        </span>
+                      </div>
+                      <div style={{ gridColumn: 'span 2' }}>
+                        <span style={{ color: '#888' }}>Range: </span>
+                        <span style={{ color: '#aaa', fontSize: '0.7rem' }}>
+                          {coinData.trade_history.oldest_trade || '?'} → {coinData.trade_history.newest_trade || '?'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <button 
+                  onClick={syncHistory}
+                  disabled={syncing}
+                  style={{ 
+                    marginTop: '1rem', 
+                    width: '100%', 
+                    padding: '10px', 
+                    background: syncing ? 'rgba(255,255,255,0.05)' : 'rgba(0, 229, 255, 0.1)', 
+                    border: '1px solid rgba(0, 229, 255, 0.3)', 
+                    borderRadius: '8px', 
+                    color: '#00e5ff', 
+                    cursor: syncing ? 'wait' : 'pointer',
+                    fontSize: '0.85rem',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  {syncing ? '⏳ Syncing dari Hata API...' : '🔄 Sync Sejarah Trade (Hata API)'}
+                </button>
               </section>
 
               <section className="panel guardian-panel" style={{ background: 'rgba(10, 25, 41, 0.7)', border: '1px solid #1e4976' }}>
