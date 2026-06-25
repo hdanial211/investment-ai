@@ -84,22 +84,152 @@ def truncate_float(val: float, decimals: int) -> float:
 
 # ─────────────────────────────────────────────
 # Helper: Get strategy settings by risk level
+# TP% now comes from per-coin state (set via frontend)
 # ─────────────────────────────────────────────
 def _get_strategy(coin_id: str, risk_level: int) -> dict:
+    tp_pct = shared.engine_state[coin_id].get("tp_pct", 0.005)
     if risk_level == 3:
-        return {"max_layers": 3, "tp_pct": 0.005}
+        return {"max_layers": 3, "tp_pct": tp_pct}
     elif risk_level == 2:
-        return {"max_layers": 5, "tp_pct": 0.004}
+        return {"max_layers": 5, "tp_pct": tp_pct}
     else:
-        return {"max_layers": 6, "tp_pct": 0.015}
+        return {"max_layers": 6, "tp_pct": tp_pct}
 
 
 # ─────────────────────────────────────────────
-# Helper: Place next DCA layer at 1% below entry
-# (Called after a SELL fills for any coin)
+# Helper: Extract exec data from Hata order response
 # ─────────────────────────────────────────────
-def _place_next_layer(coin_id: str, last_entry_price: float):
-    """After a SELL fills, place Limit BUY at 1% below last entry. Works for all 5 coins."""
+def _extract_hata_exec_data(coin_id: str, order_data: dict, fallback_qty: float = 0.0) -> dict:
+    """Extract actual executed quantity, fees, and cost from Hata API order data.
+    Returns dict with: exec_qty, fee_qty, net_qty, actual_cost_myr"""
+    exec_qty = float(order_data.get("exec_qty", fallback_qty))
+    cummul_quote = float(order_data.get("cummul_quote_qty", 0.0))
+    
+    # Extract fees from trades array
+    trades = order_data.get("trades", [])
+    fee_qty = 0.0
+    for t in trades:
+        if t.get("fee_asset") == coin_id:
+            fee_qty += float(t.get("fee", 0.0))
+    
+    # Net quantity = what's actually in wallet after buy
+    if trades:
+        net_qty = exec_qty - fee_qty
+    else:
+        # Fallback: estimate 0.4% fee if trades not available
+        net_qty = exec_qty * 0.996
+        fee_qty = exec_qty * 0.004
+    
+    # Actual MYR cost
+    if cummul_quote > 0:
+        actual_cost_myr = cummul_quote
+    else:
+        # Fallback: use orig price × exec_qty
+        price = float(order_data.get("price", 0))
+        actual_cost_myr = price * exec_qty if price > 0 else 0.0
+    
+    return {
+        "exec_qty": exec_qty,
+        "fee_qty": fee_qty,
+        "net_qty": net_qty,
+        "actual_cost_myr": actual_cost_myr
+    }
+
+
+# ─────────────────────────────────────────────
+# CORE: Place consolidated sell order
+# Cancel old sell → combine all HOLDING layers → 1 sell
+# ─────────────────────────────────────────────
+def _place_consolidated_sell(coin_id: str):
+    """Cancel existing sell, combine all HOLDING layers, place 1 consolidated sell order."""
+    import hata_api
+    
+    layers = shared.engine_state[coin_id].get("layers", [])
+    holding_layers = [l for l in layers if l.get("status") == "HOLDING"]
+    
+    if not holding_layers:
+        logger.info(f"[{coin_id}] No HOLDING layers to consolidate.")
+        return
+    
+    # 1. Cancel existing consolidated sell if any
+    old_sell_id = shared.engine_state[coin_id].get("consolidated_sell_order_id")
+    if old_sell_id:
+        logger.info(f"[{coin_id}] Cancelling old consolidated sell order {old_sell_id}...")
+        cancel_res = hata_api.cancel_order(f"{coin_id}_MYR", old_sell_id)
+        logger.info(f"[{coin_id}] Cancel result: {cancel_res}")
+        shared.engine_state[coin_id]["consolidated_sell_order_id"] = None
+    
+    # 2. Calculate totals from all HOLDING layers
+    total_cost = 0.0     # Total MYR spent (actual from Hata)
+    total_net_qty = 0.0  # Total crypto received (net of fees)
+    
+    for l in holding_layers:
+        cost = l.get("actual_cost_myr", l.get("amount_myr", 0))
+        net = l.get("net_qty", 0)
+        total_cost += cost
+        total_net_qty += net
+    
+    if total_net_qty <= 0 or total_cost <= 0:
+        logger.error(f"[{coin_id}] Cannot consolidate: total_net_qty={total_net_qty}, total_cost={total_cost}")
+        return
+    
+    # 3. Weighted average entry price
+    avg_entry = total_cost / total_net_qty
+    
+    # 4. Calculate sell price: avg_entry × (1 + tp_pct)
+    # TP% covers the profit target. Hata maker fees on sell side are typically
+    # embedded in the spread or deducted from received MYR, so we add a small
+    # buffer for sell-side fees too.
+    tp_pct = shared.engine_state[coin_id].get("tp_pct", 0.005)
+    SELL_FEE_RATE = 0.004  # ~0.4% Hata sell fee buffer
+    sell_price = avg_entry * (1.0 + tp_pct + SELL_FEE_RATE)
+    
+    # 5. Verify actual wallet balance before placing sell
+    qty_scale = hata_api.COIN_SCALES.get(coin_id, {}).get("qty", 4)
+    price_scale = hata_api.COIN_SCALES.get(coin_id, {}).get("price", 0)
+    
+    sell_qty = truncate_float(total_net_qty, qty_scale)
+    sell_price = round(sell_price, price_scale)
+    
+    avail_bal, _ = hata_api.get_token_balance(coin_id)
+    if avail_bal < sell_qty:
+        logger.warning(f"[{coin_id}] Wallet balance ({avail_bal}) < planned sell qty ({sell_qty}). Capping to available.")
+        sell_qty = truncate_float(avail_bal, qty_scale)
+    
+    if sell_qty <= 0:
+        logger.error(f"[{coin_id}] Cannot place consolidated sell: sell_qty is 0.")
+        return
+    
+    # 6. Place ONE consolidated sell order
+    logger.info(f"[{coin_id}] CONSOLIDATED SELL: {len(holding_layers)} layers combined | "
+                f"Avg Entry: RM{avg_entry:.4f} | TP: RM{sell_price:.4f} (+{(tp_pct+SELL_FEE_RATE)*100:.2f}%) | "
+                f"Qty: {sell_qty} | Total Cost: RM{total_cost:.2f}")
+    
+    sell_res = hata_api.place_limit_order(f"{coin_id}_MYR", "SELL", sell_price, sell_qty)
+    
+    if sell_res.get("status") == "error":
+        logger.error(f"[{coin_id}] Consolidated SELL failed: {sell_res.get('message')}")
+        return
+    
+    sell_order_id = str(sell_res.get("data", {}).get("id", ""))
+    shared.engine_state[coin_id]["consolidated_sell_order_id"] = sell_order_id
+    
+    # Store consolidated sell metadata on each holding layer for reference
+    for l in holding_layers:
+        l["consolidated_sell_price"] = sell_price
+        l["consolidated_sell_qty"] = sell_qty
+    
+    shared.save_state()
+    logger.info(f"[{coin_id}] CONSOLIDATED SELL SUCCESS: Order {sell_order_id} at RM{sell_price:.4f}")
+
+
+# ─────────────────────────────────────────────
+# Helper: Place next DCA BUY layer at 1% below entry
+# (Called after a consolidated SELL fills)
+# NOTE: This only places a BUY — sell is handled by consolidated
+# ─────────────────────────────────────────────
+def _place_next_dca_buy(coin_id: str, last_entry_price: float):
+    """After a consolidated SELL fills, place Limit BUY at 1% below last entry."""
     import hata_api
 
     layers = shared.engine_state[coin_id].get("layers", [])
@@ -107,7 +237,7 @@ def _place_next_layer(coin_id: str, last_entry_price: float):
     strategy = _get_strategy(coin_id, risk_level)
 
     if len(layers) >= strategy["max_layers"]:
-        logger.info(f"[{coin_id}] Max layers ({strategy['max_layers']}) reached. Skipping auto-layer.")
+        logger.info(f"[{coin_id}] Max layers ({strategy['max_layers']}) reached. Skipping auto-DCA.")
         return
 
     # 1% below last entry price
@@ -115,13 +245,12 @@ def _place_next_layer(coin_id: str, last_entry_price: float):
     trade_amount = shared.engine_state[coin_id].get("trade_amount_myr", 50.0)
     qty_scale = hata_api.COIN_SCALES.get(coin_id, {}).get("qty", 4)
     quantity = round(trade_amount / next_entry, qty_scale)
-    take_profit = round(next_entry * (1.0 + strategy["tp_pct"]), 6)
 
-    logger.info(f"[{coin_id}] AUTO-LAYER: Placing Limit BUY at RM{next_entry:.4f} (1% below RM{last_entry_price:.4f})")
+    logger.info(f"[{coin_id}] AUTO-DCA: Placing Limit BUY at RM{next_entry:.4f} (1% below RM{last_entry_price:.4f})")
     hata_res = hata_api.place_limit_order(f"{coin_id}_MYR", "BUY", next_entry, quantity)
 
     if hata_res.get("status") == "error":
-        logger.error(f"[{coin_id}] Auto-layer BUY failed: {hata_res.get('message')}")
+        logger.error(f"[{coin_id}] Auto-DCA BUY failed: {hata_res.get('message')}")
         return
 
     order_id = hata_res.get("data", {}).get("id")
@@ -130,7 +259,6 @@ def _place_next_layer(coin_id: str, last_entry_price: float):
         "entry_price": next_entry,
         "amount_myr": trade_amount,
         "quantity": quantity,
-        "take_profit": take_profit,
         "status": "PENDING_BUY",
         "buy_order_id": str(order_id),
         "hata_buy_res": hata_res,
@@ -138,16 +266,18 @@ def _place_next_layer(coin_id: str, last_entry_price: float):
     }
     shared.engine_state[coin_id]["layers"].append(layer)
     shared.save_state()
-    logger.info(f"[{coin_id}] AUTO-LAYER SUCCESS: BUY order {order_id} at RM{next_entry:.4f}, TP: RM{take_profit:.4f}")
+    logger.info(f"[{coin_id}] AUTO-DCA SUCCESS: BUY order {order_id} at RM{next_entry:.4f}")
 
 
 # ─────────────────────────────────────────────
 # Startup Recovery: Sync all layers with Hata API
 # Runs once on bot start / laptop restart
+# Migrates old per-layer sells to consolidated sell
 # ─────────────────────────────────────────────
 async def startup_recovery():
     """Reconcile all PENDING layers in bot_state.json with actual Hata API status.
-    Handles: fills missed while bot was offline, stuck orders, missing created_at."""
+    Handles: fills missed while bot was offline, stuck orders, missing created_at.
+    Also migrates old per-layer sell orders to new consolidated sell system."""
     import hata_api
     loop = asyncio.get_running_loop()
     logger.info("=" * 60)
@@ -163,17 +293,78 @@ async def startup_recovery():
 
             active_layers = []
             coin_changed = False
+            needs_consolidated_sell = False
+            old_sell_ids_to_cancel = []
             logger.info(f"[{coin_id}] Recovering {len(layers)} layer(s)...")
 
             for l in layers:
                 status = l.get("status", "OPEN")
 
+                # ── MIGRATE: Old PENDING_SELL layers → HOLDING ──
+                # Old system had per-layer sells. Cancel them and convert to HOLDING.
+                if status == "PENDING_SELL":
+                    sell_id = l.get("sell_order_id")
+                    if sell_id:
+                        # Check if sell already filled
+                        res = hata_api.get_order_status(sell_id)
+                        order_data = res.get("data")
+                        if order_data and order_data.get("status") == "fulfilled":
+                            # Old sell filled — count P&L and remove layer
+                            exec_data = _extract_hata_exec_data(coin_id, order_data)
+                            sell_received = exec_data.get("actual_cost_myr", 0)
+                            buy_cost = l.get("actual_cost_myr", l.get("amount_myr", 0))
+                            pnl = sell_received - buy_cost
+                            shared.engine_state[coin_id]["total_pnl"] += pnl
+                            logger.info(f"[{coin_id}] RECOVERY: Old sell {sell_id} was filled! PnL: RM{pnl:.2f}")
+                            coin_changed = True
+                            continue  # Don't append — layer complete
+                        elif order_data and order_data.get("status") in ["cancelled", "rejected"]:
+                            # Already cancelled — convert to HOLDING
+                            logger.info(f"[{coin_id}] RECOVERY: Old sell {sell_id} already cancelled. Converting to HOLDING.")
+                        else:
+                            # Still active — need to cancel it
+                            old_sell_ids_to_cancel.append(sell_id)
+                            logger.info(f"[{coin_id}] RECOVERY: Will cancel old per-layer sell {sell_id}")
+                    
+                    # Convert to HOLDING — need exec data if not present
+                    if "net_qty" not in l:
+                        # Fetch buy order to get actual exec data
+                        buy_id = l.get("buy_order_id")
+                        if buy_id:
+                            buy_res = hata_api.get_order_status(buy_id)
+                            buy_data = buy_res.get("data")
+                            if buy_data and buy_data.get("status") == "fulfilled":
+                                exec_info = _extract_hata_exec_data(coin_id, buy_data, l.get("quantity", 0))
+                                l["exec_qty"] = exec_info["exec_qty"]
+                                l["fee_qty"] = exec_info["fee_qty"]
+                                l["net_qty"] = exec_info["net_qty"]
+                                l["actual_cost_myr"] = exec_info["actual_cost_myr"]
+                            else:
+                                # Fallback from stored data
+                                sell_qty = l.get("sell_quantity", l.get("quantity", 0))
+                                l["net_qty"] = sell_qty
+                                l["exec_qty"] = l.get("quantity", 0)
+                                l["fee_qty"] = l.get("quantity", 0) - sell_qty
+                                l["actual_cost_myr"] = l.get("amount_myr", 0)
+                        else:
+                            sell_qty = l.get("sell_quantity", l.get("quantity", 0))
+                            l["net_qty"] = sell_qty
+                            l["exec_qty"] = l.get("quantity", 0)
+                            l["fee_qty"] = l.get("quantity", 0) - sell_qty
+                            l["actual_cost_myr"] = l.get("amount_myr", 0)
+                    
+                    l["status"] = "HOLDING"
+                    coin_changed = True
+                    needs_consolidated_sell = True
+                    active_layers.append(l)
+
                 # ── PENDING_BUY ──────────────────────────────────
-                if status == "PENDING_BUY":
+                elif status == "PENDING_BUY":
                     buy_id = l.get("buy_order_id")
                     if not buy_id:
-                        l["status"] = "OPEN"
+                        l["status"] = "HOLDING"
                         coin_changed = True
+                        needs_consolidated_sell = True
                         active_layers.append(l)
                         continue
 
@@ -187,36 +378,16 @@ async def startup_recovery():
                     order_status = order_data.get("status")
 
                     if order_status == "fulfilled":
-                        # Missed fill while bot was offline → place SELL now
-                        logger.info(f"[{coin_id}] RECOVERY: Buy {buy_id} was already filled! Placing SELL...")
-                        exec_qty = float(order_data.get("exec_qty", l["quantity"]))
-                        
-                        trades = order_data.get("trades", [])
-                        fee_total = 0.0
-                        for t in trades:
-                            if t.get("fee_asset") == coin_id:
-                                fee_total += float(t.get("fee", 0.0))
-                                
-                        if trades:
-                            actual_qty = exec_qty - fee_total
-                        else:
-                            actual_qty = exec_qty * 0.996
-                            
-                        qty_scale = hata_api.COIN_SCALES.get(coin_id, {}).get("qty", 4)
-                        adj_qty = truncate_float(actual_qty, qty_scale)
-                        l["sell_quantity"] = adj_qty
-                        
-                        sell_res = hata_api.place_limit_order(f"{coin_id}_MYR", "SELL", l["take_profit"], adj_qty)
-                        if sell_res.get("status") == "success":
-                            sell_id = sell_res.get("data", {}).get("id")
-                            l["status"] = "PENDING_SELL"
-                            l["sell_order_id"] = str(sell_id)
-                            l["hata_sell_res"] = sell_res
-                            logger.info(f"[{coin_id}] RECOVERY: SELL {sell_id} placed at RM{l['take_profit']:.4f} with quantity {adj_qty:.4f}")
-                        else:
-                            l["status"] = "OPEN"
-                            logger.error(f"[{coin_id}] RECOVERY: Failed to place SELL: {sell_res}")
+                        # Missed fill while bot was offline → extract exec data, mark HOLDING
+                        logger.info(f"[{coin_id}] RECOVERY: Buy {buy_id} was already filled!")
+                        exec_info = _extract_hata_exec_data(coin_id, order_data, l.get("quantity", 0))
+                        l["exec_qty"] = exec_info["exec_qty"]
+                        l["fee_qty"] = exec_info["fee_qty"]
+                        l["net_qty"] = exec_info["net_qty"]
+                        l["actual_cost_myr"] = exec_info["actual_cost_myr"]
+                        l["status"] = "HOLDING"
                         coin_changed = True
+                        needs_consolidated_sell = True
                         active_layers.append(l)
 
                     elif order_status in ["cancelled", "rejected"]:
@@ -229,7 +400,7 @@ async def startup_recovery():
                         if "created_at" not in l:
                             l["created_at"] = time.time()
                             coin_changed = True
-                            logger.info(f"[{coin_id}] RECOVERY: Patched created_at for buy {buy_id}. Countdown starts now.")
+                            logger.info(f"[{coin_id}] RECOVERY: Patched created_at for buy {buy_id}.")
 
                         age_sec = time.time() - l["created_at"]
                         if age_sec > 300:
@@ -241,50 +412,42 @@ async def startup_recovery():
                         else:
                             active_layers.append(l)
 
-                # ── PENDING_SELL ─────────────────────────────────
-                elif status == "PENDING_SELL":
-                    sell_id = l.get("sell_order_id")
-                    if not sell_id:
-                        l["status"] = "OPEN"
-                        coin_changed = True
-                        active_layers.append(l)
-                        continue
+                # ── HOLDING (already converted) ─────────────────
+                elif status == "HOLDING":
+                    active_layers.append(l)
+                    needs_consolidated_sell = True
 
-                    res = hata_api.get_order_status(sell_id)
-                    order_data = res.get("data")
-                    if not order_data:
-                        active_layers.append(l)
-                        continue
+                # ── OPEN (legacy retry) ─────────────────────────
+                elif status == "OPEN":
+                    # Old OPEN layers = buy filled but sell failed
+                    # Convert to HOLDING
+                    if "net_qty" not in l:
+                        sell_qty = l.get("sell_quantity", l.get("quantity", 0))
+                        l["net_qty"] = sell_qty
+                        l["exec_qty"] = l.get("quantity", 0)
+                        l["fee_qty"] = l.get("quantity", 0) - sell_qty if sell_qty < l.get("quantity", 0) else 0
+                        l["actual_cost_myr"] = l.get("amount_myr", 0)
+                    l["status"] = "HOLDING"
+                    coin_changed = True
+                    needs_consolidated_sell = True
+                    active_layers.append(l)
 
-                    order_status = order_data.get("status")
-
-                    if order_status == "fulfilled":
-                        # Missed sell fill while bot was offline
-                        profit_myr = l["amount_myr"] * (l["take_profit"] / l["entry_price"])
-                        actual_pnl = profit_myr - l["amount_myr"]
-                        shared.engine_state[coin_id]["total_pnl"] += actual_pnl
-                        logger.info(f"[{coin_id}] RECOVERY: Sell {sell_id} was already filled! PnL: +RM{actual_pnl:.2f}")
-                        coin_changed = True
-                        # Place next DCA layer at 1% below this entry
-                        _place_next_layer(coin_id, l["entry_price"])
-                        # Do NOT append — layer is complete
-
-                    elif order_status in ["cancelled", "rejected"]:
-                        logger.warning(f"[{coin_id}] RECOVERY: Sell {sell_id} was {order_status}. Reverting to OPEN.")
-                        l["status"] = "OPEN"
-                        coin_changed = True
-                        active_layers.append(l)
-
-                    else:
-                        # Still active — keep as is
-                        active_layers.append(l)
-
-                # ── OPEN (retry) ──────────────────────────────────
                 else:
                     active_layers.append(l)
 
+            # Cancel all old per-layer sells
+            for sell_id in old_sell_ids_to_cancel:
+                cancel_res = hata_api.cancel_order(f"{coin_id}_MYR", sell_id)
+                logger.info(f"[{coin_id}] RECOVERY: Cancelled old sell {sell_id}: {cancel_res}")
+
             if coin_changed:
                 shared.engine_state[coin_id]["layers"] = active_layers
+                state_changed = True
+
+            # Place consolidated sell if we have HOLDING layers
+            if needs_consolidated_sell:
+                logger.info(f"[{coin_id}] RECOVERY: Placing consolidated sell for {len([l for l in active_layers if l.get('status') == 'HOLDING'])} HOLDING layers...")
+                _place_consolidated_sell(coin_id)
                 state_changed = True
 
         if state_changed:
@@ -344,23 +507,25 @@ async def update_hata_prices_loop():
                 shared.global_state["frozen_myr"] = froz
             shared.global_state["usdt_myr_rate"] = rate
 
-            # 3. Check all pending orders for all 5 coins
+            # 3. Check all pending orders for all 5 coins (NEW CONSOLIDATED FLOW)
             def check_orders():
                 state_changed = False
                 for coin_id in shared.engine_state:
                     layers = shared.engine_state[coin_id].get("layers", [])
                     active_layers = []
                     coin_changed = False
+                    needs_consolidated_sell = False
 
                     for l in layers:
-                        status = l.get("status", "OPEN")
+                        status = l.get("status", "HOLDING")
 
                         # ── PENDING_BUY ──────────────────────────
                         if status == "PENDING_BUY":
                             buy_id = l.get("buy_order_id")
                             if not buy_id:
-                                l["status"] = "OPEN"
+                                l["status"] = "HOLDING"
                                 coin_changed = True
+                                needs_consolidated_sell = True
                                 active_layers.append(l)
                                 continue
 
@@ -371,38 +536,21 @@ async def update_hata_prices_loop():
                                 order_status = order_data.get("status")
 
                                 if order_status == "fulfilled":
-                                    logger.info(f"[{coin_id}] Buy {buy_id} FILLED! Placing Limit SELL at RM{l['take_profit']:.4f}")
-                                    exec_qty = float(order_data.get("exec_qty", l["quantity"]))
-                                    trades = order_data.get("trades", [])
-                                    fee_total = 0.0
-                                    for t in trades:
-                                        if t.get("fee_asset") == coin_id:
-                                            fee_total += float(t.get("fee", 0.0))
-                                    if trades:
-                                        actual_qty = exec_qty - fee_total
-                                    else:
-                                        actual_qty = exec_qty * 0.996
-                                    qty_scale = hata_api.COIN_SCALES.get(coin_id, {}).get("qty", 4)
-                                    adj_qty = truncate_float(actual_qty, qty_scale)
-                                    l["sell_quantity"] = adj_qty
-
-                                    avail_bal, _ = hata_api.get_token_balance(coin_id)
-                                    if avail_bal < adj_qty:
-                                        logger.warning(f"[{coin_id}] Insufficient balance for SELL ({avail_bal:.4f} < {adj_qty:.4f}). Retry next cycle.")
-                                        l["status"] = "OPEN"
-                                    else:
-                                        sell_res = hata_api.place_limit_order(f"{coin_id}_MYR", "SELL", l["take_profit"], adj_qty)
-                                        if sell_res.get("status") == "success":
-                                            sell_id = sell_res.get("data", {}).get("id")
-                                            l["status"] = "PENDING_SELL"
-                                            l["sell_order_id"] = str(sell_id)
-                                            l["hata_sell_res"] = sell_res
-                                            logger.info(f"[{coin_id}] SELL {sell_id} placed at RM{l['take_profit']:.4f}")
-                                        else:
-                                            l["status"] = "OPEN"
-                                            logger.error(f"[{coin_id}] Failed to place SELL: {sell_res}")
+                                    logger.info(f"[{coin_id}] Buy {buy_id} FILLED!")
+                                    # Extract actual exec data from Hata API
+                                    exec_info = _extract_hata_exec_data(coin_id, order_data, l.get("quantity", 0))
+                                    l["exec_qty"] = exec_info["exec_qty"]
+                                    l["fee_qty"] = exec_info["fee_qty"]
+                                    l["net_qty"] = exec_info["net_qty"]
+                                    l["actual_cost_myr"] = exec_info["actual_cost_myr"]
+                                    l["status"] = "HOLDING"
                                     coin_changed = True
+                                    needs_consolidated_sell = True
                                     active_layers.append(l)
+                                    logger.info(f"[{coin_id}] Layer {l['id']} → HOLDING | "
+                                                f"exec_qty: {exec_info['exec_qty']}, "
+                                                f"net_qty: {exec_info['net_qty']}, "
+                                                f"cost: RM{exec_info['actual_cost_myr']:.2f}")
 
                                 elif order_status in ["cancelled", "rejected"]:
                                     logger.info(f"[{coin_id}] Buy {buy_id} was {order_status}. Removing layer.")
@@ -414,7 +562,7 @@ async def update_hata_prices_loop():
                                     if "created_at" not in l:
                                         l["created_at"] = time.time()
                                         coin_changed = True
-                                        logger.info(f"[{coin_id}] Patched created_at for buy {buy_id}. Countdown starts now.")
+                                        logger.info(f"[{coin_id}] Patched created_at for buy {buy_id}.")
 
                                     age_sec = time.time() - l["created_at"]
                                     if age_sec > 300:
@@ -430,75 +578,9 @@ async def update_hata_prices_loop():
                             else:
                                 active_layers.append(l)
 
-                        # ── PENDING_SELL ──────────────────────────
-                        elif status == "PENDING_SELL":
-                            sell_id = l.get("sell_order_id")
-                            if not sell_id:
-                                l["status"] = "OPEN"
-                                coin_changed = True
-                                active_layers.append(l)
-                                continue
-
-                            res = hata_api.get_order_status(sell_id)
-                            order_data = res.get("data")
-
-                            if order_data:
-                                order_status = order_data.get("status")
-
-                                if order_status == "fulfilled":
-                                    profit_myr = l["amount_myr"] * (l["take_profit"] / l["entry_price"])
-                                    actual_pnl = profit_myr - l["amount_myr"]
-                                    shared.engine_state[coin_id]["total_pnl"] += actual_pnl
-                                    logger.info(f"[{coin_id}] SELL {sell_id} FILLED! PnL: +RM{actual_pnl:.2f} | Total PnL: RM{shared.engine_state[coin_id]['total_pnl']:.2f}")
-                                    coin_changed = True
-                                    # ★ Auto-place next DCA layer at 1% below this entry (all 5 coins)
-                                    _place_next_layer(coin_id, l["entry_price"])
-                                    # Do NOT append — this layer is complete
-
-                                elif order_status in ["cancelled", "rejected"]:
-                                    logger.warning(f"[{coin_id}] SELL {sell_id} was {order_status}. Reverting to OPEN for retry.")
-                                    l["status"] = "OPEN"
-                                    coin_changed = True
-                                    active_layers.append(l)
-
-                                else:
-                                    active_layers.append(l)
-                            else:
-                                active_layers.append(l)
-
-                        # ── OPEN (retry sell) ─────────────────────
-                        elif status == "OPEN":
-                            qty_scale = hata_api.COIN_SCALES.get(coin_id, {}).get("qty", 4)
-                            adj_qty = l.get("sell_quantity")
-                            if adj_qty is None:
-                                exec_qty = l.get("quantity", 0)
-                                adj_qty = truncate_float(exec_qty * 0.996, qty_scale)
-                                l["sell_quantity"] = adj_qty
-                                coin_changed = True
-                                
-                            avail_bal, _ = hata_api.get_token_balance(coin_id)
-                            if avail_bal < adj_qty:
-                                logger.warning(f"[{coin_id}] Available balance ({avail_bal:.4f}) is less than planned sell quantity ({adj_qty:.4f}). Capping sell quantity.")
-                                adj_qty = truncate_float(avail_bal, qty_scale)
-                                l["sell_quantity"] = adj_qty
-                                coin_changed = True
-                                
-                            if adj_qty <= 0:
-                                logger.error(f"[{coin_id}] Cannot place SELL order: truncated sell quantity is 0 (balance: {avail_bal:.4f}).")
-                                active_layers.append(l)
-                            else:
-                                logger.info(f"[{coin_id}] Retrying Limit SELL for layer {l['id']} with quantity {adj_qty:.4f}...")
-                                sell_res = hata_api.place_limit_order(f"{coin_id}_MYR", "SELL", l["take_profit"], adj_qty)
-                                if sell_res.get("status") == "success":
-                                    sell_id = sell_res.get("data", {}).get("id")
-                                    l["status"] = "PENDING_SELL"
-                                    l["sell_order_id"] = str(sell_id)
-                                    l["hata_sell_res"] = sell_res
-                                    logger.info(f"[{coin_id}] Retry SELL {sell_id} placed.")
-                                else:
-                                    logger.error(f"[{coin_id}] Retry SELL failed: {sell_res}")
-                                coin_changed = True
-                                active_layers.append(l)
+                        # ── HOLDING (waiting for consolidated sell to fill) ──
+                        elif status == "HOLDING":
+                            active_layers.append(l)
 
                         else:
                             active_layers.append(l)
@@ -506,6 +588,59 @@ async def update_hata_prices_loop():
                     if coin_changed:
                         shared.engine_state[coin_id]["layers"] = active_layers
                         state_changed = True
+
+                    # Check consolidated sell order status
+                    consolidated_sell_id = shared.engine_state[coin_id].get("consolidated_sell_order_id")
+                    holding_layers = [l for l in active_layers if l.get("status") == "HOLDING"]
+                    
+                    if consolidated_sell_id and holding_layers:
+                        res = hata_api.get_order_status(consolidated_sell_id)
+                        order_data = res.get("data")
+                        
+                        if order_data:
+                            sell_status = order_data.get("status")
+                            
+                            if sell_status == "fulfilled":
+                                # CONSOLIDATED SELL FILLED! Calculate real P&L from Hata
+                                exec_info = _extract_hata_exec_data(coin_id, order_data)
+                                sell_received_myr = exec_info["actual_cost_myr"]  # MYR received from sell
+                                
+                                # Total cost of all holding layers
+                                total_buy_cost = sum(l.get("actual_cost_myr", l.get("amount_myr", 0)) for l in holding_layers)
+                                
+                                # Real P&L = what we received - what we spent
+                                real_pnl = sell_received_myr - total_buy_cost
+                                shared.engine_state[coin_id]["total_pnl"] += real_pnl
+                                
+                                logger.info(f"[{coin_id}] ★ CONSOLIDATED SELL FILLED! ★")
+                                logger.info(f"[{coin_id}]   Sold: RM{sell_received_myr:.2f} | Cost: RM{total_buy_cost:.2f} | PnL: RM{real_pnl:.2f}")
+                                logger.info(f"[{coin_id}]   Total PnL: RM{shared.engine_state[coin_id]['total_pnl']:.2f}")
+                                
+                                # Get last entry price for next DCA
+                                last_entry = holding_layers[-1].get("entry_price", 0)
+                                
+                                # Clear all holding layers — cycle complete
+                                shared.engine_state[coin_id]["layers"] = [l for l in active_layers if l.get("status") != "HOLDING"]
+                                shared.engine_state[coin_id]["consolidated_sell_order_id"] = None
+                                state_changed = True
+                                shared.save_state()
+                                
+                                # Auto-place next DCA buy
+                                if last_entry > 0:
+                                    _place_next_dca_buy(coin_id, last_entry)
+                                    
+                            elif sell_status in ["cancelled", "rejected"]:
+                                logger.warning(f"[{coin_id}] Consolidated sell {consolidated_sell_id} was {sell_status}. Re-placing...")
+                                shared.engine_state[coin_id]["consolidated_sell_order_id"] = None
+                                state_changed = True
+                                needs_consolidated_sell = True
+                    
+                    # Place new consolidated sell if needed
+                    if needs_consolidated_sell:
+                        current_holding = [l for l in shared.engine_state[coin_id].get("layers", []) if l.get("status") == "HOLDING"]
+                        if current_holding:
+                            _place_consolidated_sell(coin_id)
+                            state_changed = True
 
                 if state_changed:
                     shared.save_state()
@@ -612,13 +747,11 @@ async def process_kline(coin_id, kline):
                             logger.error(f"[{coin_id}] Hata API Error: {hata_res.get('message')}")
                         else:
                             order_id = hata_res.get("data", {}).get("id")
-                            take_profit = current_price * (1.0 + strategy["tp_pct"])
                             layer = {
                                 "id": len(layers) + 1,
                                 "entry_price": current_price,
                                 "amount_myr": trade_amount,
                                 "quantity": quantity,
-                                "take_profit": take_profit,
                                 "status": "PENDING_BUY",
                                 "buy_order_id": str(order_id),
                                 "hata_buy_res": hata_res,
@@ -626,7 +759,7 @@ async def process_kline(coin_id, kline):
                             }
                             shared.engine_state[coin_id]["layers"].append(layer)
                             shared.save_state()
-                            logger.info(f"[{coin_id}] PENDING_BUY created. Order {order_id} at RM{current_price:.4f}, TP: RM{take_profit:.4f}")
+                            logger.info(f"[{coin_id}] PENDING_BUY created. Order {order_id} at RM{current_price:.4f}")
             else:
                 shared.engine_state[coin_id]["last_signal"] = 0
 

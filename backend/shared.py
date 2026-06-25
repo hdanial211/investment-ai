@@ -31,7 +31,9 @@ def create_coin_state():
         "total_pnl": 0.0,
         "trade_amount_myr": 250.0,
         "risk_level": 1,
-        "is_auto": False
+        "is_auto": False,
+        "tp_pct": 0.005,
+        "consolidated_sell_order_id": None
     }
 
 def load_state():
@@ -78,9 +80,10 @@ def compute_system_status() -> dict:
     """Compute system health status from current bot state.
     Fully autonomous — no external API calls."""
     pending_buys = []
-    pending_sells = []
+    holding_coins = []
     stuck_orders = []
     total_layers = 0
+    coins_with_consolidated_sell = []
 
     for coin_id, coin_state in engine_state.items():
         for l in coin_state.get("layers", []):
@@ -92,8 +95,11 @@ def compute_system_status() -> dict:
                 pending_buys.append(coin_id)
                 if age_min > 3:
                     stuck_orders.append(f"{coin_id} ({age_min:.0f} min)")
-            elif s == "PENDING_SELL":
-                pending_sells.append(coin_id)
+            elif s == "HOLDING":
+                holding_coins.append(coin_id)
+        
+        if coin_state.get("consolidated_sell_order_id"):
+            coins_with_consolidated_sell.append(coin_id)
 
     if stuck_orders:
         return {
@@ -109,10 +115,12 @@ def compute_system_status() -> dict:
         }
     else:
         buy_str = f"{len(pending_buys)} beli menunggu ({', '.join(set(pending_buys))})" if pending_buys else "tiada pesanan beli"
-        sell_str = f"{len(pending_sells)} jual aktif ({', '.join(set(pending_sells))})" if pending_sells else "tiada pesanan jual"
+        hold_str = f"{len(set(holding_coins))} coin holding ({', '.join(set(holding_coins))})" if holding_coins else "tiada holding"
+        sell_str = f"Gabungan sell aktif: {', '.join(coins_with_consolidated_sell)}" if coins_with_consolidated_sell else "tiada gabungan sell"
         return {
             "status": "safe",
-            "analysis": f"Operasi normal. {total_layers} lapisan aktif — {buy_str}, {sell_str}.",
-            "recommendation": "Bot berjalan lancar. Auto-layer (1% DCA) akan dicetuskan apabila pesanan jual selesai."
+            "analysis": f"Operasi normal. {total_layers} lapisan aktif — {buy_str}, {hold_str}. {sell_str}.",
+            "recommendation": "Bot berjalan lancar. Consolidated sell akan dicetuskan apabila layer baru diisi."
         }
+
 

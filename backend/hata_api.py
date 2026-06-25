@@ -268,3 +268,69 @@ def cancel_order(symbol: str, order_id: str) -> dict:
     except Exception as e:
         print(f"Error cancelling order {order_id}: {e}")
         return {"status": "error", "message": str(e)}
+
+def get_trade_history(pair: str, limit: int = 50) -> dict:
+    """Fetch trade history from Hata API for real P&L calculation"""
+    if not HATA_API_KEY or not HATA_API_SECRET:
+        return {"status": "simulated", "data": []}
+        
+    endpoint = "/orderbook/sapi/trades"
+    timestamp = str(int(time.time()))
+    clean_pair = pair.replace("_", "").upper()
+    
+    params = {
+        "limit": str(limit),
+        "pair": clean_pair,
+        "timestamp": timestamp
+    }
+    
+    signature = _generate_signature(params, HATA_API_SECRET)
+    headers = {
+        "X-API-KEY": HATA_API_KEY,
+        "Signature": signature
+    }
+    url = f"{BASE_URL}{endpoint}"
+    
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            print(f"Error fetching trade history for {pair}: {response.text}")
+            return {"status": "error", "message": response.text}
+    except Exception as e:
+        print(f"Error fetching trade history for {pair}: {e}")
+        return {"status": "error", "message": str(e)}
+
+def get_my_orders(pair: str, status: str = "active") -> dict:
+    """Fetch open/active orders from Hata API"""
+    if not HATA_API_KEY or not HATA_API_SECRET:
+        return {"status": "simulated", "data": []}
+        
+    endpoint = "/orderbook/sapi/orders"
+    timestamp = str(int(time.time()))
+    clean_pair = pair.replace("_", "").upper()
+    
+    params = {
+        "pair": clean_pair,
+        "status": status,
+        "timestamp": timestamp
+    }
+    
+    signature = _generate_signature(params, HATA_API_SECRET)
+    headers = {
+        "X-API-KEY": HATA_API_KEY,
+        "Signature": signature
+    }
+    url = f"{BASE_URL}{endpoint}"
+    
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            print(f"Error fetching orders for {pair}: {response.text}")
+            return {"status": "error", "message": response.text}
+    except Exception as e:
+        print(f"Error fetching orders for {pair}: {e}")
+        return {"status": "error", "message": str(e)}

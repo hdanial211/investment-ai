@@ -21,11 +21,11 @@ function App() {
       guardian_last_update: "Never"
     },
     coins: {
-      ETH: { current_price: 0.0, last_signal: 0.0, confidence: 0.0, layers: [], total_pnl: 0.0, risk_level: 1 },
-      BTC: { current_price: 0.0, last_signal: 0.0, confidence: 0.0, layers: [], total_pnl: 0.0, risk_level: 1 },
-      SOL: { current_price: 0.0, last_signal: 0.0, confidence: 0.0, layers: [], total_pnl: 0.0, risk_level: 1 },
-      XRP: { current_price: 0.0, last_signal: 0.0, confidence: 0.0, layers: [], total_pnl: 0.0, risk_level: 1 },
-      LTC: { current_price: 0.0, last_signal: 0.0, confidence: 0.0, layers: [], total_pnl: 0.0, risk_level: 1 }
+      ETH: { current_price: 0.0, last_signal: 0.0, confidence: 0.0, layers: [], total_pnl: 0.0, risk_level: 1, tp_pct: 0.005 },
+      BTC: { current_price: 0.0, last_signal: 0.0, confidence: 0.0, layers: [], total_pnl: 0.0, risk_level: 1, tp_pct: 0.005 },
+      SOL: { current_price: 0.0, last_signal: 0.0, confidence: 0.0, layers: [], total_pnl: 0.0, risk_level: 1, tp_pct: 0.005 },
+      XRP: { current_price: 0.0, last_signal: 0.0, confidence: 0.0, layers: [], total_pnl: 0.0, risk_level: 1, tp_pct: 0.005 },
+      LTC: { current_price: 0.0, last_signal: 0.0, confidence: 0.0, layers: [], total_pnl: 0.0, risk_level: 1, tp_pct: 0.005 }
     }
   })
 
@@ -95,6 +95,18 @@ function App() {
     }
   }
 
+  const setTP = async (tp_pct) => {
+    if (isNaN(tp_pct) || tp_pct < 0.001 || tp_pct > 0.5) return
+    try {
+      await axios.post('http://localhost:8000/api/set-tp', {
+        coin: selectedCoin,
+        tp_pct: tp_pct
+      })
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
   // Resolve current coin details safely
   const coinData = state.coins[selectedCoin] || {
     current_price: 0.0,
@@ -103,10 +115,12 @@ function App() {
     layers: [],
     total_pnl: 0.0,
     trade_amount_myr: 250.0,
-    risk_level: 1
+    risk_level: 1,
+    tp_pct: 0.005
   }
 
   const tradeAmount = coinData.trade_amount_myr || 250.0;
+  const tpPct = coinData.tp_pct || 0.005;
   const maxLayers = coinData.risk_level === 3 ? "2-3 Lapis" : coinData.risk_level === 2 ? "5 Lapis" : "6 Lapis";
   
   const getStrategyName = (coin, level) => {
@@ -120,6 +134,18 @@ function App() {
 
   // Calculate overall PnL across all coins
   const totalPnL = Object.values(state.coins).reduce((sum, c) => sum + (c.total_pnl || 0), 0)
+
+  // Calculate consolidated sell info for current coin
+  const holdingLayers = (coinData.layers || []).filter(l => l.status === 'HOLDING')
+  const consolidatedSellId = coinData.consolidated_sell_order_id
+  let consolidatedInfo = null
+  if (holdingLayers.length > 0) {
+    const totalCost = holdingLayers.reduce((sum, l) => sum + (l.actual_cost_myr || l.amount_myr || 0), 0)
+    const totalQty = holdingLayers.reduce((sum, l) => sum + (l.net_qty || l.quantity || 0), 0)
+    const avgEntry = totalQty > 0 ? totalCost / totalQty : 0
+    const sellPrice = holdingLayers[0]?.consolidated_sell_price || (avgEntry * (1 + tpPct + 0.004))
+    consolidatedInfo = { totalCost, totalQty, avgEntry, sellPrice }
+  }
 
   return (
     <div className="dashboard">
@@ -235,26 +261,64 @@ function App() {
                             <th>Layer</th>
                             <th>Harga Entry (RM)</th>
                             <th>Saiz (RM)</th>
-                            <th>Take Profit (0.6% - RM)</th>
+                            <th>Qty (Hata)</th>
                             <th>Status</th>
                           </tr>
                         </thead>
                         <tbody>
                           {coinData.layers.map(l => {
                             const entryPriceMYR = l.entry_price || 0
-                            const takeProfitMYR = l.take_profit || 0
+                            const netQty = l.net_qty || l.quantity || 0
+                            const actualCost = l.actual_cost_myr || l.amount_myr || 0
                             return (
                               <tr key={l.id}>
                                 <td>#{l.id}</td>
                                 <td>RM {entryPriceMYR > 0 ? entryPriceMYR.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}</td>
-                                <td>RM {l.amount_myr ? l.amount_myr.toFixed(2) : '0.00'}</td>
-                                <td className="profit-target">RM {takeProfitMYR > 0 ? takeProfitMYR.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}</td>
-                                <td><span className="status-badge open">{l.status || 'TERBUKA'}</span></td>
+                                <td>RM {actualCost ? actualCost.toFixed(2) : '0.00'}</td>
+                                <td>{netQty > 0 ? netQty.toFixed(6) : '-'}</td>
+                                <td><span className={`status-badge ${l.status === 'HOLDING' ? 'holding' : l.status === 'PENDING_BUY' ? 'pending' : 'open'}`}>{l.status || 'TERBUKA'}</span></td>
                               </tr>
                             )
                           })}
                         </tbody>
                       </table>
+
+                      {/* Consolidated Sell Summary */}
+                      {consolidatedInfo && (
+                        <div style={{ 
+                          marginTop: '1rem', 
+                          background: 'rgba(0, 229, 255, 0.08)', 
+                          border: '1px solid rgba(0, 229, 255, 0.3)', 
+                          borderRadius: '8px', 
+                          padding: '12px 16px' 
+                        }}>
+                          <h4 style={{ color: '#00e5ff', margin: '0 0 10px 0', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <TrendingUp size={16} /> Gabungan Sell Order
+                            {consolidatedSellId && <span style={{ fontSize: '0.75rem', color: '#888', marginLeft: '8px' }}>#{consolidatedSellId}</span>}
+                          </h4>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.85rem' }}>
+                            <div>
+                              <span style={{ color: '#888' }}>Avg Entry: </span>
+                              <span style={{ color: '#fff' }}>RM {consolidatedInfo.avgEntry.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>
+                            </div>
+                            <div>
+                              <span style={{ color: '#888' }}>Total Qty: </span>
+                              <span style={{ color: '#fff' }}>{consolidatedInfo.totalQty.toFixed(6)}</span>
+                            </div>
+                            <div>
+                              <span style={{ color: '#888' }}>Total Kos: </span>
+                              <span style={{ color: '#fff' }}>RM {consolidatedInfo.totalCost.toFixed(2)}</span>
+                            </div>
+                            <div>
+                              <span style={{ color: '#888' }}>Sell Price (TP {(tpPct * 100).toFixed(1)}%): </span>
+                              <span style={{ color: '#00e676', fontWeight: 'bold' }}>RM {consolidatedInfo.sellPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>
+                            </div>
+                          </div>
+                          <p style={{ margin: '8px 0 0 0', fontSize: '0.75rem', color: '#666' }}>
+                            *Satu sell order gabungan untuk semua {holdingLayers.length} layer. Cancel & replace automatik bila layer baru masuk.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -276,7 +340,7 @@ function App() {
                     )}
                   </div>
                   <div className="stat-box">
-                    <h3>Untung Bersih (Semua)</h3>
+                    <h3>Untung Bersih (Semua) <span style={{ fontSize: '0.65rem', color: '#888' }}>via Hata</span></h3>
                     <p className={`value ${totalPnL >= 0 ? 'profit' : 'loss'}`}>
                       RM {totalPnL >= 0 ? '+' : ''}{totalPnL.toFixed(2)}
                     </p>
@@ -284,7 +348,7 @@ function App() {
                 </div>
                 <div className="stats-row">
                   <div className="stat-box" style={{ gridColumn: 'span 2' }}>
-                    <h3>Untung Bersih ({selectedCoin})</h3>
+                    <h3>Untung Bersih ({selectedCoin}) <span style={{ fontSize: '0.65rem', color: '#888' }}>via Hata</span></h3>
                     <p className={`value ${coinData.total_pnl >= 0 ? 'profit' : 'loss'}`} style={{ fontSize: '1.4rem' }}>
                       RM {coinData.total_pnl >= 0 ? '+' : ''}{coinData.total_pnl ? coinData.total_pnl.toFixed(2) : '0.00'}
                     </p>
@@ -354,6 +418,27 @@ function App() {
                     />
                   </div>
 
+                  <label>Take Profit (%) — per coin</label>
+                  <div className="amount-controls" style={{ marginBottom: '1rem' }}>
+                    <input 
+                      type="number" 
+                      className="amount-input"
+                      value={tpPct ? (tpPct * 100).toFixed(1) : ''} 
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value)
+                        if (!isNaN(val)) setTP(val / 100)
+                      }}
+                      min="0.1"
+                      max="50"
+                      step="0.1"
+                      placeholder="Cth: 0.5 = 0.5%"
+                      style={{ width: '100%', fontSize: '1.2rem', padding: '10px' }}
+                    />
+                    <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#888' }}>
+                      *TP {(tpPct * 100).toFixed(1)}% + ~0.4% fee buffer = Sell pada +{((tpPct + 0.004) * 100).toFixed(1)}% dari avg entry
+                    </p>
+                  </div>
+
                   <label>Tahap Risiko (Pilihan Strategi Pasif)</label>
                   <div className="amount-controls" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
                     <button 
@@ -387,11 +472,14 @@ function App() {
                     <p style={{ margin: '5px 0', fontSize: '0.9rem' }}>
                       <strong style={{ color: '#aaa' }}>Kapasiti Maksimum:</strong> {maxLayers}
                     </p>
+                    <p style={{ margin: '5px 0', fontSize: '0.9rem' }}>
+                      <strong style={{ color: '#aaa' }}>Take Profit:</strong> <span style={{ color: '#00e676' }}>{(tpPct * 100).toFixed(1)}%</span> (+ ~0.4% sell fee)
+                    </p>
                     <p style={{ margin: '15px 0 5px 0', fontSize: '0.95rem' }}>
                       <strong style={{ color: '#fff' }}>Saiz Trade Ditetapkan: <span style={{ color: '#00e5ff' }}>RM {tradeAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></strong>
                     </p>
                     <p style={{ margin: '0', fontSize: '0.8rem', color: '#666' }}>
-                      *Bot akan masuk posisi sebanyak RM {tradeAmount} pada setiap layer (maksimum {maxLayers}).
+                      *Bot akan masuk posisi sebanyak RM {tradeAmount} pada setiap layer (maksimum {maxLayers}). Semua layer digabung dalam 1 sell order.
                     </p>
                   </div>
                 </div>

@@ -33,6 +33,17 @@ class AmountSetting(BaseModel):
     coin: str
     amount: float
 
+class TPSetting(BaseModel):
+    coin: str
+    tp_pct: float  # e.g. 0.005 = 0.5%
+
+class RiskLevelSetting(BaseModel):
+    coin: str
+    risk_level: int
+
+class ManualAction(BaseModel):
+    coin: str
+
 class BacktestParams(BaseModel):
     coin: str = "ETH"
     initial_cash: float = 100000.0
@@ -59,20 +70,12 @@ def toggle_auto(toggle: AutoToggle):
         shared.save_state()
     return {"status": "success", "is_auto": engine_state[toggle.coin]["is_auto"]}
 
-class RiskLevelSetting(BaseModel):
-    coin: str
-    risk_level: int
-
 @app.post("/api/set-risk-level")
 def set_risk_level(setting: RiskLevelSetting):
     if setting.risk_level in [1, 2, 3] and setting.coin in engine_state:
         engine_state[setting.coin]["risk_level"] = setting.risk_level
         shared.save_state()
     return {"status": "success", "risk_level": engine_state[setting.coin]["risk_level"]}
-
-class AmountSetting(BaseModel):
-    coin: str
-    amount: float
 
 @app.post("/api/set-amount")
 def set_amount(setting: AmountSetting):
@@ -81,8 +84,24 @@ def set_amount(setting: AmountSetting):
         shared.save_state()
     return {"status": "success", "trade_amount_myr": engine_state[setting.coin]["trade_amount_myr"]}
 
-class ManualAction(BaseModel):
-    coin: str
+@app.post("/api/set-tp")
+def set_tp(setting: TPSetting):
+    """Set take profit percentage per coin from frontend"""
+    if setting.coin not in engine_state:
+        raise HTTPException(status_code=400, detail="Invalid coin")
+    if setting.tp_pct < 0.001 or setting.tp_pct > 0.5:
+        raise HTTPException(status_code=400, detail="TP% must be between 0.1% and 50%")
+    
+    engine_state[setting.coin]["tp_pct"] = setting.tp_pct
+    shared.save_state()
+    
+    # If there are HOLDING layers, re-place consolidated sell with new TP%
+    holding_layers = [l for l in engine_state[setting.coin].get("layers", []) if l.get("status") == "HOLDING"]
+    if holding_layers:
+        from live_engine import _place_consolidated_sell
+        _place_consolidated_sell(setting.coin)
+    
+    return {"status": "success", "tp_pct": engine_state[setting.coin]["tp_pct"]}
 
 @app.post("/api/manual-buy")
 def manual_buy(action: ManualAction):
@@ -100,8 +119,8 @@ def manual_buy(action: ManualAction):
     if amount > balance:
         raise HTTPException(status_code=400, detail="Insufficient balance in Hata")
 
-    quantity = amount / price
-    import hata_api
+    qty_scale = hata_api.COIN_SCALES.get(coin, {}).get("qty", 4)
+    quantity = round(amount / price, qty_scale)
     hata_res = hata_api.place_limit_order(f"{coin}_MYR", "BUY", price, quantity)
     
     if hata_res.get("status") == "error":
@@ -113,7 +132,6 @@ def manual_buy(action: ManualAction):
         "entry_price": price,
         "amount_myr": amount,
         "quantity": quantity,
-        "take_profit": price * 1.006,
         "status": "PENDING_BUY",
         "buy_order_id": str(order_id),
         "hata_buy_res": hata_res,
@@ -135,21 +153,56 @@ def manual_buy(action: ManualAction):
 @app.post("/api/panic-sell")
 def panic_sell(action: ManualAction):
     coin = action.coin
-    if coin in engine_state:
-        # We need to cancel the open limit sells!
-        import hata_api
-        # Notice: Currently we don't have the order_id easily accessible to cancel
-        # We will just empty the internal layers. In a production app we should cancel the Hata orders.
-        # But wait, panic sell means sell NOW at market. Since hata_api doesn't have market sell yet,
-        # we'll place a limit sell at current_price - 2% to ensure it fills.
-        current_price = engine_state[coin]["current_price"]
-        for layer in engine_state[coin]["layers"]:
-            qty = layer.get("quantity", layer["amount_myr"]/layer["entry_price"])
-            hata_api.place_limit_order(f"{coin}_MYR", "SELL", current_price * 0.98, qty)
+    if coin not in engine_state:
+        raise HTTPException(status_code=400, detail="Invalid coin")
+    
+    # 1. Cancel consolidated sell order if exists
+    consolidated_sell_id = engine_state[coin].get("consolidated_sell_order_id")
+    if consolidated_sell_id:
+        hata_api.cancel_order(f"{coin}_MYR", consolidated_sell_id)
+        engine_state[coin]["consolidated_sell_order_id"] = None
+    
+    # 2. Cancel any pending buy orders
+    for layer in engine_state[coin]["layers"]:
+        if layer.get("status") == "PENDING_BUY":
+            buy_id = layer.get("buy_order_id")
+            if buy_id:
+                hata_api.cancel_order(f"{coin}_MYR", buy_id)
+    
+    # 3. Sell all holding at market (use current_price - 2% to ensure fill)
+    current_price = engine_state[coin]["current_price"]
+    holding_layers = [l for l in engine_state[coin]["layers"] if l.get("status") == "HOLDING"]
+    
+    if holding_layers and current_price > 0:
+        # Sum up all net_qty from holding layers
+        total_qty = sum(l.get("net_qty", l.get("sell_quantity", l.get("quantity", 0))) for l in holding_layers)
+        qty_scale = hata_api.COIN_SCALES.get(coin, {}).get("qty", 4)
+        total_qty = truncate_float(total_qty, qty_scale)
+        
+        if total_qty > 0:
+            # Verify actual balance
+            avail_bal, _ = hata_api.get_token_balance(coin)
+            if avail_bal < total_qty:
+                total_qty = truncate_float(avail_bal, qty_scale)
             
-        engine_state[coin]["layers"] = []
-        shared.save_state()
+            if total_qty > 0:
+                panic_price = current_price * 0.98  # 2% below to ensure fill
+                hata_api.place_limit_order(f"{coin}_MYR", "SELL", panic_price, total_qty)
+    
+    # 4. Clear all layers
+    engine_state[coin]["layers"] = []
+    engine_state[coin]["consolidated_sell_order_id"] = None
+    shared.save_state()
+    
     return {"status": "success", "message": f"All positions closed for {coin}"}
+
+
+def truncate_float(val: float, decimals: int) -> float:
+    """Truncate float value to a specific number of decimal places without rounding up."""
+    eps = 1e-9
+    factor = 10 ** decimals
+    return int((val + eps) * factor) / factor
+
 
 from fastapi import WebSocket, WebSocketDisconnect
 import asyncio
