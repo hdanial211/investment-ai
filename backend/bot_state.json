@@ -134,8 +134,10 @@
         "risk_level": 3,
         "is_auto": true,
         "tp_pct": 0.005,
-        "consolidated_sell_order_id": "251248312",
-        "last_cycle_entry": 0.0
+        "consolidated_sell_order_id": "251255679",
+        "last_cycle_entry": 0.0,
+        "total_buy_fees_myr": 0.0,
+        "total_buy_fees_qty": 2.76e-05
     },
     "BTC": {
         "current_price": 256446.0,
@@ -272,8 +274,10 @@
         "risk_level": 3,
         "is_auto": true,
         "tp_pct": 0.004,
-        "consolidated_sell_order_id": "251248319",
-        "last_cycle_entry": 0.0
+        "consolidated_sell_order_id": "251255693",
+        "last_cycle_entry": 0.0,
+        "total_buy_fees_myr": 0.0,
+        "total_buy_fees_qty": 7.599999999999999e-07
     },
     "SOL": {
         "current_price": 286.7,
@@ -432,8 +436,10 @@
         "risk_level": 3,
         "is_auto": true,
         "tp_pct": 0.008,
-        "consolidated_sell_order_id": "251248324",
-        "last_cycle_entry": 0.0
+        "consolidated_sell_order_id": "251255705",
+        "last_cycle_entry": 0.0,
+        "total_buy_fees_myr": 0.0,
+        "total_buy_fees_qty": 0.0005200000000000001
     },
     "XRP": {
         "current_price": 4.485,
@@ -558,8 +564,10 @@
         "risk_level": 3,
         "is_auto": true,
         "tp_pct": 0.006,
-        "consolidated_sell_order_id": "251248329",
-        "last_cycle_entry": 0.0
+        "consolidated_sell_order_id": "251255717",
+        "last_cycle_entry": 0.0,
+        "total_buy_fees_myr": 0.0,
+        "total_buy_fees_qty": 0.0504
     },
     "LTC": {
         "current_price": 170.6,
@@ -628,7 +636,9 @@
         "risk_level": 3,
         "is_auto": true,
         "tp_pct": 0.004,
-        "consolidated_sell_order_id": "251248338",
-        "last_cycle_entry": 0.0
+        "consolidated_sell_order_id": "251255732",
+        "last_cycle_entry": 0.0,
+        "total_buy_fees_myr": 0.0,
+        "total_buy_fees_qty": 0.000632
     }
 }

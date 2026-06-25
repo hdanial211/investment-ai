@@ -269,6 +269,7 @@ function App() {
                             <th>Harga Entry (RM)</th>
                             <th>Saiz (RM)</th>
                             <th>Qty (Hata)</th>
+                            <th>Fee</th>
                             <th>Status</th>
                           </tr>
                         </thead>
@@ -277,12 +278,29 @@ function App() {
                             const entryPriceMYR = l.entry_price || 0
                             const netQty = l.net_qty || l.quantity || 0
                             const actualCost = l.actual_cost_myr || l.amount_myr || 0
+                            const feeMyr = l.fee_myr || 0
+                            const feeRole = l.fee_role || ''
+                            const isMaker = feeRole === 'maker'
                             return (
                               <tr key={l.id}>
                                 <td>#{l.id}</td>
                                 <td>RM {entryPriceMYR > 0 ? entryPriceMYR.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}</td>
                                 <td>RM {actualCost ? actualCost.toFixed(2) : '0.00'}</td>
                                 <td>{netQty > 0 ? netQty.toFixed(6) : '-'}</td>
+                                <td>
+                                  {l.status === 'HOLDING' ? (
+                                    <span style={{ 
+                                      fontSize: '0.7rem', 
+                                      padding: '2px 6px', 
+                                      borderRadius: '4px',
+                                      background: isMaker ? 'rgba(0,230,118,0.15)' : 'rgba(255,179,0,0.15)',
+                                      color: isMaker ? '#00e676' : '#ffb300',
+                                      fontWeight: 'bold'
+                                    }}>
+                                      {isMaker ? 'Maker 0%' : feeMyr > 0 ? `Taker RM${feeMyr.toFixed(4)}` : '-'}
+                                    </span>
+                                  ) : '-'}
+                                </td>
                                 <td><span className={`status-badge ${l.status === 'HOLDING' ? 'holding' : l.status === 'PENDING_BUY' ? 'pending' : 'open'}`}>{l.status || 'TERBUKA'}</span></td>
                               </tr>
                             )
@@ -320,9 +338,17 @@ function App() {
                               <span style={{ color: '#888' }}>Sell Price (TP {(tpPct * 100).toFixed(1)}%): </span>
                               <span style={{ color: '#00e676', fontWeight: 'bold' }}>RM {consolidatedInfo.sellPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>
                             </div>
+                            <div>
+                              <span style={{ color: '#888' }}>Total Buy Fee: </span>
+                              <span style={{ color: (coinData.total_buy_fees_myr || 0) > 0 ? '#ffb300' : '#00e676', fontWeight: 'bold' }}>
+                                {(coinData.total_buy_fees_myr || 0) > 0 
+                                  ? `RM ${(coinData.total_buy_fees_myr || 0).toFixed(4)} (auto-recovered dlm TP)`
+                                  : 'RM 0 (Maker — tiada fee!)'}
+                              </span>
+                            </div>
                           </div>
                           <p style={{ margin: '8px 0 0 0', fontSize: '0.75rem', color: '#666' }}>
-                            *Satu sell order gabungan untuk semua {holdingLayers.length} layer. Cancel & replace automatik bila layer baru masuk.
+                            *Fee dari Hata API dikira auto: Maker=0%, Taker=0.25%. TP sell price dah include fee recovery.
                           </p>
                           {pendingBuyLayers.length > 0 && (
                             <p style={{ margin: '6px 0 0 0', fontSize: '0.8rem', color: '#ffb300' }}>
@@ -504,7 +530,7 @@ function App() {
                       }[selectedCoin] || '0.5% — Default'}
                     </div>
                     <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#888' }}>
-                      *Hata Maker Fee = 0% (Limit Order) | Sell pada +{(tpPct * 100).toFixed(1)}% dari avg entry
+                      *Fee auto-kira dari Hata API (Maker 0% / Taker 0.25%) — TP sell price auto-recover fee
                     </p>
                   </div>
 

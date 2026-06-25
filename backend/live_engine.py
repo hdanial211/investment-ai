@@ -101,25 +101,37 @@ def _get_strategy(coin_id: str, risk_level: int) -> dict:
 # ─────────────────────────────────────────────
 def _extract_hata_exec_data(coin_id: str, order_data: dict, fallback_qty: float = 0.0) -> dict:
     """Extract actual executed quantity, fees, and cost from Hata API order data.
-    Returns dict with: exec_qty, fee_qty, net_qty, actual_cost_myr"""
+    Returns dict with: exec_qty, fee_qty, net_qty, actual_cost_myr, fee_role"""
     exec_qty = float(order_data.get("exec_qty", fallback_qty))
     cummul_quote = float(order_data.get("cummul_quote_qty", 0.0))
     
-    # Extract fees from trades array
+    # Extract fees from trades array (actual from Hata API)
     trades = order_data.get("trades", [])
     fee_qty = 0.0
+    fee_role = "unknown"  # maker or taker
     for t in trades:
         if t.get("fee_asset") == coin_id:
             fee_qty += float(t.get("fee", 0.0))
+        # Detect role from trade data
+        if t.get("is_maker") is True:
+            fee_role = "maker"
+        elif t.get("is_maker") is False:
+            fee_role = "taker"
     
-    # Net quantity = what's actually in wallet after buy
+    # Net quantity = what's actually in wallet after fees
     if trades:
         net_qty = exec_qty - fee_qty
+        if fee_qty > 0:
+            logger.info(f"[{coin_id}] Fee detected: {fee_qty} {coin_id} ({fee_role}) | exec: {exec_qty} -> net: {net_qty}")
+        else:
+            logger.info(f"[{coin_id}] No fee (maker) | exec: {exec_qty} = net: {net_qty}")
     else:
-        # Fallback: Hata MAKER fee = 0% for limit orders (order book)
-        # Taker fee = 0.25% only for market/IOC orders (we don't use those)
-        net_qty = exec_qty
-        fee_qty = 0.0
+        # Fallback: assume TAKER worst case (0.25% fee) to be safe
+        # Better to overestimate fee than underestimate
+        fee_qty = exec_qty * 0.0025
+        net_qty = exec_qty * 0.9975
+        fee_role = "taker_fallback"
+        logger.warning(f"[{coin_id}] No trades data — using 0.25% taker fallback fee")
     
     # Actual MYR cost
     if cummul_quote > 0:
@@ -129,11 +141,17 @@ def _extract_hata_exec_data(coin_id: str, order_data: dict, fallback_qty: float 
         price = float(order_data.get("price", 0))
         actual_cost_myr = price * exec_qty if price > 0 else 0.0
     
+    # Calculate fee in MYR terms for display
+    price = float(order_data.get("price", 0))
+    fee_myr = fee_qty * price if price > 0 else 0.0
+    
     return {
         "exec_qty": exec_qty,
         "fee_qty": fee_qty,
         "net_qty": net_qty,
-        "actual_cost_myr": actual_cost_myr
+        "actual_cost_myr": actual_cost_myr,
+        "fee_myr": fee_myr,
+        "fee_role": fee_role
     }
 
 
@@ -163,24 +181,33 @@ def _place_consolidated_sell(coin_id: str):
     # 2. Calculate totals from all HOLDING layers
     total_cost = 0.0     # Total MYR spent (actual from Hata)
     total_net_qty = 0.0  # Total crypto received (net of fees)
+    total_fee_qty = 0.0  # Total fees paid in coin
+    total_fee_myr = 0.0  # Total fees paid in MYR
     
     for l in holding_layers:
         cost = l.get("actual_cost_myr", l.get("amount_myr", 0))
         net = l.get("net_qty", 0)
+        fee = l.get("fee_qty", 0)
+        fee_m = l.get("fee_myr", 0)
         total_cost += cost
         total_net_qty += net
+        total_fee_qty += fee
+        total_fee_myr += fee_m
     
     if total_net_qty <= 0 or total_cost <= 0:
         logger.error(f"[{coin_id}] Cannot consolidate: total_net_qty={total_net_qty}, total_cost={total_cost}")
         return
     
-    # 3. Weighted average entry price
+    # 3. Weighted average entry price (INCLUDES fee recovery automatically)
+    # Because net_qty < exec_qty when fees exist, avg_entry is higher
+    # This means sell price naturally covers the fee loss
     avg_entry = total_cost / total_net_qty
     
     # 4. Calculate sell price: avg_entry × (1 + tp_pct)
-    # Hata Maker fee = 0% for limit orders that go to order book
-    # Our sell is a LIMIT order placed above market price → always Maker → 0% fee
-    # Taker fee (0.25%) only for market/IOC orders which we DON'T use
+    # Fee recovery is BUILT INTO avg_entry because we divide by net_qty (after fees)
+    # Example: Paid RM10 for 0.00003984 BTC (after 0.4% taker fee)
+    #   avg_entry = 10 / 0.00003984 = RM250,999 (higher than buy price RM256,446)
+    #   sell_price = 250,999 * 1.005 = RM252,254 → recovers fee + TP profit
     tp_pct = shared.engine_state[coin_id].get("tp_pct", 0.005)
     sell_price = avg_entry * (1.0 + tp_pct)
     
@@ -201,9 +228,10 @@ def _place_consolidated_sell(coin_id: str):
         return
     
     # 6. Place ONE consolidated sell order
+    fee_info = f"Total Buy Fee: RM{total_fee_myr:.4f} ({total_fee_qty} {coin_id})" if total_fee_qty > 0 else "No buy fees (Maker)"
     logger.info(f"[{coin_id}] CONSOLIDATED SELL: {len(holding_layers)} layers combined | "
                 f"Avg Entry: RM{avg_entry:.4f} | TP: RM{sell_price:.4f} (+{tp_pct*100:.2f}%) | "
-                f"Qty: {sell_qty} | Total Cost: RM{total_cost:.2f} | Maker Fee: 0%")
+                f"Qty: {sell_qty} | Cost: RM{total_cost:.2f} | {fee_info}")
     
     sell_res = hata_api.place_limit_order(f"{coin_id}_MYR", "SELL", sell_price, sell_qty)
     
@@ -218,6 +246,10 @@ def _place_consolidated_sell(coin_id: str):
     for l in holding_layers:
         l["consolidated_sell_price"] = sell_price
         l["consolidated_sell_qty"] = sell_qty
+    
+    # Store fee summary for frontend
+    shared.engine_state[coin_id]["total_buy_fees_myr"] = total_fee_myr
+    shared.engine_state[coin_id]["total_buy_fees_qty"] = total_fee_qty
     
     shared.save_state()
     logger.info(f"[{coin_id}] CONSOLIDATED SELL SUCCESS: Order {sell_order_id} at RM{sell_price:.4f}")
@@ -559,6 +591,8 @@ async def update_hata_prices_loop():
                                     l["fee_qty"] = exec_info["fee_qty"]
                                     l["net_qty"] = exec_info["net_qty"]
                                     l["actual_cost_myr"] = exec_info["actual_cost_myr"]
+                                    l["fee_myr"] = exec_info["fee_myr"]
+                                    l["fee_role"] = exec_info["fee_role"]
                                     l["status"] = "HOLDING"
                                     coin_changed = True
                                     needs_consolidated_sell = True
@@ -566,8 +600,8 @@ async def update_hata_prices_loop():
                                     l["_just_filled"] = True
                                     active_layers.append(l)
                                     logger.info(f"[{coin_id}] Layer {l['id']} → HOLDING | "
-                                                f"exec_qty: {exec_info['exec_qty']}, "
-                                                f"net_qty: {exec_info['net_qty']}, "
+                                                f"exec: {exec_info['exec_qty']}, net: {exec_info['net_qty']}, "
+                                                f"fee: {exec_info['fee_qty']} ({exec_info['fee_role']}), "
                                                 f"cost: RM{exec_info['actual_cost_myr']:.2f}")
 
                                 elif order_status in ["cancelled", "rejected"]:
