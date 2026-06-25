@@ -446,6 +446,33 @@ async def startup_recovery():
 
                 # ── HOLDING (already converted) ─────────────────
                 elif status == "HOLDING":
+                    # Migrate: re-fetch fee data if missing (layers from before v5.3.3)
+                    if "fee_role" not in l or "fee_myr" not in l:
+                        buy_id = l.get("buy_order_id")
+                        if buy_id:
+                            logger.info(f"[{coin_id}] RECOVERY: Re-fetching fee data for Layer {l.get('id')} (buy {buy_id})...")
+                            buy_res = hata_api.get_order_status(buy_id)
+                            buy_data = buy_res.get("data")
+                            if buy_data and buy_data.get("status") == "fulfilled":
+                                exec_info = _extract_hata_exec_data(coin_id, buy_data, l.get("quantity", 0))
+                                l["exec_qty"] = exec_info["exec_qty"]
+                                l["fee_qty"] = exec_info["fee_qty"]
+                                l["net_qty"] = exec_info["net_qty"]
+                                l["actual_cost_myr"] = exec_info["actual_cost_myr"]
+                                l["fee_myr"] = exec_info["fee_myr"]
+                                l["fee_role"] = exec_info["fee_role"]
+                                coin_changed = True
+                                logger.info(f"[{coin_id}] RECOVERY: Layer {l.get('id')} fee updated: "
+                                            f"{exec_info['fee_role']} fee={exec_info['fee_qty']} (RM{exec_info['fee_myr']:.4f})")
+                            else:
+                                # Cannot re-fetch — set defaults
+                                l["fee_myr"] = 0.0
+                                l["fee_role"] = "unknown"
+                                coin_changed = True
+                        else:
+                            l["fee_myr"] = 0.0
+                            l["fee_role"] = "unknown"
+                            coin_changed = True
                     active_layers.append(l)
                     needs_consolidated_sell = True
 
