@@ -116,9 +116,10 @@ def _extract_hata_exec_data(coin_id: str, order_data: dict, fallback_qty: float 
     if trades:
         net_qty = exec_qty - fee_qty
     else:
-        # Fallback: estimate 0.4% fee if trades not available
-        net_qty = exec_qty * 0.996
-        fee_qty = exec_qty * 0.004
+        # Fallback: Hata MAKER fee = 0% for limit orders (order book)
+        # Taker fee = 0.25% only for market/IOC orders (we don't use those)
+        net_qty = exec_qty
+        fee_qty = 0.0
     
     # Actual MYR cost
     if cummul_quote > 0:
@@ -177,12 +178,11 @@ def _place_consolidated_sell(coin_id: str):
     avg_entry = total_cost / total_net_qty
     
     # 4. Calculate sell price: avg_entry × (1 + tp_pct)
-    # TP% covers the profit target. Hata maker fees on sell side are typically
-    # embedded in the spread or deducted from received MYR, so we add a small
-    # buffer for sell-side fees too.
+    # Hata Maker fee = 0% for limit orders that go to order book
+    # Our sell is a LIMIT order placed above market price → always Maker → 0% fee
+    # Taker fee (0.25%) only for market/IOC orders which we DON'T use
     tp_pct = shared.engine_state[coin_id].get("tp_pct", 0.005)
-    SELL_FEE_RATE = 0.004  # ~0.4% Hata sell fee buffer
-    sell_price = avg_entry * (1.0 + tp_pct + SELL_FEE_RATE)
+    sell_price = avg_entry * (1.0 + tp_pct)
     
     # 5. Verify actual wallet balance before placing sell
     qty_scale = hata_api.COIN_SCALES.get(coin_id, {}).get("qty", 4)
@@ -202,8 +202,8 @@ def _place_consolidated_sell(coin_id: str):
     
     # 6. Place ONE consolidated sell order
     logger.info(f"[{coin_id}] CONSOLIDATED SELL: {len(holding_layers)} layers combined | "
-                f"Avg Entry: RM{avg_entry:.4f} | TP: RM{sell_price:.4f} (+{(tp_pct+SELL_FEE_RATE)*100:.2f}%) | "
-                f"Qty: {sell_qty} | Total Cost: RM{total_cost:.2f}")
+                f"Avg Entry: RM{avg_entry:.4f} | TP: RM{sell_price:.4f} (+{tp_pct*100:.2f}%) | "
+                f"Qty: {sell_qty} | Total Cost: RM{total_cost:.2f} | Maker Fee: 0%")
     
     sell_res = hata_api.place_limit_order(f"{coin_id}_MYR", "SELL", sell_price, sell_qty)
     

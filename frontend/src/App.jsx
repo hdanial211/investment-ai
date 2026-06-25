@@ -143,7 +143,7 @@ function App() {
     const totalCost = holdingLayers.reduce((sum, l) => sum + (l.actual_cost_myr || l.amount_myr || 0), 0)
     const totalQty = holdingLayers.reduce((sum, l) => sum + (l.net_qty || l.quantity || 0), 0)
     const avgEntry = totalQty > 0 ? totalCost / totalQty : 0
-    const sellPrice = holdingLayers[0]?.consolidated_sell_price || (avgEntry * (1 + tpPct + 0.004))
+    const sellPrice = holdingLayers[0]?.consolidated_sell_price || (avgEntry * (1 + tpPct))
     consolidatedInfo = { totalCost, totalQty, avgEntry, sellPrice }
   }
 
@@ -504,7 +504,7 @@ function App() {
                       }[selectedCoin] || '0.5% — Default'}
                     </div>
                     <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#888' }}>
-                      *TP {(tpPct * 100).toFixed(1)}% + ~0.4% fee buffer = Sell pada +{((tpPct + 0.004) * 100).toFixed(1)}% dari avg entry
+                      *Hata Maker Fee = 0% (Limit Order) | Sell pada +{(tpPct * 100).toFixed(1)}% dari avg entry
                     </p>
                   </div>
 
@@ -542,7 +542,7 @@ function App() {
                       <strong style={{ color: '#aaa' }}>Kapasiti Maksimum:</strong> {maxLayers}
                     </p>
                     <p style={{ margin: '5px 0', fontSize: '0.9rem' }}>
-                      <strong style={{ color: '#aaa' }}>Take Profit:</strong> <span style={{ color: '#00e676' }}>{(tpPct * 100).toFixed(1)}%</span> (+ ~0.4% sell fee)
+                      <strong style={{ color: '#aaa' }}>Take Profit:</strong> <span style={{ color: '#00e676' }}>{(tpPct * 100).toFixed(1)}%</span> (Maker Fee: 0%)
                     </p>
                     <p style={{ margin: '15px 0 5px 0', fontSize: '0.95rem' }}>
                       <strong style={{ color: '#fff' }}>Saiz Trade Ditetapkan: <span style={{ color: '#00e5ff' }}>RM {tradeAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></strong>
