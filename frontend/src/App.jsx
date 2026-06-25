@@ -147,6 +147,13 @@ function App() {
     consolidatedInfo = { totalCost, totalQty, avgEntry, sellPrice }
   }
 
+  // Cascade & cycle info
+  const pendingBuyLayers = (coinData.layers || []).filter(l => l.status === 'PENDING_BUY')
+  const lastCycleEntry = coinData.last_cycle_entry || 0
+  const minNewEntry = lastCycleEntry > 0 ? lastCycleEntry * 0.98 : 0
+  const currentPrice = coinData.current_price || 0
+  const canNewEntry = lastCycleEntry <= 0 || currentPrice <= minNewEntry
+
   return (
     <div className="dashboard">
       <header className="header">
@@ -316,6 +323,32 @@ function App() {
                           </div>
                           <p style={{ margin: '8px 0 0 0', fontSize: '0.75rem', color: '#666' }}>
                             *Satu sell order gabungan untuk semua {holdingLayers.length} layer. Cancel & replace automatik bila layer baru masuk.
+                          </p>
+                          {pendingBuyLayers.length > 0 && (
+                            <p style={{ margin: '6px 0 0 0', fontSize: '0.8rem', color: '#ffb300' }}>
+                              ⏳ Cascade: {pendingBuyLayers.length} pending BUY menunggu (Layer {pendingBuyLayers[0]?.id} @ RM {pendingBuyLayers[0]?.entry_price?.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4})})
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 2% Gap Status — shown when no layers active */}
+                      {(!coinData.layers || coinData.layers.length === 0) && lastCycleEntry > 0 && (
+                        <div style={{ 
+                          marginTop: '1rem', 
+                          background: canNewEntry ? 'rgba(0, 230, 118, 0.08)' : 'rgba(255, 179, 0, 0.08)', 
+                          border: `1px solid ${canNewEntry ? 'rgba(0, 230, 118, 0.3)' : 'rgba(255, 179, 0, 0.3)'}`, 
+                          borderRadius: '8px', 
+                          padding: '10px 14px',
+                          fontSize: '0.85rem'
+                        }}>
+                          <span style={{ color: canNewEntry ? '#00e676' : '#ffb300', fontWeight: 'bold' }}>
+                            {canNewEntry ? '✅ Boleh entry baharu' : '🔒 Entry disekat — tunggu 2% gap'}
+                          </span>
+                          <p style={{ margin: '4px 0 0 0', color: '#888', fontSize: '0.75rem' }}>
+                            Last cycle entry: RM {lastCycleEntry.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4})} | 
+                            Min entry: RM {minNewEntry.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4})} | 
+                            Harga sekarang: RM {currentPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4})}
                           </p>
                         </div>
                       )}

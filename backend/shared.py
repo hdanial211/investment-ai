@@ -33,7 +33,8 @@ def create_coin_state():
         "risk_level": 1,
         "is_auto": False,
         "tp_pct": 0.005,
-        "consolidated_sell_order_id": None
+        "consolidated_sell_order_id": None,
+        "last_cycle_entry": 0.0
     }
 
 def load_state():
