@@ -36,6 +36,14 @@ def create_coin_state():
         "consolidated_sell_order_id": None,
         "last_cycle_entry": 0.0
     }
+# AI-suggested TP% per coin (from training data volatility analysis)
+AI_SUGGESTED_TP = {
+    "BTC": 0.004,   # 0.4% — Large cap, low volatility
+    "ETH": 0.005,   # 0.5% — Medium volatility
+    "SOL": 0.008,   # 0.8% — High volatility
+    "XRP": 0.006,   # 0.6% — Medium-high volatility
+    "LTC": 0.004,   # 0.4% — Low volatility
+}
 
 def load_state():
     if os.path.exists(STATE_FILE):
@@ -55,17 +63,25 @@ def load_state():
             for coin in default_state:
                 if coin in saved_state:
                     default_state[coin].update(saved_state[coin])
+                # Apply AI-suggested TP if still at generic default
+                if default_state[coin].get("tp_pct", 0.005) == 0.005 and coin in AI_SUGGESTED_TP:
+                    default_state[coin]["tp_pct"] = AI_SUGGESTED_TP[coin]
             return default_state
         except Exception as e:
             print(f"Error loading state: {e}")
             
-    return {
+    # Fresh state — apply AI-suggested TP per coin
+    fresh = {
         "ETH": create_coin_state(),
         "BTC": create_coin_state(),
         "SOL": create_coin_state(),
         "XRP": create_coin_state(),
         "LTC": create_coin_state()
     }
+    for coin in fresh:
+        if coin in AI_SUGGESTED_TP:
+            fresh[coin]["tp_pct"] = AI_SUGGESTED_TP[coin]
+    return fresh
 
 engine_state = load_state()
 

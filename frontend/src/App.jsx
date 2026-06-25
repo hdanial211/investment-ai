@@ -453,20 +453,56 @@ function App() {
 
                   <label>Take Profit (%) — per coin</label>
                   <div className="amount-controls" style={{ marginBottom: '1rem' }}>
-                    <input 
-                      type="number" 
-                      className="amount-input"
-                      value={tpPct ? (tpPct * 100).toFixed(1) : ''} 
-                      onChange={(e) => {
-                        const val = parseFloat(e.target.value)
-                        if (!isNaN(val)) setTP(val / 100)
-                      }}
-                      min="0.1"
-                      max="50"
-                      step="0.1"
-                      placeholder="Cth: 0.5 = 0.5%"
-                      style={{ width: '100%', fontSize: '1.2rem', padding: '10px' }}
-                    />
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input 
+                        type="number" 
+                        className="amount-input"
+                        value={tpPct ? (tpPct * 100).toFixed(1) : ''} 
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value)
+                          if (!isNaN(val)) setTP(val / 100)
+                        }}
+                        min="0.1"
+                        max="50"
+                        step="0.1"
+                        placeholder="Cth: 0.5 = 0.5%"
+                        style={{ flex: 1, fontSize: '1.2rem', padding: '10px' }}
+                      />
+                      <button 
+                        onClick={() => setTP({BTC: 0.004, ETH: 0.005, SOL: 0.008, XRP: 0.006, LTC: 0.004}[selectedCoin] || 0.005)}
+                        style={{ 
+                          padding: '10px 14px', 
+                          background: 'rgba(0, 229, 255, 0.12)', 
+                          border: '1px solid rgba(0, 229, 255, 0.3)', 
+                          borderRadius: '8px', 
+                          color: '#00e5ff', 
+                          cursor: 'pointer',
+                          fontSize: '0.85rem',
+                          fontWeight: 'bold',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        Guna AI: {({BTC: '0.4', ETH: '0.5', SOL: '0.8', XRP: '0.6', LTC: '0.4'}[selectedCoin] || '0.5')}%
+                      </button>
+                    </div>
+                    <div style={{ 
+                      marginTop: '8px', 
+                      background: 'rgba(0, 229, 255, 0.06)', 
+                      border: '1px solid rgba(0, 229, 255, 0.15)', 
+                      borderRadius: '6px', 
+                      padding: '8px 12px',
+                      fontSize: '0.78rem',
+                      color: '#aaa'
+                    }}>
+                      <span style={{ color: '#00e5ff', fontWeight: 'bold' }}>💡 AI Suggestion ({selectedCoin}):</span>{' '}
+                      {{
+                        BTC: '0.4% — Large cap, volatility rendah, scalp cepat',
+                        ETH: '0.5% — Medium volatility, sweet spot DCA layering',
+                        SOL: '0.8% — High volatility, swing besar',
+                        XRP: '0.6% — Medium-high volatility, spread agak besar',
+                        LTC: '0.4% — Low volatility macam BTC, scalp cepat'
+                      }[selectedCoin] || '0.5% — Default'}
+                    </div>
                     <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#888' }}>
                       *TP {(tpPct * 100).toFixed(1)}% + ~0.4% fee buffer = Sell pada +{((tpPct + 0.004) * 100).toFixed(1)}% dari avg entry
                     </p>
