@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
-import { Activity, Power, ShieldAlert, Zap, Layers, BarChart2, Radio, Wallet, TrendingUp, AlertTriangle } from 'lucide-react'
+import { Activity, Power, ShieldAlert, Zap, Layers, BarChart2, Radio, Wallet, TrendingUp, AlertTriangle, Brain } from 'lucide-react'
 import './App.css'
 import BacktestSimulator from './BacktestSimulator'
+import AILearning from './AILearning'
 
 // ★ Minimum notional (MYR) per coin — mestikan order value >= nilai ini
 const MIN_NOTIONAL = {
@@ -188,6 +189,12 @@ function App() {
             onClick={() => setActiveTab('live')}
           >
             <Radio size={16} /> LIVE TRADE
+          </button>
+          <button 
+            className={`tab-btn ${activeTab === 'ai-learning' ? 'active' : ''}`}
+            onClick={() => setActiveTab('ai-learning')}
+          >
+            <Brain size={16} /> AI LEARNING
           </button>
           <button 
             className={`tab-btn ${activeTab === 'simulator' ? 'active' : ''}`}
@@ -753,6 +760,8 @@ function App() {
             </div>
           </div>
         </>
+      ) : activeTab === 'ai-learning' ? (
+        <AILearning />
       ) : (
         <BacktestSimulator />
       )}
