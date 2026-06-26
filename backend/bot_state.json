@@ -140,7 +140,7 @@
         "risk_level": 3,
         "is_auto": true,
         "tp_pct": 0.005,
-        "consolidated_sell_order_id": "252770973",
+        "consolidated_sell_order_id": "252813844",
         "last_cycle_entry": 0.0,
         "model_version": "v1",
         "trades_since_retrain": 0,
@@ -349,7 +349,7 @@
         "risk_level": 3,
         "is_auto": true,
         "tp_pct": 0.008,
-        "consolidated_sell_order_id": "252771022",
+        "consolidated_sell_order_id": "252813861",
         "last_cycle_entry": 0.0,
         "model_version": "v1",
         "trades_since_retrain": 0,
@@ -520,7 +520,9 @@
                 "net_qty": 3.1872000000000003,
                 "actual_cost_myr": 13.4208,
                 "consolidated_sell_price": 4.702,
-                "consolidated_sell_qty": 15.7
+                "consolidated_sell_qty": 15.7,
+                "fee_myr": 0.060185600000000006,
+                "fee_role": "unknown"
             }
         ],
         "total_pnl": 1.0497331910352088,
@@ -528,7 +530,7 @@
         "risk_level": 3,
         "is_auto": true,
         "tp_pct": 0.006,
-        "consolidated_sell_order_id": "252771103",
+        "consolidated_sell_order_id": "252813887",
         "last_cycle_entry": 0.0,
         "model_version": "v1",
         "trades_since_retrain": 0,
@@ -543,7 +545,7 @@
             "threshold_label": "Default",
             "threshold_sample_size": 0
         },
-        "total_buy_fees_myr": 0.2406348,
+        "total_buy_fees_myr": 0.3008204,
         "total_buy_fees_qty": 0.0632
     },
     "LTC": {

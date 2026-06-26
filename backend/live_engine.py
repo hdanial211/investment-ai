@@ -273,7 +273,8 @@ def _place_consolidated_sell(coin_id: str):
 # NOTE: This only places a BUY — sell is handled by consolidated
 # ─────────────────────────────────────────────
 def _place_next_dca_buy(coin_id: str, last_entry_price: float):
-    """After a consolidated SELL fills, place Limit BUY at 1% below last entry."""
+    """After a consolidated SELL fills, place Limit BUY at 1% below last entry.
+    Uses min(limit_price, current_price) to ensure full RM deployment."""
     import hata_api
 
     layers = shared.engine_state[coin_id].get("layers", [])
@@ -284,14 +285,27 @@ def _place_next_dca_buy(coin_id: str, last_entry_price: float):
         logger.info(f"[{coin_id}] Max layers ({strategy['max_layers']}) reached. Skipping auto-DCA.")
         return
 
-    # 1% below last entry price
+    # 1% below last entry price (intended limit level)
     next_entry = round(last_entry_price * 0.99, 6)
+
+    # ★ FIX: Use the LOWER of limit price or current price for qty calc & order
+    # If market already dropped below limit, order fills at market price instantly
+    # So qty must be based on actual fill price to deploy full RM amount
+    current_price = shared.engine_state[coin_id].get("current_price", 0)
+    if current_price > 0 and current_price < next_entry:
+        buy_price = current_price
+        logger.info(f"[{coin_id}] AUTO-DCA: Market RM{current_price:.4f} already < limit RM{next_entry:.4f} → using market price for accurate RM deployment")
+    else:
+        buy_price = next_entry
+
     trade_amount = shared.engine_state[coin_id].get("trade_amount_myr", 50.0)
     qty_scale = hata_api.COIN_SCALES.get(coin_id, {}).get("qty", 4)
-    quantity = round(trade_amount / next_entry, qty_scale)
+    price_scale = hata_api.COIN_SCALES.get(coin_id, {}).get("price", 2)
+    buy_price = round(buy_price, price_scale)
+    quantity = round(trade_amount / buy_price, qty_scale)
 
-    logger.info(f"[{coin_id}] AUTO-DCA: Placing Limit BUY at RM{next_entry:.4f} (1% below RM{last_entry_price:.4f})")
-    hata_res = hata_api.place_limit_order(f"{coin_id}_MYR", "BUY", next_entry, quantity)
+    logger.info(f"[{coin_id}] AUTO-DCA: Placing Limit BUY at RM{buy_price:.{price_scale}f} | qty: {quantity} | target spend: RM{trade_amount:.2f}")
+    hata_res = hata_api.place_limit_order(f"{coin_id}_MYR", "BUY", buy_price, quantity)
 
     if hata_res.get("status") == "error":
         logger.error(f"[{coin_id}] Auto-DCA BUY failed: {hata_res.get('message')}")
@@ -300,7 +314,7 @@ def _place_next_dca_buy(coin_id: str, last_entry_price: float):
     order_id = hata_res.get("data", {}).get("id")
     layer = {
         "id": len(layers) + 1,
-        "entry_price": next_entry,
+        "entry_price": buy_price,
         "amount_myr": trade_amount,
         "quantity": quantity,
         "status": "PENDING_BUY",
@@ -310,7 +324,7 @@ def _place_next_dca_buy(coin_id: str, last_entry_price: float):
     }
     shared.engine_state[coin_id]["layers"].append(layer)
     shared.save_state()
-    logger.info(f"[{coin_id}] AUTO-DCA SUCCESS: BUY order {order_id} at RM{next_entry:.4f}")
+    logger.info(f"[{coin_id}] AUTO-DCA SUCCESS: BUY order {order_id} at RM{buy_price:.{price_scale}f} (target: RM{trade_amount:.2f})")
 
 
 # ─────────────────────────────────────────────
