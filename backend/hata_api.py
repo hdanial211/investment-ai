@@ -178,11 +178,14 @@ def get_ticker(symbol: str = "ETH_MYR") -> float:
         return 0.0
 
 COIN_SCALES = {
-    "BTC": {"qty": 5, "price": 0},
-    "ETH": {"qty": 4, "price": 0},
-    "SOL": {"qty": 3, "price": 1},
-    "LTC": {"qty": 3, "price": 1},
-    "XRP": {"qty": 1, "price": 3}
+    # qty     = decimal places untuk quantity
+    # price   = decimal places untuk price
+    # min_notional = minimum nilai order (price × qty) dalam MYR
+    "BTC": {"qty": 5, "price": 0, "min_notional": 20.0},
+    "ETH": {"qty": 4, "price": 0, "min_notional": 15.0},
+    "SOL": {"qty": 3, "price": 1, "min_notional": 10.0},
+    "LTC": {"qty": 3, "price": 1, "min_notional": 10.0},
+    "XRP": {"qty": 1, "price": 3, "min_notional": 10.0}
 }
 
 def place_limit_order(symbol: str, side: str, price: float, quantity: float) -> dict:
@@ -204,7 +207,17 @@ def place_limit_order(symbol: str, side: str, price: float, quantity: float) -> 
     # Format according to exact scale
     fmt_price = f"{price:.{price_scale}f}"
     fmt_qty = f"{quantity:.{qty_scale}f}"
-    
+
+    # ★ Pre-flight: Validate notional (price × qty) sebelum hit API
+    min_notional = COIN_SCALES.get(base_coin, {}).get("min_notional", 10.0)
+    actual_notional = float(fmt_price) * float(fmt_qty)
+    if actual_notional < min_notional:
+        err_msg = (f"Order rejected (pre-flight): Notional RM{actual_notional:.4f} "
+                   f"< minimum RM{min_notional:.2f} for {base_coin}. "
+                   f"Increase trade_amount_myr or wait for lower price.")
+        print(f"[MIN NOTIONAL GUARD] {err_msg}")
+        return {"status": "error", "message": err_msg, "code": "min_notional"}
+
     params = {
         "is_buy": hata_side,
         "pair": clean_symbol,

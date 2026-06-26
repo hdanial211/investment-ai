@@ -955,29 +955,43 @@ async def process_kline(coin_id, kline):
                             logger.info(f"[{coin_id}] Skipping: Price RM{current_price:.4f} not ≥2% below last cycle entry RM{last_cycle:.4f}. Need ≤RM{min_entry:.4f}.")
 
                     if can_buy and trade_amount <= balance and current_price > 0:
-                        logger.info(f"[{coin_id}] Auto-executing LIMIT BUY RM{trade_amount:.2f} at RM{current_price:.4f}")
                         import hata_api
                         qty_scale = hata_api.COIN_SCALES.get(coin_id, {}).get("qty", 4)
+                        min_notional = hata_api.COIN_SCALES.get(coin_id, {}).get("min_notional", 10.0)
                         quantity = round(trade_amount / current_price, qty_scale)
-                        hata_res = hata_api.place_limit_order(f"{coin_id}_MYR", "BUY", current_price, quantity)
+                        actual_notional = round(quantity * current_price, 4)
 
-                        if hata_res.get("status") == "error":
-                            logger.error(f"[{coin_id}] Hata API Error: {hata_res.get('message')}")
+                        # ★ Pre-check: warn if notional might be too small
+                        if actual_notional < min_notional:
+                            logger.warning(
+                                f"[{coin_id}] Skipping BUY: Notional RM{actual_notional:.4f} < min RM{min_notional:.2f}. "
+                                f"Increase trade_amount_myr (current: RM{trade_amount:.2f}) to at least RM{min_notional:.2f}."
+                            )
                         else:
-                            order_id = hata_res.get("data", {}).get("id")
-                            layer = {
-                                "id": len(layers) + 1,
-                                "entry_price": current_price,
-                                "amount_myr": trade_amount,
-                                "quantity": quantity,
-                                "status": "PENDING_BUY",
-                                "buy_order_id": str(order_id),
-                                "hata_buy_res": hata_res,
-                                "created_at": time.time()
-                            }
-                            shared.engine_state[coin_id]["layers"].append(layer)
-                            shared.save_state()
-                            logger.info(f"[{coin_id}] PENDING_BUY created. Order {order_id} at RM{current_price:.4f}")
+                            logger.info(f"[{coin_id}] Auto-executing LIMIT BUY RM{trade_amount:.2f} (notional RM{actual_notional:.4f}) at RM{current_price:.4f}")
+                            hata_res = hata_api.place_limit_order(f"{coin_id}_MYR", "BUY", current_price, quantity)
+
+                            if hata_res.get("status") == "error":
+                                err_code = hata_res.get("code", "")
+                                if err_code == "min_notional":
+                                    logger.warning(f"[{coin_id}] Order blocked (min notional): {hata_res.get('message')}")
+                                else:
+                                    logger.error(f"[{coin_id}] Hata API Error: {hata_res.get('message')}")
+                            else:
+                                order_id = hata_res.get("data", {}).get("id")
+                                layer = {
+                                    "id": len(layers) + 1,
+                                    "entry_price": current_price,
+                                    "amount_myr": trade_amount,
+                                    "quantity": quantity,
+                                    "status": "PENDING_BUY",
+                                    "buy_order_id": str(order_id),
+                                    "hata_buy_res": hata_res,
+                                    "created_at": time.time()
+                                }
+                                shared.engine_state[coin_id]["layers"].append(layer)
+                                shared.save_state()
+                                logger.info(f"[{coin_id}] PENDING_BUY created. Order {order_id} at RM{current_price:.4f}")
             else:
                 shared.engine_state[coin_id]["last_signal"] = 0
 
