@@ -4,6 +4,15 @@ import { Activity, Power, ShieldAlert, Zap, Layers, BarChart2, Radio, Wallet, Tr
 import './App.css'
 import BacktestSimulator from './BacktestSimulator'
 
+// ★ Minimum notional (MYR) per coin — mestikan order value >= nilai ini
+const MIN_NOTIONAL = {
+  BTC: 20.0,
+  ETH: 15.0,
+  SOL: 10.0,
+  LTC: 10.0,
+  XRP: 10.0,
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState('live') // 'live' or 'simulator'
   const [selectedCoin, setSelectedCoin] = useState('ETH')
@@ -551,7 +560,80 @@ function App() {
                     />
                   </div>
 
+                  {/* ★ Min Notional Badge */}
+                  {(() => {
+                    const minVal = MIN_NOTIONAL[selectedCoin] ?? 10
+                    const currentVal = parseFloat(coinData.trade_amount_myr) || 0
+                    const isBelowMin = currentVal > 0 && currentVal < minVal
+                    const isOk = currentVal >= minVal
+                    return (
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        padding: '10px 14px',
+                        borderRadius: '10px',
+                        background: isBelowMin
+                          ? 'rgba(255,59,59,0.12)'
+                          : 'rgba(0,229,255,0.07)',
+                        border: `1.5px solid ${isBelowMin ? '#ff3b3b' : isOk ? '#00e5ff' : '#444'}`,
+                        marginBottom: '0.5rem',
+                        fontSize: '0.85rem',
+                        transition: 'all 0.3s',
+                      }}>
+                        <span style={{ fontSize: '1.1rem' }}>
+                          {isBelowMin ? '⚠️' : isOk ? '✅' : 'ℹ️'}
+                        </span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{
+                            fontWeight: 700,
+                            color: isBelowMin ? '#ff6b6b' : '#00e5ff',
+                            marginBottom: '2px',
+                            fontSize: '0.82rem',
+                            letterSpacing: '0.5px',
+                            textTransform: 'uppercase'
+                          }}>
+                            Minimum Order {selectedCoin}/MYR
+                          </div>
+                          <div style={{ color: '#ccc', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                            {Object.entries(MIN_NOTIONAL).map(([coin, min]) => (
+                              <span key={coin} style={{
+                                padding: '2px 8px',
+                                borderRadius: '20px',
+                                fontSize: '0.78rem',
+                                fontWeight: coin === selectedCoin ? 700 : 400,
+                                background: coin === selectedCoin
+                                  ? (isBelowMin ? 'rgba(255,59,59,0.3)' : 'rgba(0,229,255,0.2)')
+                                  : 'rgba(255,255,255,0.06)',
+                                color: coin === selectedCoin
+                                  ? (isBelowMin ? '#ff8080' : '#00e5ff')
+                                  : '#888',
+                                border: coin === selectedCoin
+                                  ? `1px solid ${isBelowMin ? '#ff3b3b' : '#00e5ff'}`
+                                  : '1px solid #333',
+                              }}>
+                                {coin} ≥ RM{min.toFixed(0)}
+                              </span>
+                            ))}
+                          </div>
+                          {isBelowMin && (
+                            <div style={{
+                              color: '#ff6b6b',
+                              fontWeight: 600,
+                              marginTop: '5px',
+                              fontSize: '0.8rem'
+                            }}>
+                              ❌ RM{currentVal.toFixed(2)} terlalu rendah! Naikkan ke sekurang-kurangnya RM{minVal.toFixed(0)} untuk {selectedCoin}.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })()}
+
+
                   <label>Take Profit (%) — per coin</label>
+
                   <div className="amount-controls" style={{ marginBottom: '1rem' }}>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                       <input 
