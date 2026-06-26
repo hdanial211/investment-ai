@@ -34,7 +34,21 @@ def create_coin_state():
         "is_auto": False,
         "tp_pct": 0.005,
         "consolidated_sell_order_id": None,
-        "last_cycle_entry": 0.0
+        "last_cycle_entry": 0.0,
+        # ── Adaptive ML Pipeline (per-coin, independent) ──
+        "model_version": "v1",
+        "trades_since_retrain": 0,
+        "last_retrain_at": None,
+        "adaptive_threshold": 0.60,
+        "active_trade_cycle_id": None,
+        "ml_stats": {
+            "total_predictions": 0,
+            "total_trades_logged": 0,
+            "recent_win_rate": 0.0,
+            "model_accuracy": 0.0,
+            "threshold_label": "Default",
+            "threshold_sample_size": 0
+        }
     }
 # AI-suggested TP% per coin (from training data volatility analysis)
 AI_SUGGESTED_TP = {

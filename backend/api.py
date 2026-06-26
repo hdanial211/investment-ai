@@ -297,6 +297,131 @@ def sync_trade_history():
         logger.error(f"Sync history error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ─────────────────────────────────────────────
+# ML Learning Pipeline API Endpoints
+# ─────────────────────────────────────────────
+
+@app.get("/api/ml-stats")
+def get_ml_stats():
+    """Get ML performance stats for all 5 coins (each independent)."""
+    try:
+        import ml_logger
+        coins = ["BTC", "ETH", "SOL", "XRP", "LTC"]
+        result = {}
+        for coin_id in coins:
+            result[coin_id] = ml_logger.get_ml_stats(coin_id)
+        return {"status": "ok", "data": result}
+    except Exception as e:
+        logger.error(f"ML stats error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/ml-history/{coin}")
+def get_ml_history(coin: str):
+    """Get ML trade outcome history for a specific coin (for charts)."""
+    coin = coin.upper()
+    if coin not in ["BTC", "ETH", "SOL", "XRP", "LTC"]:
+        raise HTTPException(status_code=400, detail="Invalid coin")
+    
+    try:
+        from database.models import SessionLocal
+        from database.ml_models import MLTrainingLog, ModelPerformance
+        
+        session = SessionLocal()
+        try:
+            # Recent trade outcomes for this coin
+            trades = (
+                session.query(MLTrainingLog)
+                .filter(
+                    MLTrainingLog.coin_id == coin,
+                    MLTrainingLog.actual_outcome.in_(["WIN", "LOSS"])
+                )
+                .order_by(MLTrainingLog.timestamp.desc())
+                .limit(100)
+                .all()
+            )
+            
+            trade_list = [{
+                "timestamp": str(t.timestamp),
+                "confidence": t.confidence,
+                "outcome": t.actual_outcome,
+                "pnl_myr": t.pnl_myr,
+                "pnl_pct": t.pnl_pct,
+                "layers_used": t.layers_used,
+                "hold_duration_min": t.hold_duration_min,
+                "model_version": t.model_version
+            } for t in trades]
+            
+            # Model versions for this coin
+            versions = (
+                session.query(ModelPerformance)
+                .filter(ModelPerformance.coin_id == coin)
+                .order_by(ModelPerformance.trained_at.desc())
+                .all()
+            )
+            
+            version_list = [{
+                "version": v.model_version,
+                "trained_at": str(v.trained_at),
+                "accuracy": round(v.accuracy * 100, 1),
+                "precision": round(v.precision_score * 100, 1),
+                "f1": round(v.f1_score * 100, 1),
+                "win_rate_live": round(v.win_rate_live * 100, 1),
+                "total_trades": v.total_trades,
+                "total_pnl": v.total_pnl,
+                "is_active": v.is_active,
+                "retired_at": str(v.retired_at) if v.retired_at else None
+            } for v in versions]
+            
+            return {
+                "status": "ok",
+                "coin": coin,
+                "trades": trade_list,
+                "model_versions": version_list
+            }
+        finally:
+            session.close()
+            
+    except Exception as e:
+        logger.error(f"ML history error for {coin}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class RetrainRequest(BaseModel):
+    coin: str
+
+@app.post("/api/ml-retrain")
+def manual_retrain(req: RetrainRequest):
+    """Manually trigger retrain for a specific coin."""
+    coin = req.coin.upper()
+    if coin not in ["BTC", "ETH", "SOL", "XRP", "LTC"]:
+        raise HTTPException(status_code=400, detail="Invalid coin")
+    
+    try:
+        from ml_retrain import retrain_coin, hot_reload_model
+        
+        logger.info(f"Manual retrain triggered for {coin}")
+        success = retrain_coin(coin)
+        
+        if success:
+            hot_reload_model(coin)
+            new_version = engine_state.get(coin, {}).get("model_version", "?")
+            return {
+                "status": "ok",
+                "message": f"{coin} retrained successfully → {new_version}",
+                "model_version": new_version
+            }
+        else:
+            return {
+                "status": "warning",
+                "message": f"{coin} retrain skipped (insufficient data or error)"
+            }
+    except Exception as e:
+        logger.error(f"Manual retrain error for {coin}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.on_event("startup")
 def start_server():
     # Start live engine in background (which includes WS and price/balance loops)
@@ -307,3 +432,4 @@ def start_server():
 # Force reload to pick up bot state updates
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
+

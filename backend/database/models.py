@@ -71,6 +71,12 @@ class BotSettings(Base):
 
 def create_tables():
     Base.metadata.create_all(bind=engine)
+    # Also create ML tables
+    try:
+        from database.ml_models import create_ml_tables
+        create_ml_tables()
+    except Exception:
+        pass  # ML tables will be created by live_engine on startup
 
 
 def get_db():

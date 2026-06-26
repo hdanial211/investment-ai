@@ -1,8 +1,8 @@
 {
     "ETH": {
-        "current_price": 6480.0,
+        "current_price": 6368.0,
         "last_signal": 1,
-        "confidence": 67.89438128471375,
+        "confidence": 70.82075476646423,
         "layers": [
             {
                 "id": 1,
@@ -136,34 +136,60 @@
             }
         ],
         "total_pnl": 0.5999999999999943,
-        "trade_amount_myr": 10.0,
+        "trade_amount_myr": 15.0,
         "risk_level": 3,
         "is_auto": true,
         "tp_pct": 0.005,
-        "consolidated_sell_order_id": "251263487",
+        "consolidated_sell_order_id": "252763269",
         "last_cycle_entry": 0.0,
+        "model_version": "v1",
+        "trades_since_retrain": 0,
+        "last_retrain_at": null,
+        "adaptive_threshold": 0.6,
+        "active_trade_cycle_id": null,
+        "ml_stats": {
+            "total_predictions": 0,
+            "total_trades_logged": 0,
+            "recent_win_rate": 0.0,
+            "model_accuracy": 0.0,
+            "threshold_label": "Default",
+            "threshold_sample_size": 0
+        },
         "total_buy_fees_myr": 0.20195359999999998,
         "total_buy_fees_qty": 2.76e-05
     },
     "BTC": {
-        "current_price": 262108.0,
+        "current_price": 243707.0,
         "last_signal": 1,
-        "confidence": 82.31769800186157,
+        "confidence": 84.10121202468872,
         "layers": [],
         "total_pnl": -1.8182600000000022,
         "trade_amount_myr": 10.0,
         "risk_level": 3,
-        "is_auto": true,
+        "is_auto": false,
         "tp_pct": 0.004,
         "consolidated_sell_order_id": null,
         "last_cycle_entry": 266095.1898,
+        "model_version": "v1",
+        "trades_since_retrain": 0,
+        "last_retrain_at": null,
+        "adaptive_threshold": 0.6,
+        "active_trade_cycle_id": null,
+        "ml_stats": {
+            "total_predictions": 0,
+            "total_trades_logged": 0,
+            "recent_win_rate": 0.0,
+            "model_accuracy": 0.0,
+            "threshold_label": "Default",
+            "threshold_sample_size": 0
+        },
         "total_buy_fees_myr": 0.20503960000000002,
         "total_buy_fees_qty": 7.599999999999999e-07
     },
     "SOL": {
-        "current_price": 269.0,
+        "current_price": 275.9,
         "last_signal": 1,
-        "confidence": 71.31069302558899,
+        "confidence": 71.15601897239685,
         "layers": [
             {
                 "id": 1,
@@ -323,15 +349,28 @@
         "risk_level": 3,
         "is_auto": true,
         "tp_pct": 0.008,
-        "consolidated_sell_order_id": "251263498",
+        "consolidated_sell_order_id": "252763297",
         "last_cycle_entry": 0.0,
+        "model_version": "v1",
+        "trades_since_retrain": 0,
+        "last_retrain_at": null,
+        "adaptive_threshold": 0.6,
+        "active_trade_cycle_id": null,
+        "ml_stats": {
+            "total_predictions": 0,
+            "total_trades_logged": 0,
+            "recent_win_rate": 0.0,
+            "model_accuracy": 0.0,
+            "threshold_label": "Default",
+            "threshold_sample_size": 0
+        },
         "total_buy_fees_myr": 0.16034120000000002,
         "total_buy_fees_qty": 0.0005200000000000001
     },
     "XRP": {
-        "current_price": 4.234,
+        "current_price": 4.223,
         "last_signal": 1,
-        "confidence": 74.39166307449341,
+        "confidence": 75.3034234046936,
         "layers": [
             {
                 "id": 1,
@@ -455,15 +494,28 @@
         "risk_level": 3,
         "is_auto": true,
         "tp_pct": 0.006,
-        "consolidated_sell_order_id": "251263504",
+        "consolidated_sell_order_id": "252763318",
         "last_cycle_entry": 0.0,
+        "model_version": "v1",
+        "trades_since_retrain": 0,
+        "last_retrain_at": null,
+        "adaptive_threshold": 0.6,
+        "active_trade_cycle_id": null,
+        "ml_stats": {
+            "total_predictions": 0,
+            "total_trades_logged": 0,
+            "recent_win_rate": 0.0,
+            "model_accuracy": 0.0,
+            "threshold_label": "Default",
+            "threshold_sample_size": 0
+        },
         "total_buy_fees_myr": 0.2406348,
         "total_buy_fees_qty": 0.0504
     },
     "LTC": {
-        "current_price": 163.9,
+        "current_price": 169.3,
         "last_signal": 1,
-        "confidence": 76.9004762172699,
+        "confidence": 79.13912534713745,
         "layers": [
             {
                 "id": 1,
@@ -529,8 +581,21 @@
         "risk_level": 3,
         "is_auto": true,
         "tp_pct": 0.004,
-        "consolidated_sell_order_id": "251263509",
+        "consolidated_sell_order_id": "252763349",
         "last_cycle_entry": 0.0,
+        "model_version": "v1",
+        "trades_since_retrain": 0,
+        "last_retrain_at": null,
+        "adaptive_threshold": 0.6,
+        "active_trade_cycle_id": null,
+        "ml_stats": {
+            "total_predictions": 0,
+            "total_trades_logged": 0,
+            "recent_win_rate": 0.0,
+            "model_accuracy": 0.0,
+            "threshold_label": "Default",
+            "threshold_sample_size": 0
+        },
         "total_buy_fees_myr": 0.12001679999999999,
         "total_buy_fees_qty": 0.000632
     }

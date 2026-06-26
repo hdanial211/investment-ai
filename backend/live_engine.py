@@ -14,6 +14,10 @@ from datetime import datetime
 # Import shared state
 import shared
 
+# ML Pipeline imports
+import ml_logger
+import ml_adaptive
+
 # Features calculation
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from backend.features.indicators import calculate_features
@@ -64,6 +68,14 @@ def prefetch_historical_data():
             logger.error(f"[{coin_id}] Failed to prefetch historical data: {e}")
 
 prefetch_historical_data()
+
+# ── Create ML tables on startup ──
+try:
+    from database.ml_models import create_ml_tables
+    create_ml_tables()
+    logger.info("ML tables initialized.")
+except Exception as e:
+    logger.error(f"Failed to create ML tables: {e}")
 
 # Hata MYR prices cache
 hata_prices = {
@@ -802,6 +814,32 @@ async def update_hata_prices_loop():
                                 logger.info(f"[{coin_id}]   Sold: RM{sell_received_myr:.2f} | Cost: RM{total_buy_cost:.2f} | PnL: RM{real_pnl:.2f}")
                                 logger.info(f"[{coin_id}]   Total PnL: RM{shared.engine_state[coin_id]['total_pnl']:.2f}")
                                 
+                                # ★ ML PIPELINE: Log trade outcome for this coin's learning
+                                try:
+                                    # Calculate hold duration from earliest layer
+                                    earliest_created = min(
+                                        l.get("created_at", time.time()) for l in holding_layers
+                                    )
+                                    hold_duration = int((time.time() - earliest_created) / 60)
+                                    total_fees = shared.engine_state[coin_id].get("total_buy_fees_myr", 0)
+                                    avg_entry = total_buy_cost / sum(
+                                        l.get("net_qty", l.get("quantity", 0)) for l in holding_layers
+                                    ) if holding_layers else 0
+                                    pnl_pct = (real_pnl / total_buy_cost) if total_buy_cost > 0 else 0
+                                    
+                                    ml_logger.log_trade_outcome(
+                                        coin_id=coin_id,
+                                        entry_price=avg_entry,
+                                        exit_price=float(order_data.get("price", 0)),
+                                        pnl_myr=real_pnl,
+                                        pnl_pct=pnl_pct,
+                                        hold_duration_min=hold_duration,
+                                        layers_used=len(holding_layers),
+                                        fee_total_myr=total_fees
+                                    )
+                                except Exception as ml_err:
+                                    logger.error(f"[{coin_id}] ML log_trade_outcome error: {ml_err}")
+                                
                                 # Save last cycle entry for 2% gap enforcement
                                 last_entry = holding_layers[-1].get("entry_price", 0)
                                 shared.engine_state[coin_id]["last_cycle_entry"] = last_entry
@@ -880,6 +918,30 @@ async def update_hata_prices_loop():
 
 
 # ─────────────────────────────────────────────
+# Background: Check retrain triggers every hour
+# ─────────────────────────────────────────────
+async def retrain_check_loop():
+    """Check every hour if any coin needs retraining."""
+    await asyncio.sleep(120)  # Wait 2 minutes after startup before first check
+    while True:
+        try:
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, _run_retrain_check)
+        except Exception as e:
+            logger.error(f"Retrain check loop error: {e}")
+        await asyncio.sleep(3600)  # Check every hour
+
+
+def _run_retrain_check():
+    """Run retrain check in executor (blocking)."""
+    try:
+        from ml_retrain import check_and_retrain_all
+        check_and_retrain_all()
+    except Exception as e:
+        logger.error(f"Retrain check error: {e}")
+
+
+# ─────────────────────────────────────────────
 # Process each 1-minute candle from Binance WS
 # ─────────────────────────────────────────────
 async def process_kline(coin_id, kline):
@@ -926,7 +988,25 @@ async def process_kline(coin_id, kline):
 
             shared.engine_state[coin_id]["confidence"] = golden_prob * 100
 
-            if golden_prob > 0.60:
+            # ★ ML PIPELINE: Use adaptive threshold per coin (not hardcoded 0.60)
+            threshold = shared.engine_state[coin_id].get("adaptive_threshold", 0.60)
+            
+            # ★ ML PIPELINE: Log prediction for this coin's learning
+            try:
+                model_ver = shared.engine_state[coin_id].get("model_version", "v1")
+                signal_val = 1 if golden_prob > threshold else 0
+                ml_logger.log_prediction(
+                    coin_id=coin_id,
+                    features_dict=X.iloc[0].to_dict(),
+                    confidence=golden_prob,
+                    signal=signal_val,
+                    current_price=float(shared.engine_state[coin_id]["current_price"]),
+                    model_version=model_ver
+                )
+            except Exception as ml_err:
+                logger.error(f"[{coin_id}] ML log_prediction error: {ml_err}")
+
+            if golden_prob > threshold:
                 logger.info(f"[{coin_id}] GOLDEN ENTRY SIGNAL! Confidence: {golden_prob*100:.2f}%")
                 shared.engine_state[coin_id]["last_signal"] = 1
 
@@ -1006,7 +1086,10 @@ async def start_ws():
     # ★ Step 2: Start background loop (prices + balance + order checks every 60s)
     asyncio.create_task(update_hata_prices_loop())
 
-    # ★ Step 3: Connect to Binance WebSocket for live candle data
+    # ★ Step 3: Start ML retrain check loop (every hour)
+    asyncio.create_task(retrain_check_loop())
+
+    # ★ Step 4: Connect to Binance WebSocket for live candle data
     while True:
         try:
             async with websockets.connect(WS_URL) as ws:
