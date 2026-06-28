@@ -770,22 +770,36 @@ async def update_hata_prices_loop():
                                     # Do NOT append — layer removed
 
                                 else:
-                                    # Still active — ensure created_at exists, cancel if stuck
+                                    # Still active — check if cascade or first-entry
                                     if "created_at" not in l:
                                         l["created_at"] = time.time()
                                         coin_changed = True
                                         logger.info(f"[{coin_id}] Patched created_at for buy {buy_id}.")
 
                                     age_sec = time.time() - l["created_at"]
-                                    if age_sec > 300:
-                                        logger.info(f"[{coin_id}] Buy {buy_id} stuck >{age_sec/60:.1f} min. Auto-cancelling...")
+
+                                    # ★ FIX: Cascade standby orders (HOLDING layers exist) → NO timeout
+                                    # Must stay alive until sell fills or they fill themselves
+                                    # Only first-entry (no HOLDING layers) gets auto-cancelled
+                                    has_holding = any(
+                                        ll.get("status") == "HOLDING"
+                                        for ll in layers
+                                    )
+
+                                    if has_holding:
+                                        logger.info(f"[{coin_id}] Buy {buy_id} is CASCADE standby "
+                                                    f"(age {age_sec/60:.1f} min) — keeping alive until trigger.")
+                                        active_layers.append(l)
+                                    elif age_sec > 300:
+                                        logger.info(f"[{coin_id}] Buy {buy_id} stuck >{age_sec/60:.1f} min "
+                                                    f"(first-entry, no HOLDING). Auto-cancelling...")
                                         cancel_res = hata_api.cancel_order(f"{coin_id}_MYR", buy_id)
                                         logger.info(f"[{coin_id}] Cancel result: {cancel_res}")
                                         coin_changed = True
-                                        # Do NOT append — layer removed after cancel
                                     else:
                                         remaining = 300 - age_sec
-                                        logger.info(f"[{coin_id}] Buy {buy_id} active. Auto-cancel in {remaining/60:.1f} min if unfilled.")
+                                        logger.info(f"[{coin_id}] Buy {buy_id} active (first-entry). "
+                                                    f"Auto-cancel in {remaining/60:.1f} min if unfilled.")
                                         active_layers.append(l)
                             else:
                                 active_layers.append(l)

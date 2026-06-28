@@ -1,8 +1,8 @@
 {
     "ETH": {
-        "current_price": 6491.0,
+        "current_price": 6440.0,
         "last_signal": 0,
-        "confidence": 45.1648086309433,
+        "confidence": 38.69668245315552,
         "layers": [
             {
                 "id": 1,
@@ -140,7 +140,7 @@
         "risk_level": 3,
         "is_auto": true,
         "tp_pct": 0.005,
-        "consolidated_sell_order_id": "252813844",
+        "consolidated_sell_order_id": "256950528",
         "last_cycle_entry": 0.0,
         "model_version": "v1",
         "trades_since_retrain": 0,
@@ -159,14 +159,14 @@
         "total_buy_fees_qty": 2.76e-05
     },
     "BTC": {
-        "current_price": 246848.0,
+        "current_price": 245500.0,
         "last_signal": 0,
-        "confidence": 14.615163207054138,
+        "confidence": 15.540134906768799,
         "layers": [],
         "total_pnl": -1.8182600000000022,
-        "trade_amount_myr": 10.0,
+        "trade_amount_myr": 15.0,
         "risk_level": 3,
-        "is_auto": false,
+        "is_auto": true,
         "tp_pct": 0.004,
         "consolidated_sell_order_id": null,
         "last_cycle_entry": 266095.1898,
@@ -187,9 +187,9 @@
         "total_buy_fees_qty": 7.599999999999999e-07
     },
     "SOL": {
-        "current_price": 294.3,
+        "current_price": 290.4,
         "last_signal": 0,
-        "confidence": 31.403496861457825,
+        "confidence": 51.549232006073,
         "layers": [
             {
                 "id": 1,
@@ -349,7 +349,7 @@
         "risk_level": 3,
         "is_auto": true,
         "tp_pct": 0.008,
-        "consolidated_sell_order_id": "252813861",
+        "consolidated_sell_order_id": "256950554",
         "last_cycle_entry": 0.0,
         "model_version": "v1",
         "trades_since_retrain": 0,
@@ -368,9 +368,9 @@
         "total_buy_fees_qty": 0.0005200000000000001
     },
     "XRP": {
-        "current_price": 4.326,
-        "last_signal": 0,
-        "confidence": 52.475327253341675,
+        "current_price": 4.307,
+        "last_signal": 1,
+        "confidence": 74.65817928314209,
         "layers": [
             {
                 "id": 1,
@@ -530,13 +530,13 @@
         "risk_level": 3,
         "is_auto": true,
         "tp_pct": 0.006,
-        "consolidated_sell_order_id": "252813887",
+        "consolidated_sell_order_id": "256950569",
         "last_cycle_entry": 0.0,
         "model_version": "v1",
         "trades_since_retrain": 0,
         "last_retrain_at": null,
         "adaptive_threshold": 0.6,
-        "active_trade_cycle_id": "XRP_1782659280",
+        "active_trade_cycle_id": "XRP_1782680580",
         "ml_stats": {
             "total_predictions": 0,
             "total_trades_logged": 0,
@@ -550,8 +550,8 @@
     },
     "LTC": {
         "current_price": 177.5,
-        "last_signal": 1,
-        "confidence": 63.06837797164917,
+        "last_signal": 0,
+        "confidence": 46.12906873226166,
         "layers": [
             {
                 "id": 1,
@@ -588,6 +588,34 @@
                 "fee_role": "unknown",
                 "consolidated_sell_price": 178.9,
                 "consolidated_sell_qty": 0.083
+            },
+            {
+                "id": 2,
+                "entry_price": 175.8,
+                "amount_myr": 15.0,
+                "quantity": 0.085,
+                "status": "PENDING_BUY",
+                "buy_order_id": "256950585",
+                "hata_buy_res": {
+                    "data": {
+                        "id": 256950585,
+                        "time": 1782681911,
+                        "stop_limit_price": "0",
+                        "pair_name": "LTCMYR",
+                        "price": "175.8",
+                        "orig_qty": "0.085",
+                        "exec_qty": "0",
+                        "quote_order_qty": "14.943",
+                        "cummul_quote_qty": "0",
+                        "is_buy": true,
+                        "post_only": false,
+                        "type": "limit",
+                        "status": "active",
+                        "client_order_id": "d90p2dt5193k77vnp4p0"
+                    },
+                    "status": "success"
+                },
+                "created_at": 1782681911.5686529
             }
         ],
         "total_pnl": 1.3375999999999877,
@@ -595,13 +623,13 @@
         "risk_level": 3,
         "is_auto": true,
         "tp_pct": 0.004,
-        "consolidated_sell_order_id": "256633732",
+        "consolidated_sell_order_id": "256950581",
         "last_cycle_entry": 186.12099,
         "model_version": "v1",
         "trades_since_retrain": 1,
         "last_retrain_at": null,
         "adaptive_threshold": 0.6,
-        "active_trade_cycle_id": "LTC_1782660240",
+        "active_trade_cycle_id": "LTC_1782680520",
         "ml_stats": {
             "total_predictions": 0,
             "total_trades_logged": 1,
