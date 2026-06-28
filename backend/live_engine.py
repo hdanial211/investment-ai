@@ -890,30 +890,40 @@ async def update_hata_prices_loop():
                             _place_consolidated_sell(coin_id)
                             state_changed = True
 
-                        # ★ CASCADE: If a BUY just filled, auto-place pending buy for NEXT layer
-                        just_filled = [l for l in current_layers if l.get("_just_filled")]
-                        if just_filled:
-                            # Clean up the _just_filled flag
-                            for l in just_filled:
-                                l.pop("_just_filled", None)
+                    # ★ CASCADE: Run ALWAYS (not just when needs_consolidated_sell)
+                    # Re-read layers AFTER consolidated sell to get accurate state
+                    current_layers = shared.engine_state[coin_id].get("layers", [])
+                    just_filled = [l for l in current_layers if l.get("_just_filled")]
+                    if just_filled:
+                        # Clean up the _just_filled flag first
+                        for l in just_filled:
+                            l.pop("_just_filled", None)
 
-                            # Only cascade if no other PENDING_BUY exists and not at max
-                            has_pending = any(l.get("status") == "PENDING_BUY" for l in current_layers)
-                            risk_level = shared.engine_state[coin_id].get("risk_level", 1)
-                            strategy = _get_strategy(coin_id, risk_level)
+                        # Re-read AFTER cleanup to get accurate counts
+                        has_pending = any(l.get("status") == "PENDING_BUY" for l in current_layers)
+                        holding_count = len([l for l in current_layers if l.get("status") == "HOLDING"])
+                        total_layers = len(current_layers)
+                        risk_level = shared.engine_state[coin_id].get("risk_level", 1)
+                        strategy = _get_strategy(coin_id, risk_level)
 
-                            if not has_pending and len(current_layers) < strategy["max_layers"]:
-                                # Use the lowest/latest filled layer's entry price
-                                last_filled = just_filled[-1]
-                                last_entry = last_filled.get("entry_price", 0)
-                                if last_entry > 0:
-                                    logger.info(f"[{coin_id}] ★ CASCADE: Layer {last_filled['id']} filled → auto-pending BUY for next layer below RM{last_entry:.4f}")
-                                    _place_next_dca_buy(coin_id, last_entry)
-                                    state_changed = True
-                            elif has_pending:
-                                logger.info(f"[{coin_id}] CASCADE: Skipping — already has a PENDING_BUY.")
-                            elif len(current_layers) >= strategy["max_layers"]:
-                                logger.info(f"[{coin_id}] CASCADE: Skipping — max layers ({strategy['max_layers']}) reached.")
+                        logger.info(f"[{coin_id}] CASCADE CHECK: total={total_layers}, holding={holding_count}, "
+                                    f"has_pending={has_pending}, max={strategy['max_layers']}")
+
+                        if has_pending:
+                            logger.info(f"[{coin_id}] CASCADE: Skipping — already has a PENDING_BUY.")
+                        elif total_layers >= strategy["max_layers"]:
+                            logger.info(f"[{coin_id}] CASCADE: Skipping — max layers ({strategy['max_layers']}) reached.")
+                        else:
+                            # Use the lowest/latest filled layer's entry price
+                            last_filled = just_filled[-1]
+                            last_entry = last_filled.get("entry_price", 0)
+                            if last_entry > 0:
+                                logger.info(f"[{coin_id}] ★ CASCADE: Layer {last_filled['id']} filled → "
+                                            f"auto-pending BUY for Layer {total_layers + 1} below RM{last_entry:.4f}")
+                                _place_next_dca_buy(coin_id, last_entry)
+                                state_changed = True
+                            else:
+                                logger.warning(f"[{coin_id}] CASCADE: Cannot cascade — last_entry is 0")
 
                 if state_changed:
                     shared.save_state()
