@@ -180,9 +180,9 @@ def get_ticker(symbol: str = "ETH_MYR") -> float:
 COIN_SCALES = {
     # qty     = decimal places untuk quantity
     # price   = decimal places untuk price
-    # min_notional = minimum nilai order (price × qty) dalam MYR
-    "BTC": {"qty": 5, "price": 0, "min_notional": 20.0},
-    "ETH": {"qty": 4, "price": 0, "min_notional": 15.0},
+    # min_notional = minimum nilai order (price × qty) dalam MYR — Hata exchange minimum RM10 untuk semua pairs
+    "BTC": {"qty": 5, "price": 0, "min_notional": 10.0},
+    "ETH": {"qty": 4, "price": 0, "min_notional": 10.0},
     "SOL": {"qty": 3, "price": 1, "min_notional": 10.0},
     "LTC": {"qty": 3, "price": 1, "min_notional": 10.0},
     "XRP": {"qty": 1, "price": 3, "min_notional": 10.0}

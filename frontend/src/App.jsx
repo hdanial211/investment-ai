@@ -5,10 +5,10 @@ import './App.css'
 import BacktestSimulator from './BacktestSimulator'
 import AILearning from './AILearning'
 
-// ★ Minimum notional (MYR) per coin — mestikan order value >= nilai ini
+// ★ Minimum notional (MYR) per coin — selaras dengan Hata exchange (minimum RM10 untuk semua pairs)
 const MIN_NOTIONAL = {
-  BTC: 20.0,
-  ETH: 15.0,
+  BTC: 10.0,
+  ETH: 10.0,
   SOL: 10.0,
   LTC: 10.0,
   XRP: 10.0,
