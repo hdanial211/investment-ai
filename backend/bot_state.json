@@ -643,7 +643,9 @@
                 "net_qty": 0.105576,
                 "actual_cost_myr": 17.6066,
                 "consolidated_sell_price": 177.6,
-                "consolidated_sell_qty": 0.369
+                "consolidated_sell_qty": 0.369,
+                "fee_myr": 0.079712,
+                "fee_role": "unknown"
             },
             {
                 "id": 3,
@@ -687,7 +689,7 @@
         "risk_level": 3,
         "is_auto": true,
         "tp_pct": 0.004,
-        "consolidated_sell_order_id": "252771480",
+        "consolidated_sell_order_id": "252813905",
         "last_cycle_entry": 0.0,
         "model_version": "v1",
         "trades_since_retrain": 0,
@@ -702,7 +704,7 @@
             "threshold_label": "Default",
             "threshold_sample_size": 0
         },
-        "total_buy_fees_myr": 0.1996676,
+        "total_buy_fees_myr": 0.27937959999999995,
         "total_buy_fees_qty": 0.001484
     }
 }

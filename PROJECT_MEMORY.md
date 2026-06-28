@@ -1,5 +1,5 @@
 # 🧠 INVESTMENT AI — PROJECT MEMORY FILE
-> Dikemas kini: 2026-06-26 | Versi Semasa: **v5.3.95**
+> Dikemas kini: 2026-06-28 | Versi Semasa: **v5.5.1**
 > GitHub: https://github.com/hdanial211/investment-ai
 > Lokasi Projek: `e:\PROJECTS\SEMUA PROJECT\INVESTMENT AI`
 
@@ -326,6 +326,10 @@ wss://stream.binance.com:9443/stream?streams=btcusdt@kline_1m/ethusdt@kline_1m/s
 | v5.3.93 | Pemantauan berkala (Hourly monitor) | Menjalankan pemantauan status sistem dagangan kripto secara automatik dan mengesahkan status aktif stabil bagi 4 pasangan dagangan terbuka (BTC, SOL, XRP, LTC) |
 | v5.3.94 | Pemantauan berkala (Hourly monitor) | Menjalankan pemantauan status sistem dagangan kripto secara automatik dan mengesahkan status aktif stabil bagi 4 pasangan dagangan terbuka (BTC, SOL, XRP, LTC) |
 | v5.3.95 | Pemantauan berkala (Hourly monitor) | Menjalankan pemantauan status sistem dagangan kripto secara automatik dan mengesahkan status aktif stabil bagi 4 pasangan dagangan terbuka (ETH, SOL, XRP, LTC) |
+| v5.4.0 | Adaptive ML Learning Pipeline | Bot now learns from every trade per-coin with auto-retraining and adaptive confidence thresholds |
+| v5.4.1 | AI Learning Dashboard | Added frontend tab with per-coin ML stats, cumulative PnL, scatter plots, and model version history |
+| v5.5.0 | Fix DCA Entry Size | Fixed DCA entry size calculation using min(limit,market) price for accurate RM deployment |
+| v5.5.1 | Penjadualan Kesihatan Harian | Menjadualkan pemeriksaan kesihatan sistem harian pada jam 9:00 AM dengan agent scheduling |
 
 ---
 
