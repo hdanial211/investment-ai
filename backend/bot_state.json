@@ -1,8 +1,8 @@
 {
     "ETH": {
-        "current_price": 6440.0,
+        "current_price": 6429.0,
         "last_signal": 0,
-        "confidence": 38.69668245315552,
+        "confidence": 59.3521773815155,
         "layers": [
             {
                 "id": 1,
@@ -146,7 +146,7 @@
         "trades_since_retrain": 0,
         "last_retrain_at": null,
         "adaptive_threshold": 0.6,
-        "active_trade_cycle_id": "ETH_1782580020",
+        "active_trade_cycle_id": "ETH_1782685740",
         "ml_stats": {
             "total_predictions": 0,
             "total_trades_logged": 0,
@@ -159,37 +159,37 @@
         "total_buy_fees_qty": 2.76e-05
     },
     "BTC": {
-        "current_price": 245500.0,
-        "last_signal": 0,
-        "confidence": 15.540134906768799,
+        "current_price": 244444.0,
+        "last_signal": 1,
+        "confidence": 83.43140482902527,
         "layers": [],
-        "total_pnl": -1.8182600000000022,
+        "total_pnl": -1.7594600000000025,
         "trade_amount_myr": 15.0,
         "risk_level": 3,
         "is_auto": true,
         "tp_pct": 0.004,
         "consolidated_sell_order_id": null,
-        "last_cycle_entry": 266095.1898,
+        "last_cycle_entry": 245001.0,
         "model_version": "v1",
-        "trades_since_retrain": 0,
+        "trades_since_retrain": 1,
         "last_retrain_at": null,
         "adaptive_threshold": 0.6,
-        "active_trade_cycle_id": "BTC_1782504660",
+        "active_trade_cycle_id": null,
         "ml_stats": {
             "total_predictions": 0,
-            "total_trades_logged": 0,
+            "total_trades_logged": 1,
             "recent_win_rate": 0.0,
             "model_accuracy": 0.0,
             "threshold_label": "Default",
             "threshold_sample_size": 0
         },
-        "total_buy_fees_myr": 0.20503960000000002,
-        "total_buy_fees_qty": 7.599999999999999e-07
+        "total_buy_fees_myr": 0.0,
+        "total_buy_fees_qty": 0.0
     },
     "SOL": {
-        "current_price": 290.4,
-        "last_signal": 0,
-        "confidence": 51.549232006073,
+        "current_price": 290.9,
+        "last_signal": 1,
+        "confidence": 72.7566659450531,
         "layers": [
             {
                 "id": 1,
@@ -355,7 +355,7 @@
         "trades_since_retrain": 0,
         "last_retrain_at": null,
         "adaptive_threshold": 0.6,
-        "active_trade_cycle_id": "SOL_1782636360",
+        "active_trade_cycle_id": "SOL_1782686100",
         "ml_stats": {
             "total_predictions": 0,
             "total_trades_logged": 0,
@@ -370,7 +370,7 @@
     "XRP": {
         "current_price": 4.307,
         "last_signal": 1,
-        "confidence": 74.65817928314209,
+        "confidence": 74.09397959709167,
         "layers": [
             {
                 "id": 1,
@@ -536,7 +536,7 @@
         "trades_since_retrain": 0,
         "last_retrain_at": null,
         "adaptive_threshold": 0.6,
-        "active_trade_cycle_id": "XRP_1782680580",
+        "active_trade_cycle_id": "XRP_1782686100",
         "ml_stats": {
             "total_predictions": 0,
             "total_trades_logged": 0,
@@ -549,9 +549,9 @@
         "total_buy_fees_qty": 0.0632
     },
     "LTC": {
-        "current_price": 177.5,
-        "last_signal": 0,
-        "confidence": 46.12906873226166,
+        "current_price": 175.6,
+        "last_signal": 1,
+        "confidence": 78.01514863967896,
         "layers": [
             {
                 "id": 1,
@@ -586,15 +586,15 @@
                 "actual_cost_myr": 14.91,
                 "fee_myr": 0.05967359999999999,
                 "fee_role": "unknown",
-                "consolidated_sell_price": 178.9,
-                "consolidated_sell_qty": 0.083
+                "consolidated_sell_price": 178.0,
+                "consolidated_sell_qty": 0.168
             },
             {
                 "id": 2,
                 "entry_price": 175.8,
                 "amount_myr": 15.0,
                 "quantity": 0.085,
-                "status": "PENDING_BUY",
+                "status": "HOLDING",
                 "buy_order_id": "256950585",
                 "hata_buy_res": {
                     "data": {
@@ -615,7 +615,43 @@
                     },
                     "status": "success"
                 },
-                "created_at": 1782681911.5686529
+                "created_at": 1782681911.5686529,
+                "exec_qty": 0.085,
+                "fee_qty": 0.00034,
+                "net_qty": 0.08466000000000001,
+                "actual_cost_myr": 14.926,
+                "fee_myr": 0.059772000000000006,
+                "fee_role": "unknown",
+                "consolidated_sell_price": 178.0,
+                "consolidated_sell_qty": 0.168
+            },
+            {
+                "id": 3,
+                "entry_price": 174.0,
+                "amount_myr": 15.0,
+                "quantity": 0.086,
+                "status": "PENDING_BUY",
+                "buy_order_id": "256950677",
+                "hata_buy_res": {
+                    "data": {
+                        "id": 256950677,
+                        "time": 1782681918,
+                        "stop_limit_price": "0",
+                        "pair_name": "LTCMYR",
+                        "price": "174",
+                        "orig_qty": "0.086",
+                        "exec_qty": "0",
+                        "quote_order_qty": "14.964",
+                        "cummul_quote_qty": "0",
+                        "is_buy": true,
+                        "post_only": false,
+                        "type": "limit",
+                        "status": "active",
+                        "client_order_id": "d90p2fl5193k77vnpjqg"
+                    },
+                    "status": "success"
+                },
+                "created_at": 1782681918.334597
             }
         ],
         "total_pnl": 1.3375999999999877,
@@ -623,13 +659,13 @@
         "risk_level": 3,
         "is_auto": true,
         "tp_pct": 0.004,
-        "consolidated_sell_order_id": "256950581",
+        "consolidated_sell_order_id": "256950665",
         "last_cycle_entry": 186.12099,
         "model_version": "v1",
         "trades_since_retrain": 1,
         "last_retrain_at": null,
         "adaptive_threshold": 0.6,
-        "active_trade_cycle_id": "LTC_1782680520",
+        "active_trade_cycle_id": "LTC_1782686100",
         "ml_stats": {
             "total_predictions": 0,
             "total_trades_logged": 1,
@@ -638,7 +674,7 @@
             "threshold_label": "Default",
             "threshold_sample_size": 0
         },
-        "total_buy_fees_myr": 0.05967359999999999,
-        "total_buy_fees_qty": 0.000336
+        "total_buy_fees_myr": 0.1194456,
+        "total_buy_fees_qty": 0.000676
     }
 }
