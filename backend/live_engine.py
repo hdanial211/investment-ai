@@ -124,29 +124,33 @@ def _extract_hata_exec_data(coin_id: str, order_data: dict, fallback_qty: float 
     # Extract fees from trades array (actual from Hata API)
     trades = order_data.get("trades", [])
     fee_qty = 0.0
-    fee_role = "unknown"  # maker or taker
+    fee_role = None  # will be resolved below
     for t in trades:
         if t.get("fee_asset") == coin_id:
             fee_qty += float(t.get("fee", 0.0))
-        # Detect role from trade data
+        # Detect role from trade data (is_maker field from Hata)
         if t.get("is_maker") is True:
             fee_role = "maker"
         elif t.get("is_maker") is False:
             fee_role = "taker"
-    
+
     # Net quantity = what's actually in wallet after fees
     if trades:
         net_qty = exec_qty - fee_qty
+        # ★ Kalau fee_role masih None (is_maker field tiada dalam trades)
+        # → infer dari fee_qty: 0 fee = maker (0%), ada fee = taker (0.25%)
+        if fee_role is None:
+            fee_role = "maker" if fee_qty == 0 else "taker"
+            logger.info(f"[{coin_id}] fee_role inferred from fee_qty: {fee_role} (fee={fee_qty})")
         if fee_qty > 0:
             logger.info(f"[{coin_id}] Fee detected: {fee_qty} {coin_id} ({fee_role}) | exec: {exec_qty} -> net: {net_qty}")
         else:
-            logger.info(f"[{coin_id}] No fee (maker) | exec: {exec_qty} = net: {net_qty}")
+            logger.info(f"[{coin_id}] No fee ({fee_role}) | exec: {exec_qty} = net: {net_qty}")
     else:
-        # Fallback: assume TAKER worst case (0.25% fee) to be safe
-        # Better to overestimate fee than underestimate
+        # Fallback: tiada trades data → assume TAKER worst case (0.25% fee)
         fee_qty = exec_qty * 0.0025
         net_qty = exec_qty * 0.9975
-        fee_role = "taker_fallback"
+        fee_role = "taker"
         logger.warning(f"[{coin_id}] No trades data — using 0.25% taker fallback fee")
     
     # Actual MYR cost
