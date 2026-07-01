@@ -486,6 +486,10 @@ def _check_grid_group(coin_id: str, group: dict) -> bool:
             l["fee_role"] = exec_info["fee_role"]
             l["status"] = "HOLDING"
             state_changed = True
+            # ★ UNFREEZE: balance sebenar dah jadi coin dalam wallet, bukan MYR lagi
+            amt = l.get("amount_myr", 0.0)
+            shared.global_state["frozen_myr"] = max(0.0, shared.global_state.get("frozen_myr", 0.0) - amt)
+            logger.info(f"[{coin_id}] Unfroze RM{amt:.2f} (filled). Frozen now: RM{shared.global_state['frozen_myr']:.2f}")
             logger.info(f"[{coin_id}] Group {group['id']} Layer {l['id']} PENDING_BUY filled → HOLDING "
                         f"| net={exec_info['net_qty']:.6f} fee={exec_info['fee_role']} RM{exec_info['fee_myr']:.4f}")
             # Place sell immediately
@@ -497,6 +501,10 @@ def _check_grid_group(coin_id: str, group: dict) -> bool:
             # ★ Manual cancel dari luar (Hata dashboard) → remove layer sahaja
             logger.info(f"[{coin_id}] Group {group['id']} Layer {l['id']} buy {order_status} (external cancel). Removing.")
             layers_to_delete_pending.append(l["id"])
+            # ★ UNFREEZE: release reserved balance bila order cancel
+            amt = l.get("amount_myr", 0.0)
+            shared.global_state["frozen_myr"] = max(0.0, shared.global_state.get("frozen_myr", 0.0) - amt)
+            logger.info(f"[{coin_id}] Unfroze RM{amt:.2f} (cancel). Frozen now: RM{shared.global_state['frozen_myr']:.2f}")
             state_changed = True
 
         else:
@@ -1526,7 +1534,13 @@ async def process_kline(coin_id, kline):
                     # This check (above) already handles that in the elif len(groups) > 0 block.
                     # DO NOT add another guard here for groups=[] — it breaks scalping flow.
 
-                    if can_buy and trade_amount <= balance and current_price > 0:
+                    # ★ BALANCE CHECK: guna available = total - frozen
+                    # frozen_myr dikira dari semua PENDING_BUY yang sedang menunggu fill
+                    # Ini elak race condition bila 5 coins signal serentak
+                    frozen = shared.global_state.get("frozen_myr", 0.0)
+                    available_balance = balance - frozen
+
+                    if can_buy and trade_amount <= available_balance and current_price > 0:
                         import hata_api
                         qty_scale = hata_api.COIN_SCALES.get(coin_id, {}).get("qty", 4)
                         price_scale = hata_api.COIN_SCALES.get(coin_id, {}).get("price", 0)
@@ -1584,10 +1598,14 @@ async def process_kline(coin_id, kline):
                                 
                                 shared.engine_state[coin_id]["groups"].append(new_group)
                                 shared.engine_state[coin_id]["last_cycle_entry"] = entry_price
+                                # ★ FREEZE balance segera supaya coin lain nampak balance berkurang
+                                shared.global_state["frozen_myr"] = shared.global_state.get("frozen_myr", 0.0) + trade_amount
                                 shared.save_state()
                                 logger.info(f"[{coin_id}] NEW GROUP {new_group['id']} started! "
                                             f"PENDING_BUY Order {order_id} @ RM{entry_price:.{price_scale}f} "
-                                            f"(-0.1% dari market RM{current_price:.{price_scale}f})")
+                                            f"(-0.1% dari market RM{current_price:.{price_scale}f}) "
+                                            f"| Frozen: RM{shared.global_state['frozen_myr']:.2f} "
+                                            f"| Available: RM{available_balance - trade_amount:.2f}")
 
             else:
                 shared.engine_state[coin_id]["last_signal"] = 0
