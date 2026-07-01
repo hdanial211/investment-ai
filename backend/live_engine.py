@@ -602,9 +602,33 @@ def _check_grid_group(coin_id: str, group: dict) -> bool:
                 _grid_update_standby_buy(coin_id, group, standby_price)
                 state_changed = True
             elif buy_status in ["cancelled", "rejected"]:
+                logger.warning(f"[{coin_id}] Group {group['id']}: Standby BUY {standby_id} was {buy_status}. "
+                               f"Will re-place below lowest holding layer.")
                 group["standby_buy_order_id"] = None
                 group["standby_buy_price"] = 0.0
                 state_changed = True
+                # ★ FIX: Auto re-place standby BUY if there are still HOLDING layers
+                # Selagi ada layers HOLDING, standby BUY MESTI ada di bawah
+                holding_now = [l for l in group.get("layers", []) if l.get("status") == "HOLDING"]
+                if holding_now:
+                    lowest = min(l.get("entry_price", 0) for l in holding_now)
+                    logger.info(f"[{coin_id}] Group {group['id']}: Re-placing standby BUY below RM{lowest:.4f}...")
+                    _grid_update_standby_buy(coin_id, group, lowest)
+
+    # ★ SAFETY NET: Health check — group ada HOLDING layers tapi tiada standby BUY?
+    # Ini boleh berlaku kalau API call gagal semasa letak standby.
+    # Auto-repair: letak semula standby BUY di bawah lowest holding layer.
+    holding_layers = [l for l in group.get("layers", []) if l.get("status") == "HOLDING"]
+    has_standby = bool(group.get("standby_buy_order_id"))
+    risk_level = shared.engine_state[coin_id].get("risk_level", 1)
+    strategy = _get_strategy(coin_id, risk_level)
+    if holding_layers and not has_standby and len(holding_layers) < strategy["max_layers"]:
+        lowest_entry = min(l.get("entry_price", 0) for l in holding_layers)
+        logger.warning(f"[{coin_id}] Group {group['id']}: ⚠ SAFETY NET — "
+                       f"ada {len(holding_layers)} HOLDING layer(s) tapi tiada standby BUY! "
+                       f"Auto-placing standby below RM{lowest_entry:.4f}...")
+        _grid_update_standby_buy(coin_id, group, lowest_entry)
+        state_changed = True
 
     return state_changed
 
@@ -633,12 +657,11 @@ def _check_grid_orders(coin_id: str) -> bool:
         ]
         state_changed = True
         if not shared.engine_state[coin_id]["groups"]:
-            # ★ BUG FIX: Do NOT reset last_cycle_entry to 0.
-            # Keeping the last sell price as the anchor ensures the new-entry gap guard
-            # (2% below last cycle) still works on next ML signal.
-            # Resetting to 0 was bypassing the guard and causing immediate re-entry.
-            logger.info(f"[{coin_id}] ★ ALL GROUPS COMPLETE. Seeking new ML entry... "
-                        f"(gap guard active: last_cycle_entry=RM{shared.engine_state[coin_id].get('last_cycle_entry', 0):.4f})")
+            # Reset last_cycle_entry so bot can seek new ML entry freely after group complete.
+            # The user's concept: once ALL layers sold (group done), re-entry is unrestricted.
+            # The 2% gap guard only applies when CREATING A NEW GROUP while existing group is active.
+            shared.engine_state[coin_id]["last_cycle_entry"] = 0.0
+            logger.info(f"[{coin_id}] ★ ALL GROUPS COMPLETE. last_cycle_entry reset. Seeking new ML entry freely...")
 
 
 # ─────────────────────────────────────────────
