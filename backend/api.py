@@ -37,6 +37,10 @@ class TPSetting(BaseModel):
     coin: str
     tp_pct: float  # e.g. 0.005 = 0.5%
 
+class GridGapRequest(BaseModel):
+    coin: str
+    grid_gap_pct: float  # e.g. 0.01 = 1%
+
 class RiskLevelSetting(BaseModel):
     coin: str
     risk_level: int
@@ -58,9 +62,19 @@ class BacktestParams(BaseModel):
 
 @app.get("/api/state")
 def get_state():
+    # Build enriched coin data including grid fields
+    coins_data = {}
+    for coin_id, coin_state in engine_state.items():
+        coins_data[coin_id] = {
+            **coin_state,
+            "grid_gap_pct": coin_state.get("grid_gap_pct", 0.01),
+            "standby_buy_order_id": coin_state.get("standby_buy_order_id"),
+            "standby_buy_price": coin_state.get("standby_buy_price", 0.0),
+            "system_mode": coin_state.get("system_mode", "grid"),
+        }
     return {
         "global": global_state,
-        "coins": engine_state
+        "coins": coins_data
     }
 
 @app.post("/api/toggle-auto")
@@ -102,6 +116,19 @@ def set_tp(setting: TPSetting):
         _place_consolidated_sell(setting.coin)
     
     return {"status": "success", "tp_pct": engine_state[setting.coin]["tp_pct"]}
+
+@app.post("/api/set-grid-gap")
+def set_grid_gap(req: GridGapRequest):
+    """Set grid gap % per coin (used by Grid Paired Orders system)"""
+    coin = req.coin.upper()
+    if coin not in engine_state:
+        raise HTTPException(status_code=400, detail="Invalid coin")
+    if not (0.001 <= req.grid_gap_pct <= 0.10):
+        raise HTTPException(status_code=400, detail="grid_gap_pct must be between 0.1% and 10%")
+    engine_state[coin]["grid_gap_pct"] = req.grid_gap_pct
+    shared.save_state()
+    logger.info(f"[{coin}] Grid gap set to {req.grid_gap_pct*100:.2f}%")
+    return {"status": "ok", "coin": coin, "grid_gap_pct": req.grid_gap_pct}
 
 @app.post("/api/manual-buy")
 def manual_buy(action: ManualAction):
@@ -386,6 +413,24 @@ def get_ml_history(coin: str):
     except Exception as e:
         logger.error(f"ML history error for {coin}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class GridGapRequest(BaseModel):
+    coin: str
+    grid_gap_pct: float
+
+
+@app.post("/api/set-grid-gap")
+def set_grid_gap(req: GridGapRequest):
+    """Set grid gap % for a specific coin"""
+    coin = req.coin.upper()
+    if coin not in engine_state:
+        raise HTTPException(status_code=400, detail="Invalid coin")
+    if not (0.001 <= req.grid_gap_pct <= 0.10):
+        raise HTTPException(status_code=400, detail="gap_pct must be between 0.1% and 10%")
+    engine_state[coin]["grid_gap_pct"] = req.grid_gap_pct
+    save_state()
+    return {"status": "ok", "coin": coin, "grid_gap_pct": req.grid_gap_pct}
 
 
 class RetrainRequest(BaseModel):

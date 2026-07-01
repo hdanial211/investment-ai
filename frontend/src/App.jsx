@@ -117,6 +117,18 @@ function App() {
     }
   }
 
+  const setGridGap = async (gap_pct) => {
+    if (isNaN(gap_pct) || gap_pct < 0.001 || gap_pct > 0.10) return
+    try {
+      await axios.post('http://localhost:8000/api/set-grid-gap', {
+        coin: selectedCoin,
+        grid_gap_pct: gap_pct
+      })
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
   const [syncing, setSyncing] = useState(false)
   const syncHistory = async () => {
     setSyncing(true)
@@ -142,6 +154,10 @@ function App() {
 
   const tradeAmount = coinData.trade_amount_myr || 250.0;
   const tpPct = coinData.tp_pct || 0.005;
+  const gridGapPct = coinData.grid_gap_pct || 0.01;
+  const standbyBuyId = coinData.standby_buy_order_id || null;
+  const standbyBuyPrice = coinData.standby_buy_price || 0;
+  const systemMode = coinData.system_mode || 'grid';
   const maxLayers = coinData.risk_level === 3 ? "2-3 Lapis" : coinData.risk_level === 2 ? "5 Lapis" : "6 Lapis";
   
   const getStrategyName = (coin, level) => {
@@ -292,11 +308,12 @@ function App() {
                       <table className="layer-table">
                         <thead>
                           <tr>
-                            <th>Layer</th>
-                            <th>Harga Entry (RM)</th>
+                            <th>#</th>
+                            <th>Entry (RM)</th>
                             <th>Saiz (RM)</th>
-                            <th>Qty (Hata)</th>
+                            <th>Qty</th>
                             <th>Fee</th>
+                            <th>Sell Target</th>
                             <th>Status</th>
                           </tr>
                         </thead>
@@ -308,6 +325,8 @@ function App() {
                             const feeMyr = l.fee_myr || 0
                             const feeRole = l.fee_role || ''
                             const isMaker = feeRole === 'maker'
+                            const sellTarget = l.sell_target_price || 0
+                            const hasSell = !!l.sell_order_id
                             return (
                               <tr key={l.id}>
                                 <td>#{l.id}</td>
@@ -328,6 +347,13 @@ function App() {
                                     </span>
                                   ) : '-'}
                                 </td>
+                                <td>
+                                  {l.status === 'HOLDING' ? (
+                                    <span style={{ fontSize: '0.75rem', color: hasSell ? '#00e676' : '#888', fontWeight: hasSell ? 'bold' : 'normal' }}>
+                                      {hasSell ? `RM ${sellTarget.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}` : '⏳ placing...'}
+                                    </span>
+                                  ) : '-'}
+                                </td>
                                 <td><span className={`status-badge ${l.status === 'HOLDING' ? 'holding' : l.status === 'PENDING_BUY' ? 'pending' : 'open'}`}>{l.status || 'TERBUKA'}</span></td>
                               </tr>
                             )
@@ -335,47 +361,41 @@ function App() {
                         </tbody>
                       </table>
 
-                      {/* Consolidated Sell Summary */}
-                      {consolidatedInfo && (
+                      {/* Grid Paired Orders Summary */}
+                      {holdingLayers.length > 0 && (
                         <div style={{ 
                           marginTop: '1rem', 
-                          background: 'rgba(0, 229, 255, 0.08)', 
-                          border: '1px solid rgba(0, 229, 255, 0.3)', 
+                          background: 'rgba(0, 229, 255, 0.06)', 
+                          border: '1px solid rgba(0, 229, 255, 0.25)', 
                           borderRadius: '8px', 
                           padding: '12px 16px' 
                         }}>
                           <h4 style={{ color: '#00e5ff', margin: '0 0 10px 0', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <TrendingUp size={16} /> Gabungan Sell Order
-                            {consolidatedSellId && <span style={{ fontSize: '0.75rem', color: '#888', marginLeft: '8px' }}>#{consolidatedSellId}</span>}
+                            <TrendingUp size={16} /> Grid Paired Orders
+                            <span style={{ fontSize: '0.72rem', background: 'rgba(0,230,118,0.15)', color: '#00e676', padding: '2px 8px', borderRadius: '12px', marginLeft: '6px' }}>MAKER 0% FEE</span>
                           </h4>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.85rem' }}>
-                            <div>
-                              <span style={{ color: '#888' }}>Avg Entry: </span>
-                              <span style={{ color: '#fff' }}>RM {consolidatedInfo.avgEntry.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>
-                            </div>
-                            <div>
-                              <span style={{ color: '#888' }}>Total Qty: </span>
-                              <span style={{ color: '#fff' }}>{consolidatedInfo.totalQty.toFixed(6)}</span>
-                            </div>
-                            <div>
-                              <span style={{ color: '#888' }}>Total Kos: </span>
-                              <span style={{ color: '#fff' }}>RM {consolidatedInfo.totalCost.toFixed(2)}</span>
-                            </div>
-                            <div>
-                              <span style={{ color: '#888' }}>Sell Price (TP {(tpPct * 100).toFixed(1)}%): </span>
-                              <span style={{ color: '#00e676', fontWeight: 'bold' }}>RM {consolidatedInfo.sellPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>
-                            </div>
-                            <div>
-                              <span style={{ color: '#888' }}>Total Buy Fee: </span>
-                              <span style={{ color: (coinData.total_buy_fees_myr || 0) > 0 ? '#ffb300' : '#00e676', fontWeight: 'bold' }}>
-                                {(coinData.total_buy_fees_myr || 0) > 0 
-                                  ? `RM ${(coinData.total_buy_fees_myr || 0).toFixed(4)} (auto-recovered dlm TP)`
-                                  : 'RM 0 (Maker — tiada fee!)'}
-                              </span>
-                            </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.83rem' }}>
+                            {holdingLayers.map(l => (
+                              <div key={l.id} style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '6px', padding: '8px 10px' }}>
+                                <div style={{ color: '#888', fontSize: '0.72rem', marginBottom: '3px' }}>Layer #{l.id}</div>
+                                <div style={{ color: '#fff' }}>Buy @ RM{(l.entry_price||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+                                <div style={{ color: l.sell_order_id ? '#00e676' : '#888', fontWeight: 'bold' }}>
+                                  {l.sell_order_id 
+                                    ? `✅ Sell @ RM${(l.sell_target_price||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`
+                                    : '⏳ Placing sell...'}
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                          <p style={{ margin: '8px 0 0 0', fontSize: '0.75rem', color: '#666' }}>
-                            *Fee dari Hata API dikira auto: Maker=0%, Taker=0.25%. TP sell price dah include fee recovery.
+                          {standbyBuyId && (
+                            <div style={{ marginTop: '10px', padding: '8px 10px', background: 'rgba(255,179,0,0.08)', border: '1px solid rgba(255,179,0,0.25)', borderRadius: '6px', fontSize: '0.82rem' }}>
+                              <span style={{ color: '#ffb300', fontWeight: 'bold' }}>📡 Standby BUY: </span>
+                              <span style={{ color: '#fff' }}>RM {standbyBuyPrice > 0 ? standbyBuyPrice.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) : '...'}</span>
+                              <span style={{ color: '#888', fontSize: '0.72rem', marginLeft: '8px' }}>#{standbyBuyId}</span>
+                            </div>
+                          )}
+                          <p style={{ margin: '8px 0 0 0', fontSize: '0.72rem', color: '#666' }}>
+                            *Setiap layer ada sell sendiri. Standby BUY sentiasa aktif di bawah. Fee auto-dikira dari Hata API.
                           </p>
                           {pendingBuyLayers.length > 0 && (
                             <p style={{ margin: '6px 0 0 0', fontSize: '0.8rem', color: '#ffb300' }}>
@@ -694,6 +714,43 @@ function App() {
                     </div>
                     <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#888' }}>
                       *Fee auto-kira dari Hata API (Maker 0% / Taker 0.25%) — TP sell price auto-recover fee
+                    </p>
+                  </div>
+
+                  {/* Grid Gap % Setting */}
+                  <label>Grid Gap (%) — Jarak antara Buy/Sell per coin</label>
+                  <div className="amount-controls" style={{ marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input 
+                        type="number" 
+                        className="amount-input"
+                        value={gridGapPct ? (gridGapPct * 100).toFixed(2) : ''} 
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value)
+                          if (!isNaN(val)) setGridGap(val / 100)
+                        }}
+                        min="0.1"
+                        max="10"
+                        step="0.1"
+                        placeholder="Cth: 1.0 = 1%"
+                        style={{ flex: 1, fontSize: '1.2rem', padding: '10px' }}
+                      />
+                      <span style={{ color: '#00e676', fontWeight: 'bold', fontSize: '1rem', whiteSpace: 'nowrap' }}>%</span>
+                    </div>
+                    <div style={{ 
+                      marginTop: '8px', 
+                      background: 'rgba(0, 230, 118, 0.06)', 
+                      border: '1px solid rgba(0, 230, 118, 0.15)', 
+                      borderRadius: '6px', 
+                      padding: '8px 12px',
+                      fontSize: '0.78rem',
+                      color: '#aaa'
+                    }}>
+                      <span style={{ color: '#00e676', fontWeight: 'bold' }}>💡 Grid Gap Sekarang ({selectedCoin}): {(gridGapPct * 100).toFixed(2)}%</span><br/>
+                      Entry @ RM{(coinData.current_price||0).toLocaleString()} → Sell @ RM{((coinData.current_price||0) * (1 + gridGapPct)).toLocaleString(undefined,{maximumFractionDigits:2})}, Standby Buy @ RM{((coinData.current_price||0) * (1 - gridGapPct)).toLocaleString(undefined,{maximumFractionDigits:2})}
+                    </div>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#888' }}>
+                      *Semua orders (sell + standby buy) = Limit order → MAKER fee 0%
                     </p>
                   </div>
 

@@ -1,5 +1,5 @@
 # 🧠 INVESTMENT AI — PROJECT MEMORY FILE
-> Dikemas kini: 2026-07-01 | Versi Semasa: **v5.5.7**
+> Dikemas kini: 2026-07-01 | Versi Semasa: **v5.5.0 — Grid Paired Orders**
 > GitHub: https://github.com/hdanial211/investment-ai
 > Lokasi Projek: `e:\PROJECTS\SEMUA PROJECT\INVESTMENT AI`
 
