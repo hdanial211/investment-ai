@@ -100,11 +100,10 @@ def truncate_float(val: float, decimals: int) -> float:
 # ─────────────────────────────────────────────
 def _get_strategy(coin_id: str, risk_level: int) -> dict:
     tp_pct = shared.engine_state[coin_id].get("tp_pct", 0.005)
-    # ★ Per-coin max_layers setting (overrides risk_level if set)
+    # Per-coin max_layers setting (overrides risk_level if set)
     custom_max = shared.engine_state[coin_id].get("max_layers", 0)
     if custom_max and custom_max > 0:
         return {"max_layers": int(custom_max), "tp_pct": tp_pct}
-    # Fallback: ikut risk_level
     if risk_level == 3:
         return {"max_layers": 3, "tp_pct": tp_pct}
     elif risk_level == 2:
@@ -337,20 +336,15 @@ def _place_next_dca_buy(coin_id: str, last_entry_price: float):
 # Each layer has its own SELL order (MAKER = 0% fee)
 # ─────────────────────────────────────────────
 def _grid_place_layer_sell(coin_id: str, layer: dict) -> str:
-    """Place a SELL limit order for a single layer at entry_price * (1 + grid_gap_pct).
-
-    Fee handling: Uses net_qty (after buy fees) as sell quantity.
-    Sell target = (actual_cost_myr / net_qty) * (1 + gap) → recovers buy fee + profit.
-    Returns sell_order_id or empty string on failure."""
+    """Place SELL limit order for one layer. Returns sell_order_id or empty string."""
     import hata_api
 
     gap_pct = shared.engine_state[coin_id].get("grid_gap_pct", 0.01)
     qty_scale = hata_api.COIN_SCALES.get(coin_id, {}).get("qty", 4)
     price_scale = hata_api.COIN_SCALES.get(coin_id, {}).get("price", 0)
 
-    # Use net_qty (after buy fees) — same pattern as old consolidated sell
-    net_qty = layer.get("net_qty", 0)
-    actual_cost = layer.get("actual_cost_myr", layer.get("amount_myr", 0))
+    net_qty = layer.get("net_qty", 0) or layer.get("quantity", 0)
+    actual_cost = layer.get("actual_cost_myr", 0) or layer.get("amount_myr", 0)
     fee_role = layer.get("fee_role", "unknown")
     fee_myr = layer.get("fee_myr", 0.0)
 
@@ -358,12 +352,10 @@ def _grid_place_layer_sell(coin_id: str, layer: dict) -> str:
         logger.error(f"[{coin_id}] GRID SELL: Cannot place sell — net_qty={net_qty}, cost={actual_cost}")
         return ""
 
-    # avg_entry = cost / net_qty → INCLUDES fee recovery (same as old system)
     avg_entry = actual_cost / net_qty
     sell_price = round(avg_entry * (1.0 + gap_pct), price_scale)
     sell_qty = truncate_float(net_qty, qty_scale)
 
-    # Verify wallet balance
     avail_bal, _ = hata_api.get_token_balance(coin_id)
     if avail_bal < sell_qty:
         logger.warning(f"[{coin_id}] GRID SELL: Wallet ({avail_bal}) < planned qty ({sell_qty}). Capping.")
@@ -373,13 +365,11 @@ def _grid_place_layer_sell(coin_id: str, layer: dict) -> str:
         logger.error(f"[{coin_id}] GRID SELL: sell_qty is 0. Skipping.")
         return ""
 
-    logger.info(f"[{coin_id}] GRID SELL Layer {layer['id']}: "
-                f"avg_entry=RM{avg_entry:.4f} | sell=RM{sell_price:.{price_scale}f} "
-                f"| qty={sell_qty} | gap={gap_pct*100:.2f}% "
-                f"| buy_fee={fee_role} RM{fee_myr:.4f}")
+    logger.info(f"[{coin_id}] GRID SELL Layer {layer['id']}: avg_entry=RM{avg_entry:.4f} "
+                f"| sell=RM{sell_price:.{price_scale}f} | qty={sell_qty} "
+                f"| gap={gap_pct*100:.2f}% | fee={fee_role} RM{fee_myr:.4f}")
 
     sell_res = hata_api.place_limit_order(f"{coin_id}_MYR", "SELL", sell_price, sell_qty)
-
     if sell_res.get("status") == "error":
         logger.error(f"[{coin_id}] GRID SELL failed: {sell_res.get('message')}")
         return ""
@@ -387,86 +377,117 @@ def _grid_place_layer_sell(coin_id: str, layer: dict) -> str:
     sell_order_id = str(sell_res.get("data", {}).get("id", ""))
     layer["sell_order_id"] = sell_order_id
     layer["sell_target_price"] = sell_price
-    logger.info(f"[{coin_id}] GRID SELL SUCCESS: Order {sell_order_id} @ RM{sell_price:.{price_scale}f}")
+    logger.info(f"[{coin_id}] GRID SELL OK: Order {sell_order_id} @ RM{sell_price:.{price_scale}f}")
     return sell_order_id
 
 
 # ─────────────────────────────────────────────
-# GRID SYSTEM: Update or place cascade standby BUY
-# Single standby BUY below the lowest layer
-# (Replaces old consolidated DCA cascade)
+# GRID SYSTEM: Update standby BUY for ONE group
 # ─────────────────────────────────────────────
-def _grid_update_standby_buy(coin_id: str, from_price: float):
-    """Cancel existing standby BUY (if any) and place a new one at from_price * (1 - gap_pct).
-
-    Called after:
-    - First entry fills (place standby 1 step below)
-    - Cascade BUY fills (place next standby 1 step below new layer)
-    - A SELL fills (re-anchor standby below remaining position)"""
+def _grid_update_standby_buy(coin_id: str, group: dict, from_price: float):
+    """Cancel existing standby BUY for this group and place new one at from_price*(1-gap)."""
     import hata_api
 
     gap_pct = shared.engine_state[coin_id].get("grid_gap_pct", 0.01)
     qty_scale = hata_api.COIN_SCALES.get(coin_id, {}).get("qty", 4)
     price_scale = hata_api.COIN_SCALES.get(coin_id, {}).get("price", 0)
     trade_amount = shared.engine_state[coin_id].get("trade_amount_myr", 50.0)
-
-    layers = shared.engine_state[coin_id].get("layers", [])
     risk_level = shared.engine_state[coin_id].get("risk_level", 1)
     strategy = _get_strategy(coin_id, risk_level)
-    total_layers = len(layers)
 
-    if total_layers >= strategy["max_layers"]:
-        logger.info(f"[{coin_id}] GRID STANDBY: Max layers ({strategy['max_layers']}) reached. No standby buy.")
+    group_layers = group.get("layers", [])
+    holding = [l for l in group_layers if l.get("status") == "HOLDING"]
+
+    if len(holding) >= strategy["max_layers"]:
+        logger.info(f"[{coin_id}] Group {group['id']}: Max layers ({strategy['max_layers']}) reached. No standby buy.")
+        old_standby_id = group.get("standby_buy_order_id")
+        if old_standby_id:
+            logger.info(f"[{coin_id}] Group {group['id']}: Cancelling old standby {old_standby_id} due to max layers")
+            hata_api.cancel_order(f"{coin_id}_MYR", old_standby_id)
+            group["standby_buy_order_id"] = None
+            group["standby_buy_price"] = 0.0
         return
 
-    # Cancel old standby buy if exists
-    old_standby_id = shared.engine_state[coin_id].get("standby_buy_order_id")
+    # Cancel old standby buy for this group
+    old_standby_id = group.get("standby_buy_order_id")
     if old_standby_id:
-        logger.info(f"[{coin_id}] GRID STANDBY: Cancelling old standby buy {old_standby_id}...")
+        logger.info(f"[{coin_id}] Group {group['id']}: Cancelling old standby {old_standby_id}")
         hata_api.cancel_order(f"{coin_id}_MYR", old_standby_id)
-        shared.engine_state[coin_id]["standby_buy_order_id"] = None
-        shared.engine_state[coin_id]["standby_buy_price"] = 0.0
+        group["standby_buy_order_id"] = None
+        group["standby_buy_price"] = 0.0
 
-    # New standby price: 1 step (gap%) below from_price
     standby_price = round(from_price * (1.0 - gap_pct), price_scale)
     quantity = round(trade_amount / standby_price, qty_scale)
 
-    # Notional check
     min_notional = hata_api.COIN_SCALES.get(coin_id, {}).get("min_notional", 10.0)
-    actual_notional = standby_price * quantity
-    if actual_notional < min_notional:
-        logger.warning(f"[{coin_id}] GRID STANDBY: Notional RM{actual_notional:.4f} < min RM{min_notional:.2f}. Skipping.")
+    if standby_price * quantity < min_notional:
+        logger.warning(f"[{coin_id}] Group {group['id']}: Notional too small. Skipping standby.")
         return
 
-    logger.info(f"[{coin_id}] GRID STANDBY: Placing standby BUY @ RM{standby_price:.{price_scale}f} "
-                f"(gap {gap_pct*100:.2f}% below RM{from_price:.{price_scale}f}) | qty: {quantity}")
+    logger.info(f"[{coin_id}] Group {group['id']}: Placing standby BUY @ RM{standby_price:.{price_scale}f} "
+                f"({gap_pct*100:.2f}% below RM{from_price:.{price_scale}f})")
 
     buy_res = hata_api.place_limit_order(f"{coin_id}_MYR", "BUY", standby_price, quantity)
-
     if buy_res.get("status") == "error":
-        logger.error(f"[{coin_id}] GRID STANDBY BUY failed: {buy_res.get('message')}")
+        logger.error(f"[{coin_id}] Group {group['id']}: Standby BUY failed: {buy_res.get('message')}")
         return
 
     standby_id = str(buy_res.get("data", {}).get("id", ""))
-    shared.engine_state[coin_id]["standby_buy_order_id"] = standby_id
-    shared.engine_state[coin_id]["standby_buy_price"] = standby_price
-    logger.info(f"[{coin_id}] GRID STANDBY SUCCESS: Order {standby_id} @ RM{standby_price:.{price_scale}f}")
+    group["standby_buy_order_id"] = standby_id
+    group["standby_buy_price"] = standby_price
+    logger.info(f"[{coin_id}] Group {group['id']}: Standby BUY OK — {standby_id} @ RM{standby_price:.{price_scale}f}")
     shared.save_state()
 
 
 # ─────────────────────────────────────────────
-# GRID SYSTEM: Check all grid orders (replaces check_orders logic)
-# Called from check_orders() when system_mode == 'grid'
+# GRID SYSTEM: Check ONE group's orders
 # ─────────────────────────────────────────────
-def _check_grid_orders(coin_id: str) -> bool:
-    """Check all individual layer sell orders and standby buy.
-    Returns True if any state changed."""
+def _check_grid_group(coin_id: str, group: dict) -> bool:
+    """Check all orders in one group. Returns True if state changed."""
     import hata_api
 
     state_changed = False
-    layers = shared.engine_state[coin_id].get("layers", [])
+    layers = group.get("layers", [])
 
-    # ── 1. Check each HOLDING layer's individual sell order ──
+    # ── Check PENDING_BUY layers (first entry waiting to fill) ──
+    for l in layers:
+        if l.get("status") != "PENDING_BUY":
+            continue
+        buy_id = l.get("buy_order_id")
+        if not buy_id:
+            l["status"] = "HOLDING"
+            state_changed = True
+            continue
+        res = hata_api.get_order_status(buy_id)
+        order_data = res.get("data")
+        if not order_data:
+            continue
+        order_status = order_data.get("status")
+        if order_status == "fulfilled":
+            exec_info = _extract_hata_exec_data(coin_id, order_data, l.get("quantity", 0))
+            l["exec_qty"] = exec_info["exec_qty"]
+            l["fee_qty"] = exec_info["fee_qty"]
+            l["net_qty"] = exec_info["net_qty"]
+            l["actual_cost_myr"] = exec_info["actual_cost_myr"]
+            l["fee_myr"] = exec_info["fee_myr"]
+            l["fee_role"] = exec_info["fee_role"]
+            l["status"] = "HOLDING"
+            state_changed = True
+            logger.info(f"[{coin_id}] Group {group['id']} Layer {l['id']} PENDING_BUY filled → HOLDING "
+                        f"| net={exec_info['net_qty']:.6f} fee={exec_info['fee_role']} RM{exec_info['fee_myr']:.4f}")
+            # Place sell immediately
+            _grid_place_layer_sell(coin_id, l)
+            # Place standby buy for this group
+            _grid_update_standby_buy(coin_id, group, l["entry_price"])
+        elif order_status in ["cancelled", "rejected"]:
+            logger.info(f"[{coin_id}] Group {group['id']} Layer {l['id']} buy {order_status}. Removing.")
+            group["layers"] = [x for x in layers if x["id"] != l["id"]]
+            state_changed = True
+
+    # Refresh layers list after pending changes
+    layers = group.get("layers", [])
+
+    # ── Check HOLDING layers' individual sell orders ──
     layers_to_remove = []
     for l in layers:
         if l.get("status") != "HOLDING":
@@ -474,8 +495,7 @@ def _check_grid_orders(coin_id: str) -> bool:
 
         sell_id = l.get("sell_order_id")
         if not sell_id:
-            # Layer has no sell yet — place one
-            logger.info(f"[{coin_id}] GRID: Layer {l['id']} HOLDING but no sell. Placing sell...")
+            logger.info(f"[{coin_id}] Group {group['id']} Layer {l['id']}: No sell. Placing...")
             _grid_place_layer_sell(coin_id, l)
             state_changed = True
             continue
@@ -488,12 +508,10 @@ def _check_grid_orders(coin_id: str) -> bool:
         sell_status = order_data.get("status")
 
         if sell_status == "fulfilled":
-            # ── SELL FILLED → Layer completed ──
             exec_info = _extract_hata_exec_data(coin_id, order_data)
             sell_received_myr = exec_info["actual_cost_myr"]
             sell_fee_myr = exec_info["fee_myr"]
             sell_fee_role = exec_info["fee_role"]
-
             buy_cost = l.get("actual_cost_myr", l.get("amount_myr", 0))
             buy_fee_myr = l.get("fee_myr", 0.0)
             real_pnl = sell_received_myr - buy_cost
@@ -501,13 +519,10 @@ def _check_grid_orders(coin_id: str) -> bool:
             shared.engine_state[coin_id]["total_pnl"] = (
                 shared.engine_state[coin_id].get("total_pnl", 0.0) + real_pnl
             )
-
-            logger.info(f"[{coin_id}] ★ GRID SELL FILLED Layer {l['id']}! "
-                        f"Buy: RM{buy_cost:.2f} (fee {l.get('fee_role','?')} RM{buy_fee_myr:.4f}) | "
-                        f"Sell: RM{sell_received_myr:.2f} (fee {sell_fee_role} RM{sell_fee_myr:.4f}) | "
-                        f"PnL: RM{real_pnl:.4f}")
-
-            # ML logging
+            logger.info(f"[{coin_id}] ★ Group {group['id']} Layer {l['id']} SELL FILLED! "
+                        f"Buy RM{buy_cost:.2f} ({l.get('fee_role','?')} RM{buy_fee_myr:.4f}) "
+                        f"| Sell RM{sell_received_myr:.2f} ({sell_fee_role} RM{sell_fee_myr:.4f}) "
+                        f"| PnL RM{real_pnl:.4f}")
             try:
                 ml_logger.log_trade_outcome(
                     coin_id=coin_id,
@@ -526,52 +541,43 @@ def _check_grid_orders(coin_id: str) -> bool:
             state_changed = True
 
         elif sell_status in ["cancelled", "rejected"]:
-            logger.warning(f"[{coin_id}] GRID: Sell {sell_id} for Layer {l['id']} was {sell_status}. Re-placing...")
+            logger.warning(f"[{coin_id}] Group {group['id']} Layer {l['id']} sell {sell_status}. Re-placing...")
             l["sell_order_id"] = None
             _grid_place_layer_sell(coin_id, l)
             state_changed = True
 
     # Remove completed layers
     if layers_to_remove:
-        remaining_layers = [l for l in layers if l.get("id") not in layers_to_remove]
-        shared.engine_state[coin_id]["layers"] = remaining_layers
-        layers = remaining_layers
+        group["layers"] = [l for l in layers if l.get("id") not in layers_to_remove]
+        layers = group["layers"]
         state_changed = True
 
-        # After sell fills: update standby buy position
         holding = [l for l in layers if l.get("status") == "HOLDING"]
         if holding:
-            # Re-anchor standby 1 step below the LOWEST remaining layer
             lowest_entry = min(l.get("entry_price", 0) for l in holding)
-            _grid_update_standby_buy(coin_id, lowest_entry)
+            _grid_update_standby_buy(coin_id, group, lowest_entry)
         else:
-            # ALL layers sold — cancel standby buy, cycle complete
-            old_standby = shared.engine_state[coin_id].get("standby_buy_order_id")
+            # Group complete — cancel standby buy
+            old_standby = group.get("standby_buy_order_id")
             if old_standby:
-                logger.info(f"[{coin_id}] GRID: All layers sold. Cancelling standby buy {old_standby}.")
                 hata_api.cancel_order(f"{coin_id}_MYR", old_standby)
-                shared.engine_state[coin_id]["standby_buy_order_id"] = None
-                shared.engine_state[coin_id]["standby_buy_price"] = 0.0
-            logger.info(f"[{coin_id}] ★ GRID CYCLE COMPLETE. All layers sold. Seeking new entry...")
-            # Reset last_cycle_entry so ML can seek new entry
-            shared.engine_state[coin_id]["last_cycle_entry"] = 0.0
+                group["standby_buy_order_id"] = None
+                group["standby_buy_price"] = 0.0
+            logger.info(f"[{coin_id}] ★ Group {group['id']} COMPLETE. All layers sold.")
 
-    # ── 2. Check standby BUY order ──
-    standby_id = shared.engine_state[coin_id].get("standby_buy_order_id")
+    # ── Check standby BUY fill ──
+    standby_id = group.get("standby_buy_order_id")
     if standby_id:
         res = hata_api.get_order_status(standby_id)
         order_data = res.get("data")
         if order_data:
             buy_status = order_data.get("status")
-
             if buy_status == "fulfilled":
-                # Standby BUY filled → new layer
                 exec_info = _extract_hata_exec_data(coin_id, order_data, 0)
-                standby_price = shared.engine_state[coin_id].get("standby_buy_price", 0)
+                standby_price = group.get("standby_buy_price", 0)
                 trade_amount = shared.engine_state[coin_id].get("trade_amount_myr", 50.0)
-
                 new_layer = {
-                    "id": max([l.get("id", 0) for l in layers], default=0) + 1,
+                    "id": max((l.get("id", 0) for l in group.get("layers", [])), default=0) + 1,
                     "entry_price": standby_price,
                     "amount_myr": trade_amount,
                     "quantity": exec_info["exec_qty"],
@@ -587,28 +593,52 @@ def _check_grid_orders(coin_id: str) -> bool:
                     "sell_target_price": 0.0,
                     "created_at": time.time()
                 }
-                shared.engine_state[coin_id]["layers"].append(new_layer)
-                shared.engine_state[coin_id]["standby_buy_order_id"] = None
-                shared.engine_state[coin_id]["standby_buy_price"] = 0.0
-
-                logger.info(f"[{coin_id}] ★ GRID CASCADE: Standby BUY {standby_id} filled @ RM{standby_price:.4f} "
-                            f"| net: {exec_info['net_qty']} | fee: {exec_info['fee_role']} RM{exec_info['fee_myr']:.4f}")
-
-                # Place sell for this new layer
+                group["layers"].append(new_layer)
+                group["standby_buy_order_id"] = None
+                group["standby_buy_price"] = 0.0
+                logger.info(f"[{coin_id}] ★ Group {group['id']} CASCADE: Standby BUY filled @ RM{standby_price:.4f} "
+                            f"net={exec_info['net_qty']} fee={exec_info['fee_role']} RM{exec_info['fee_myr']:.4f}")
                 _grid_place_layer_sell(coin_id, new_layer)
-
-                # Place next standby buy 1 step below this new layer
-                _grid_update_standby_buy(coin_id, standby_price)
-
+                _grid_update_standby_buy(coin_id, group, standby_price)
                 state_changed = True
-
             elif buy_status in ["cancelled", "rejected"]:
-                logger.warning(f"[{coin_id}] GRID: Standby buy {standby_id} was {buy_status}. Clearing.")
-                shared.engine_state[coin_id]["standby_buy_order_id"] = None
-                shared.engine_state[coin_id]["standby_buy_price"] = 0.0
+                group["standby_buy_order_id"] = None
+                group["standby_buy_price"] = 0.0
                 state_changed = True
 
     return state_changed
+
+
+# ─────────────────────────────────────────────
+# GRID SYSTEM: Check ALL groups for one coin
+# Called from check_orders() when system_mode == 'grid'
+# ─────────────────────────────────────────────
+def _check_grid_orders(coin_id: str) -> bool:
+    """Check all groups for this coin. Returns True if any state changed."""
+    groups = shared.engine_state[coin_id].get("groups", [])
+    state_changed = False
+    groups_to_remove = []
+
+    for group in groups:
+        changed = _check_grid_group(coin_id, group)
+        if changed:
+            state_changed = True
+        # Mark group for removal if all layers sold
+        if not group.get("layers"):
+            groups_to_remove.append(group["id"])
+
+    if groups_to_remove:
+        shared.engine_state[coin_id]["groups"] = [
+            g for g in groups if g["id"] not in groups_to_remove
+        ]
+        state_changed = True
+        if not shared.engine_state[coin_id]["groups"]:
+            # ★ BUG FIX: Do NOT reset last_cycle_entry to 0.
+            # Keeping the last sell price as the anchor ensures the new-entry gap guard
+            # (2% below last cycle) still works on next ML signal.
+            # Resetting to 0 was bypassing the guard and causing immediate re-entry.
+            logger.info(f"[{coin_id}] ★ ALL GROUPS COMPLETE. Seeking new ML entry... "
+                        f"(gap guard active: last_cycle_entry=RM{shared.engine_state[coin_id].get('last_cycle_entry', 0):.4f})")
 
 
 # ─────────────────────────────────────────────
@@ -1009,8 +1039,11 @@ async def update_hata_prices_loop():
                         changed = _check_grid_orders(coin_id)
                         if changed:
                             shared.save_state()
-                        continue  # Skip old DCA logic for this coin
-
+                        # ★ BUG FIX: Skip legacy DCA code entirely when in grid mode.
+                        # Old DCA code (below) operates on `layers[]` which is a legacy array.
+                        # Grid mode uses `groups[]` exclusively — mixing them causes double-entry.
+                        continue
+                        
                     layers = shared.engine_state[coin_id].get("layers", [])
                     active_layers = []
                     coin_changed = False
@@ -1346,23 +1379,33 @@ async def process_kline(coin_id, kline):
                     trade_amount = shared.engine_state[coin_id].get("trade_amount_myr", 50.0)
                     current_price = shared.engine_state[coin_id]["current_price"]
                     strategy = _get_strategy(coin_id, risk_level)
-                    layers = shared.engine_state[coin_id]["layers"]
-
                     can_buy = True
 
-                    # ★ BLOCK: Jika ada layers aktif (sedang dalam layering cycle)
-                    # Cascade akan handle DCA secara automatik — AI signal hanya untuk ENTRY BARU
-                    if len(layers) > 0:
-                        can_buy = False
-                        logger.info(f"[{coin_id}] Skipping: Active layering cycle ({len(layers)} layers). Cascade handles DCA.")
+                    # ★ MULTI-GROUP ENTRY LOGIC
+                    groups = shared.engine_state[coin_id].get("groups", [])
+                    max_groups = shared.engine_state[coin_id].get("max_groups", 3)
+                    new_group_gap = shared.engine_state[coin_id].get("new_group_gap_pct", 0.02)
 
-                    # ★ BLOCK: Selepas habis layering, kena tunggu 2% gap dari last cycle entry
+                    if len(groups) >= max_groups:
+                        can_buy = False
+                        logger.info(f"[{coin_id}] Skipping: Max groups ({max_groups}) reached.")
+                    elif len(groups) > 0:
+                        # Check distance from lowest active entry
+                        all_entries = [l.get("entry_price", 0) for g in groups for l in g.get("layers", [])]
+                        if all_entries:
+                            lowest_entry = min(all_entries)
+                            min_required_price = lowest_entry * (1.0 - new_group_gap)
+                            if current_price > min_required_price:
+                                can_buy = False
+                                logger.info(f"[{coin_id}] Skipping: Price RM{current_price:.4f} not >= {new_group_gap*100:.1f}% below lowest layer RM{lowest_entry:.4f}. Need <= RM{min_required_price:.4f}.")
+
+                    # Also check last_cycle_entry if no active groups (cooldown from previous closed cycle)
                     if can_buy:
                         last_cycle = shared.engine_state[coin_id].get("last_cycle_entry", 0)
-                        if last_cycle > 0 and current_price > last_cycle * 0.98:
+                        if last_cycle > 0 and current_price > last_cycle * (1.0 - new_group_gap):
                             can_buy = False
-                            min_entry = last_cycle * 0.98
-                            logger.info(f"[{coin_id}] Skipping: Price RM{current_price:.4f} not ≥2% below last cycle entry RM{last_cycle:.4f}. Need ≤RM{min_entry:.4f}.")
+                            min_entry = last_cycle * (1.0 - new_group_gap)
+                            logger.info(f"[{coin_id}] Skipping: Price RM{current_price:.4f} not >= {new_group_gap*100:.1f}% below last cycle entry RM{last_cycle:.4f}. Need <= RM{min_entry:.4f}.")
 
                     if can_buy and trade_amount <= balance and current_price > 0:
                         import hata_api
@@ -1389,8 +1432,8 @@ async def process_kline(coin_id, kline):
                                     logger.error(f"[{coin_id}] Hata API Error: {hata_res.get('message')}")
                             else:
                                 order_id = hata_res.get("data", {}).get("id")
-                                layer = {
-                                    "id": len(layers) + 1,
+                                new_layer = {
+                                    "id": 1,
                                     "entry_price": current_price,
                                     "amount_myr": trade_amount,
                                     "quantity": quantity,
@@ -1398,12 +1441,23 @@ async def process_kline(coin_id, kline):
                                     "buy_order_id": str(order_id),
                                     "hata_buy_res": hata_res,
                                     "created_at": time.time(),
-                                    "sell_order_id": None,       # Grid: sell placed when buy fills
-                                    "sell_target_price": 0.0     # Grid: set when sell is placed
+                                    "sell_order_id": None,
+                                    "sell_target_price": 0.0
                                 }
-                                shared.engine_state[coin_id]["layers"].append(layer)
+                                
+                                new_group = {
+                                    "id": max([g.get("id", 0) for g in groups], default=0) + 1,
+                                    "layers": [new_layer],
+                                    "standby_buy_order_id": None,
+                                    "standby_buy_price": 0.0,
+                                    "created_at": time.time()
+                                }
+                                
+                                shared.engine_state[coin_id]["groups"].append(new_group)
+                                shared.engine_state[coin_id]["last_cycle_entry"] = current_price
                                 shared.save_state()
-                                logger.info(f"[{coin_id}] PENDING_BUY created. Order {order_id} at RM{current_price:.4f}")
+                                logger.info(f"[{coin_id}] NEW GROUP {new_group['id']} started! PENDING_BUY Order {order_id} at RM{current_price:.4f}")
+
             else:
                 shared.engine_state[coin_id]["last_signal"] = 0
 
