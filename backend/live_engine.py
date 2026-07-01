@@ -1431,9 +1431,17 @@ async def process_kline(coin_id, kline):
                     if can_buy and trade_amount <= balance and current_price > 0:
                         import hata_api
                         qty_scale = hata_api.COIN_SCALES.get(coin_id, {}).get("qty", 4)
+                        price_scale = hata_api.COIN_SCALES.get(coin_id, {}).get("price", 0)
                         min_notional = hata_api.COIN_SCALES.get(coin_id, {}).get("min_notional", 10.0)
-                        quantity = round(trade_amount / current_price, qty_scale)
-                        actual_notional = round(quantity * current_price, 4)
+
+                        # ★ First entry: limit 0.1% BAWAH current price
+                        # Lebih cepat fill vs exact current_price, masih MAKER 0% fee
+                        # (order masuk order book dulu, harga cuma perlu turun sikit je)
+                        ENTRY_OFFSET_PCT = 0.001
+                        entry_price = round(current_price * (1.0 - ENTRY_OFFSET_PCT), price_scale)
+
+                        quantity = round(trade_amount / entry_price, qty_scale)
+                        actual_notional = round(quantity * entry_price, 4)
 
                         # ★ Pre-check: warn if notional might be too small
                         if actual_notional < min_notional:
@@ -1442,8 +1450,10 @@ async def process_kline(coin_id, kline):
                                 f"Increase trade_amount_myr (current: RM{trade_amount:.2f}) to at least RM{min_notional:.2f}."
                             )
                         else:
-                            logger.info(f"[{coin_id}] Auto-executing LIMIT BUY RM{trade_amount:.2f} (notional RM{actual_notional:.4f}) at RM{current_price:.4f}")
-                            hata_res = hata_api.place_limit_order(f"{coin_id}_MYR", "BUY", current_price, quantity)
+                            logger.info(f"[{coin_id}] FIRST ENTRY LIMIT BUY RM{trade_amount:.2f} "
+                                        f"@ RM{entry_price:.{price_scale}f} (-0.1% dari RM{current_price:.{price_scale}f}) "
+                                        f"| qty={quantity} | MAKER 0%")
+                            hata_res = hata_api.place_limit_order(f"{coin_id}_MYR", "BUY", entry_price, quantity)
 
                             if hata_res.get("status") == "error":
                                 err_code = hata_res.get("code", "")
@@ -1455,7 +1465,7 @@ async def process_kline(coin_id, kline):
                                 order_id = hata_res.get("data", {}).get("id")
                                 new_layer = {
                                     "id": 1,
-                                    "entry_price": current_price,
+                                    "entry_price": entry_price,
                                     "amount_myr": trade_amount,
                                     "quantity": quantity,
                                     "status": "PENDING_BUY",
@@ -1475,9 +1485,11 @@ async def process_kline(coin_id, kline):
                                 }
                                 
                                 shared.engine_state[coin_id]["groups"].append(new_group)
-                                shared.engine_state[coin_id]["last_cycle_entry"] = current_price
+                                shared.engine_state[coin_id]["last_cycle_entry"] = entry_price
                                 shared.save_state()
-                                logger.info(f"[{coin_id}] NEW GROUP {new_group['id']} started! PENDING_BUY Order {order_id} at RM{current_price:.4f}")
+                                logger.info(f"[{coin_id}] NEW GROUP {new_group['id']} started! "
+                                            f"PENDING_BUY Order {order_id} @ RM{entry_price:.{price_scale}f} "
+                                            f"(-0.1% dari market RM{current_price:.{price_scale}f})")
 
             else:
                 shared.engine_state[coin_id]["last_signal"] = 0
