@@ -450,6 +450,7 @@ def _check_grid_group(coin_id: str, group: dict) -> bool:
     layers = group.get("layers", [])
 
     # ── Check PENDING_BUY layers (first entry waiting to fill) ──
+    layers_to_delete_pending = []
     for l in layers:
         if l.get("status") != "PENDING_BUY":
             continue
@@ -463,6 +464,7 @@ def _check_grid_group(coin_id: str, group: dict) -> bool:
         if not order_data:
             continue
         order_status = order_data.get("status")
+
         if order_status == "fulfilled":
             exec_info = _extract_hata_exec_data(coin_id, order_data, l.get("quantity", 0))
             l["exec_qty"] = exec_info["exec_qty"]
@@ -479,10 +481,90 @@ def _check_grid_group(coin_id: str, group: dict) -> bool:
             _grid_place_layer_sell(coin_id, l)
             # Place standby buy for this group
             _grid_update_standby_buy(coin_id, group, l["entry_price"])
+
         elif order_status in ["cancelled", "rejected"]:
-            logger.info(f"[{coin_id}] Group {group['id']} Layer {l['id']} buy {order_status}. Removing.")
-            group["layers"] = [x for x in layers if x["id"] != l["id"]]
+            # ★ Manual cancel dari luar (Hata dashboard) → remove layer sahaja
+            logger.info(f"[{coin_id}] Group {group['id']} Layer {l['id']} buy {order_status} (external cancel). Removing.")
+            layers_to_delete_pending.append(l["id"])
             state_changed = True
+
+        else:
+            # ── Order masih OPEN — smart price tracking ──
+            #
+            # LOGIK:
+            #   Harga TURUN (≤ entry_price)  → BIARKAN selama mana pun (akan fill)
+            #   Harga NAIK  (> entry_price) + 5 min → CANCEL
+            #     └─ Signal masih BUY → RE-PLACE @ -0.1% dari current price baru
+            #     └─ Signal dah habis → remove layer, tunggu signal baru
+            #
+            entry_price = l.get("entry_price", 0)
+            current_price_now = shared.engine_state[coin_id].get("current_price", 0)
+            age_sec = time.time() - l.get("created_at", time.time())
+
+            # Harga NAIK above entry → limit BUY tak akan fill sampai harga turun balik
+            price_above_entry = (current_price_now > 0 and entry_price > 0
+                                 and current_price_now > entry_price)
+
+            if price_above_entry and age_sec >= 300:
+                # ★ Harga dah naik, pending 5+ minit → cancel dan re-evaluate
+                logger.info(f"[{coin_id}] Group {group['id']} PENDING_BUY {buy_id}: "
+                            f"Harga NAIK RM{current_price_now:.4f} > entry RM{entry_price:.4f} "
+                            f"| pending {age_sec/60:.1f} min → CANCEL + re-evaluate")
+                hata_api.cancel_order(f"{coin_id}_MYR", buy_id)
+
+                last_signal = shared.engine_state[coin_id].get("last_signal", 0)
+                if last_signal == 1 and current_price_now > 0:
+                    # ★ Signal masih BUY → letak semula -0.1% dari current price baru
+                    price_scale = hata_api.COIN_SCALES.get(coin_id, {}).get("price", 0)
+                    qty_scale = hata_api.COIN_SCALES.get(coin_id, {}).get("qty", 4)
+                    trade_amount = shared.engine_state[coin_id].get("trade_amount_myr", 50.0)
+                    min_notional = hata_api.COIN_SCALES.get(coin_id, {}).get("min_notional", 10.0)
+
+                    new_entry = round(current_price_now * 0.999, price_scale)
+                    new_qty = round(trade_amount / new_entry, qty_scale)
+
+                    if new_entry * new_qty >= min_notional:
+                        logger.info(f"[{coin_id}] Signal masih BUY → RE-PLACE @ RM{new_entry:.{price_scale}f} "
+                                    f"(-0.1% dari RM{current_price_now:.{price_scale}f})")
+                        new_res = hata_api.place_limit_order(f"{coin_id}_MYR", "BUY", new_entry, new_qty)
+                        if new_res.get("status") != "error":
+                            new_order_id = str(new_res.get("data", {}).get("id", ""))
+                            l["entry_price"] = new_entry
+                            l["quantity"] = new_qty
+                            l["buy_order_id"] = new_order_id
+                            l["created_at"] = time.time()
+                            l.pop("hata_buy_res", None)
+                            shared.engine_state[coin_id]["last_cycle_entry"] = new_entry
+                            logger.info(f"[{coin_id}] RE-PLACED PENDING_BUY {new_order_id} @ RM{new_entry:.{price_scale}f} ✓")
+                        else:
+                            logger.error(f"[{coin_id}] Re-place gagal: {new_res.get('message')} → remove layer")
+                            layers_to_delete_pending.append(l["id"])
+                    else:
+                        logger.warning(f"[{coin_id}] Re-place notional terlalu kecil → remove layer")
+                        layers_to_delete_pending.append(l["id"])
+                else:
+                    # ★ Signal dah habis → remove layer, tunggu setup baru
+                    logger.info(f"[{coin_id}] Signal TIDAK BUY lagi → remove pending layer, tunggu setup baru")
+                    layers_to_delete_pending.append(l["id"])
+                state_changed = True
+
+            elif price_above_entry:
+                # Harga atas entry tapi < 5 minit lagi → tunggu
+                remaining = 300 - age_sec
+                logger.info(f"[{coin_id}] Group {group['id']} PENDING_BUY {buy_id}: "
+                            f"Harga RM{current_price_now:.4f} > entry RM{entry_price:.4f} "
+                            f"| Will cancel in {remaining/60:.1f} min lagi kalau tak fill")
+            else:
+                # ★ Harga TURUN atau dekat entry → BIARKAN selama mana pun
+                direction = "TURUN ↓" if current_price_now < entry_price else "≈ DEKAT"
+                logger.info(f"[{coin_id}] Group {group['id']} PENDING_BUY {buy_id}: "
+                            f"Harga {direction} RM{current_price_now:.4f} ≤ entry RM{entry_price:.4f} "
+                            f"| Biarkan, akan fill bila harga sampai level ini (age={age_sec/60:.1f}min)")
+
+    # Remove cancelled / failed / signal-expired pending layers
+    if layers_to_delete_pending:
+        group["layers"] = [x for x in group.get("layers", []) if x.get("id") not in layers_to_delete_pending]
+        state_changed = True
 
     # Refresh layers list after pending changes
     layers = group.get("layers", [])
