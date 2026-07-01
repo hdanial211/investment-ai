@@ -362,11 +362,18 @@ def _grid_place_layer_sell(coin_id: str, layer: dict) -> str:
 
     avail_bal, _ = hata_api.get_token_balance(coin_id)
     if avail_bal < sell_qty:
-        logger.warning(f"[{coin_id}] GRID SELL: Wallet ({avail_bal}) < planned qty ({sell_qty}). Capping.")
-        sell_qty = truncate_float(avail_bal, qty_scale)
+        # ★ Race condition: mungkin layer lain baru letak sell guna balance yang sama
+        # Tunggu 1 saat dan cuba semula sekali
+        logger.warning(f"[{coin_id}] GRID SELL: Wallet ({avail_bal:.6f}) < planned ({sell_qty}). "
+                       f"Retrying after 1s (kemungkinan race condition multiple layers)...")
+        time.sleep(1)
+        avail_bal, _ = hata_api.get_token_balance(coin_id)
+        if avail_bal < sell_qty:
+            logger.warning(f"[{coin_id}] GRID SELL: After retry, wallet ({avail_bal:.6f}) < planned ({sell_qty}). Capping.")
+            sell_qty = truncate_float(avail_bal, qty_scale)
 
     if sell_qty <= 0:
-        logger.error(f"[{coin_id}] GRID SELL: sell_qty is 0. Skipping.")
+        logger.error(f"[{coin_id}] GRID SELL: sell_qty is 0 after balance check. Skipping (will retry next cycle).")
         return ""
 
     logger.info(f"[{coin_id}] GRID SELL Layer {layer['id']}: avg_entry=RM{avg_entry:.4f} "
@@ -581,8 +588,13 @@ def _check_grid_group(coin_id: str, group: dict) -> bool:
 
         sell_id = l.get("sell_order_id")
         if not sell_id:
-            logger.info(f"[{coin_id}] Group {group['id']} Layer {l['id']}: No sell. Placing...")
-            _grid_place_layer_sell(coin_id, l)
+            logger.info(f"[{coin_id}] Group {group['id']} Layer {l['id']}: HOLDING tapi tiada sell order. Placing...")
+            placed_id = _grid_place_layer_sell(coin_id, l)
+            if placed_id:
+                logger.info(f"[{coin_id}] Group {group['id']} Layer {l['id']}: Sell placed OK ({placed_id})")
+                shared.save_state()  # ★ Save immediately supaya sell_order_id persistent
+            else:
+                logger.error(f"[{coin_id}] Group {group['id']} Layer {l['id']}: Sell FAILED. Will retry next cycle (60s).")
             state_changed = True
             continue
 
