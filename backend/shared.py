@@ -40,6 +40,8 @@ def create_coin_state():
         "standby_buy_order_id": None,        # Single cascade standby BUY below current position
         "standby_buy_price": 0.0,            # Price of standby BUY
         "system_mode": "grid",               # 'grid' = new system, 'dca' = old system
+        "max_layers": 0,                     # 0 = guna risk_level default (3/5/6), >0 = custom per coin
+
         # ── Adaptive ML Pipeline (per-coin, independent) ──
         "model_version": "v1",
         "trades_since_retrain": 0,

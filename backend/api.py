@@ -130,6 +130,24 @@ def set_grid_gap(req: GridGapRequest):
     logger.info(f"[{coin}] Grid gap set to {req.grid_gap_pct*100:.2f}%")
     return {"status": "ok", "coin": coin, "grid_gap_pct": req.grid_gap_pct}
 
+class MaxLayersRequest(BaseModel):
+    coin: str
+    max_layers: int  # 0 = ikut risk_level default, 1-10 = custom
+
+@app.post("/api/set-max-layers")
+def set_max_layers(req: MaxLayersRequest):
+    """Set max layers per coin (0 = guna risk_level default)"""
+    coin = req.coin.upper()
+    if coin not in engine_state:
+        raise HTTPException(status_code=400, detail="Invalid coin")
+    if not (0 <= req.max_layers <= 10):
+        raise HTTPException(status_code=400, detail="max_layers must be between 0 and 10")
+    engine_state[coin]["max_layers"] = req.max_layers
+    shared.save_state()
+    label = f"{req.max_layers} layers (custom)" if req.max_layers > 0 else "default (ikut risk level)"
+    logger.info(f"[{coin}] Max layers set to {label}")
+    return {"status": "ok", "coin": coin, "max_layers": req.max_layers}
+
 @app.post("/api/manual-buy")
 def manual_buy(action: ManualAction):
     coin = action.coin

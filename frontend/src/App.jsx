@@ -129,6 +129,19 @@ function App() {
     }
   }
 
+  const setMaxLayers = async (n) => {
+    const val = parseInt(n)
+    if (isNaN(val) || val < 0 || val > 10) return
+    try {
+      await axios.post('http://localhost:8000/api/set-max-layers', {
+        coin: selectedCoin,
+        max_layers: val
+      })
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
   const [syncing, setSyncing] = useState(false)
   const syncHistory = async () => {
     setSyncing(true)
@@ -158,7 +171,10 @@ function App() {
   const standbyBuyId = coinData.standby_buy_order_id || null;
   const standbyBuyPrice = coinData.standby_buy_price || 0;
   const systemMode = coinData.system_mode || 'grid';
-  const maxLayers = coinData.risk_level === 3 ? "2-3 Lapis" : coinData.risk_level === 2 ? "5 Lapis" : "6 Lapis";
+  const maxLayersCustom = coinData.max_layers || 0;  // 0 = ikut risk_level
+  const riskDefaultMax = coinData.risk_level === 3 ? 3 : coinData.risk_level === 2 ? 5 : 6;
+  const effectiveMaxLayers = maxLayersCustom > 0 ? maxLayersCustom : riskDefaultMax;
+  const maxLayers = `${effectiveMaxLayers} Lapis${maxLayersCustom > 0 ? ' (Custom)' : ' (Auto)'}`;
   
   const getStrategyName = (coin, level) => {
     if (level === 3) {
@@ -754,6 +770,49 @@ function App() {
                     </p>
                   </div>
 
+                  {/* Max Layers Setting */}
+                  <label>Bilangan Layer Maksimum — per coin</label>
+                  <div className="amount-controls" style={{ marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input 
+                        type="number" 
+                        className="amount-input"
+                        value={maxLayersCustom || ''}
+                        onChange={(e) => setMaxLayers(e.target.value)}
+                        min="0"
+                        max="10"
+                        step="1"
+                        placeholder={`0 = Auto (${riskDefaultMax} layers)`}
+                        style={{ flex: 1, fontSize: '1.2rem', padding: '10px' }}
+                      />
+                      <span style={{ color: '#aaa', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>max layers</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
+                      {[0,1,2,3,4,5,6].map(n => (
+                        <button key={n}
+                          onClick={() => setMaxLayers(n)}
+                          style={{
+                            padding: '6px 14px',
+                            borderRadius: '8px',
+                            border: `1px solid ${maxLayersCustom === n || (n === 0 && maxLayersCustom === 0) ? '#00e5ff' : '#333'}`,
+                            background: maxLayersCustom === n || (n === 0 && maxLayersCustom === 0) ? 'rgba(0,229,255,0.15)' : 'rgba(255,255,255,0.04)',
+                            color: maxLayersCustom === n || (n === 0 && maxLayersCustom === 0) ? '#00e5ff' : '#888',
+                            cursor: 'pointer',
+                            fontSize: '0.85rem',
+                            fontWeight: 'bold'
+                          }}
+                        >
+                          {n === 0 ? `Auto (${riskDefaultMax})` : `${n}x`}
+                        </button>
+                      ))}
+                    </div>
+                    <p style={{ margin: '6px 0 0 0', fontSize: '0.75rem', color: '#888' }}>
+                      Sekarang: <span style={{ color: '#00e676', fontWeight: 'bold' }}>{effectiveMaxLayers} layers max</span>
+                      {maxLayersCustom > 0 ? ' (Custom)' : ` (Auto dari Risk Level ${coinData.risk_level})`}
+                      {' '}— Grid akan letak standby BUY sampai max ni
+                    </p>
+                  </div>
+
                   <label>Tahap Risiko (Pilihan Strategi Pasif)</label>
                   <div className="amount-controls" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
                     <button 
@@ -785,16 +844,16 @@ function App() {
                       <strong style={{ color: '#aaa' }}>Strategi:</strong> {getStrategyName(selectedCoin, coinData.risk_level)}
                     </p>
                     <p style={{ margin: '5px 0', fontSize: '0.9rem' }}>
-                      <strong style={{ color: '#aaa' }}>Kapasiti Maksimum:</strong> {maxLayers}
+                      <strong style={{ color: '#aaa' }}>Max Layers:</strong> <span style={{ color: '#00e676' }}>{effectiveMaxLayers}</span> {maxLayersCustom > 0 ? '(Custom)' : `(Auto - Risk ${coinData.risk_level})`}
                     </p>
                     <p style={{ margin: '5px 0', fontSize: '0.9rem' }}>
-                      <strong style={{ color: '#aaa' }}>Take Profit:</strong> <span style={{ color: '#00e676' }}>{(tpPct * 100).toFixed(1)}%</span> (Maker Fee: 0%)
+                      <strong style={{ color: '#aaa' }}>Grid Gap:</strong> <span style={{ color: '#00e676' }}>{(gridGapPct * 100).toFixed(2)}%</span> per step (MAKER 0% fee)
                     </p>
                     <p style={{ margin: '15px 0 5px 0', fontSize: '0.95rem' }}>
-                      <strong style={{ color: '#fff' }}>Saiz Trade Ditetapkan: <span style={{ color: '#00e5ff' }}>RM {tradeAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></strong>
+                      <strong style={{ color: '#fff' }}>Saiz Trade: <span style={{ color: '#00e5ff' }}>RM {tradeAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></strong>
                     </p>
                     <p style={{ margin: '0', fontSize: '0.8rem', color: '#666' }}>
-                      *Bot akan masuk posisi sebanyak RM {tradeAmount} pada setiap layer (maksimum {maxLayers}). Semua layer digabung dalam 1 sell order.
+                      *Bot layering sehingga {effectiveMaxLayers} layers. Setiap layer ada sell sendiri (Maker 0% fee). Standby BUY sentiasa aktif.
                     </p>
                   </div>
                 </div>

@@ -100,6 +100,11 @@ def truncate_float(val: float, decimals: int) -> float:
 # ─────────────────────────────────────────────
 def _get_strategy(coin_id: str, risk_level: int) -> dict:
     tp_pct = shared.engine_state[coin_id].get("tp_pct", 0.005)
+    # ★ Per-coin max_layers setting (overrides risk_level if set)
+    custom_max = shared.engine_state[coin_id].get("max_layers", 0)
+    if custom_max and custom_max > 0:
+        return {"max_layers": int(custom_max), "tp_pct": tp_pct}
+    # Fallback: ikut risk_level
     if risk_level == 3:
         return {"max_layers": 3, "tp_pct": tp_pct}
     elif risk_level == 2:
