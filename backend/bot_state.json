@@ -1,8 +1,8 @@
 {
     "ETH": {
-        "current_price": 6428.0,
-        "last_signal": 0,
-        "confidence": 54.39020395278931,
+        "current_price": 6407.0,
+        "last_signal": 1,
+        "confidence": 69.56735253334045,
         "layers": [],
         "total_pnl": -0.05260000000000531,
         "trade_amount_myr": 15.0,
@@ -11,6 +11,34 @@
         "tp_pct": 0.005,
         "consolidated_sell_order_id": null,
         "last_cycle_entry": 6393.0,
+        "model_version": "v1",
+        "trades_since_retrain": 2,
+        "last_retrain_at": null,
+        "adaptive_threshold": 0.6,
+        "active_trade_cycle_id": "ETH_1782828120",
+        "ml_stats": {
+            "total_predictions": 0,
+            "total_trades_logged": 2,
+            "recent_win_rate": 0.0,
+            "model_accuracy": 0.0,
+            "threshold_label": "Default",
+            "threshold_sample_size": 0
+        },
+        "total_buy_fees_myr": 0.1182292,
+        "total_buy_fees_qty": 1.84e-05
+    },
+    "BTC": {
+        "current_price": 241498.0,
+        "last_signal": 1,
+        "confidence": 83.7137222290039,
+        "layers": [],
+        "total_pnl": -1.7018600000000017,
+        "trade_amount_myr": 15.0,
+        "risk_level": 3,
+        "is_auto": true,
+        "tp_pct": 0.004,
+        "consolidated_sell_order_id": null,
+        "last_cycle_entry": 240005.0,
         "model_version": "v1",
         "trades_since_retrain": 2,
         "last_retrain_at": null,
@@ -24,41 +52,13 @@
             "threshold_label": "Default",
             "threshold_sample_size": 0
         },
-        "total_buy_fees_myr": 0.1182292,
-        "total_buy_fees_qty": 1.84e-05
-    },
-    "BTC": {
-        "current_price": 244010.0,
-        "last_signal": 1,
-        "confidence": 82.90143609046936,
-        "layers": [],
-        "total_pnl": -1.7594600000000025,
-        "trade_amount_myr": 15.0,
-        "risk_level": 3,
-        "is_auto": true,
-        "tp_pct": 0.004,
-        "consolidated_sell_order_id": null,
-        "last_cycle_entry": 245001.0,
-        "model_version": "v1",
-        "trades_since_retrain": 1,
-        "last_retrain_at": null,
-        "adaptive_threshold": 0.6,
-        "active_trade_cycle_id": "BTC_1782748380",
-        "ml_stats": {
-            "total_predictions": 0,
-            "total_trades_logged": 1,
-            "recent_win_rate": 0.0,
-            "model_accuracy": 0.0,
-            "threshold_label": "Default",
-            "threshold_sample_size": 0
-        },
         "total_buy_fees_myr": 0.0,
         "total_buy_fees_qty": 0.0
     },
     "SOL": {
-        "current_price": 300.0,
+        "current_price": 297.9,
         "last_signal": 1,
-        "confidence": 70.22430300712585,
+        "confidence": 72.27909564971924,
         "layers": [],
         "total_pnl": 0.7414999999999932,
         "trade_amount_myr": 15.0,
@@ -71,7 +71,7 @@
         "trades_since_retrain": 2,
         "last_retrain_at": null,
         "adaptive_threshold": 0.6,
-        "active_trade_cycle_id": "SOL_1782748380",
+        "active_trade_cycle_id": "SOL_1782828120",
         "ml_stats": {
             "total_predictions": 0,
             "total_trades_logged": 2,
@@ -84,9 +84,9 @@
         "total_buy_fees_qty": 0.000208
     },
     "XRP": {
-        "current_price": 4.291,
+        "current_price": 4.255,
         "last_signal": 1,
-        "confidence": 62.15481162071228,
+        "confidence": 80.31543493270874,
         "layers": [
             {
                 "id": 1,
@@ -252,7 +252,7 @@
         "trades_since_retrain": 0,
         "last_retrain_at": null,
         "adaptive_threshold": 0.6,
-        "active_trade_cycle_id": "XRP_1782748380",
+        "active_trade_cycle_id": "XRP_1782828120",
         "ml_stats": {
             "total_predictions": 0,
             "total_trades_logged": 0,
@@ -265,9 +265,9 @@
         "total_buy_fees_qty": 0.0632
     },
     "LTC": {
-        "current_price": 174.4,
+        "current_price": 173.7,
         "last_signal": 1,
-        "confidence": 75.43419003486633,
+        "confidence": 77.66021490097046,
         "layers": [
             {
                 "id": 1,
@@ -389,7 +389,7 @@
         "trades_since_retrain": 1,
         "last_retrain_at": null,
         "adaptive_threshold": 0.6,
-        "active_trade_cycle_id": "LTC_1782748380",
+        "active_trade_cycle_id": "LTC_1782828120",
         "ml_stats": {
             "total_predictions": 0,
             "total_trades_logged": 1,
