@@ -1422,13 +1422,11 @@ async def process_kline(coin_id, kline):
                                 can_buy = False
                                 logger.info(f"[{coin_id}] Skipping: Price RM{current_price:.4f} not >= {new_group_gap*100:.1f}% below lowest layer RM{lowest_entry:.4f}. Need <= RM{min_required_price:.4f}.")
 
-                    # Also check last_cycle_entry if no active groups (cooldown from previous closed cycle)
-                    if can_buy:
-                        last_cycle = shared.engine_state[coin_id].get("last_cycle_entry", 0)
-                        if last_cycle > 0 and current_price > last_cycle * (1.0 - new_group_gap):
-                            can_buy = False
-                            min_entry = last_cycle * (1.0 - new_group_gap)
-                            logger.info(f"[{coin_id}] Skipping: Price RM{current_price:.4f} not >= {new_group_gap*100:.1f}% below last cycle entry RM{last_cycle:.4f}. Need <= RM{min_entry:.4f}.")
+                    # ★ NOTE: last_cycle_entry guard ONLY applies when there are ACTIVE groups.
+                    # When groups=[], bot enters freely based on ML signal (cycle is complete, no cooldown).
+                    # The 2% gap is ONLY to prevent adding a new group too close to existing active group.
+                    # This check (above) already handles that in the elif len(groups) > 0 block.
+                    # DO NOT add another guard here for groups=[] — it breaks scalping flow.
 
                     if can_buy and trade_amount <= balance and current_price > 0:
                         import hata_api
