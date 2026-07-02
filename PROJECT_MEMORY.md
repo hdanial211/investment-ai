@@ -1,5 +1,5 @@
 # 🧠 INVESTMENT AI — PROJECT MEMORY FILE
-> Dikemas kini: 2026-07-01 | Versi Semasa: **v5.5.0 — Grid Paired Orders**
+> Dikemas kini: 2026-07-02 | Versi Semasa: **v5.5.9 — Grid Multi-Group + Daily Telegram Report**
 > GitHub: https://github.com/hdanial211/investment-ai
 > Lokasi Projek: `e:\PROJECTS\SEMUA PROJECT\INVESTMENT AI`
 
@@ -329,37 +329,52 @@ wss://stream.binance.com:9443/stream?streams=btcusdt@kline_1m/ethusdt@kline_1m/s
 | v5.4.0 | Adaptive ML Learning Pipeline | Bot now learns from every trade per-coin with auto-retraining and adaptive confidence thresholds |
 | v5.4.1 | AI Learning Dashboard | Added frontend tab with per-coin ML stats, cumulative PnL, scatter plots, and model version history |
 | v5.5.0 | Fix DCA Entry Size | Fixed DCA entry size calculation using min(limit,market) price for accurate RM deployment |
-| v5.5.1 | Penjadualan Kesihatan Harian | Menjadualkan pemeriksaan kesihatan sistem harian pada jam 9:00 AM dengan agent scheduling |
-| v5.5.2 | Pemeriksaan Kesihatan Harian | Menjalankan pemeriksaan kesihatan sistem harian pada jam 9:00 AM (iterasi 1) |
-| v5.5.3 | Pemeriksaan Kesihatan Harian | Menjalankan pemeriksaan kesihatan sistem harian pada jam 9:00 AM (iterasi 2) |
-| v5.5.4 | Pemeriksaan Kesihatan Harian | Menjalankan pemeriksaan kesihatan sistem harian pada jam 9:00 AM (iterasi 3) |
-| v5.5.5 | Pemeriksaan Kesihatan Harian | Menjalankan pemeriksaan kesihatan sistem harian pada jam 9:00 AM (iterasi 4) |
-| v5.5.6 | Pemeriksaan Kesihatan Harian | Menjalankan pemeriksaan kesihatan sistem harian pada jam 9:00 AM (iterasi 5) |
-| v5.5.7 | Pemeriksaan Kesihatan Harian | Menjalankan pemeriksaan kesihatan sistem harian pada jam 9:00 AM (iterasi 6) |
+| v5.5.1-4 | Pemeriksaan Kesihatan Harian (iterasi 1-3) | Menjalankan pemantauan berkala sistem |
+| v5.5.5 | Smart PENDING_BUY Management | Cancel+replace jika harga naik >5min; hold kalau turun. First entry letak di -0.1% dari market (Maker). |
+| v5.5.6 | Fee Role Fix | Betulkan kiraan fee_role: inference dari fee_qty jika `is_maker` tidak ada dalam API response. Patch bot_state.json dari 'unknown' ke 'taker'. |
+| v5.5.7 | Sell Placement Race Condition Fix | Retry 1s + save_state() terus selepas sell order placed, elak status 'placing...' tergantung. |
+| v5.5.8 | frozen_myr Balance Reservation | Tambah `frozen_myr` dalam global_state untuk reserve baki sebelum order dihantar. Elak semua 5 coin beli serentak sampai wallet kosong. |
+| v5.5.9 | Daily Telegram Report — Direct Hata API | Script `scratch/test_daily_report_direct.py` yang query live `/orderbook/sapi/trades/history` API Hata untuk kira PnL harian + posisi HOLDING semasa. Hantar ke Telegram group 'SAHAM SIGNAL' pukul 11PM setiap hari via Antigravity schedule. |
 
 ---
 
 ## 📋 PERATURAN PENTING
 
-1. **Auto-cancel**: PENDING_BUY > 5 minit → cancel automatik (check setiap 60 saat)
-2. **Anti double-buy**: Jangan beli baru jika ada PENDING_BUY aktif untuk coin yang sama
-3. **1% gap rule**: Untuk layer baru, harga mesti ≤ last_entry × 0.99
-4. **Auto-DCA**: PENDING_SELL fill → terus letak BUY baru di entry × 0.99
-5. **Startup recovery**: Bot check Hata API untuk semua layers bila restart
-6. **Tidak pakai Groq**: Sistem sepenuhnya autonomi, tanpa API AI luar
-7. **Confidence threshold**: > 60% untuk trigger entry baru
-8. **Sell quantity**: Dihitung secara dinamik berdasarkan trade fill & fi Hata. Jika baki kurang, bot akan auto-cap (truncate) mengikut baki sedia ada.
-9. **Auto-healing & Pemantauan**: Memantau backend (port 8000) dan frontend (port 5173) secara berkala dan memulakan semula perkhidmatan jika dikesan terhenti.
+1. **Auto-cancel PENDING_BUY**: Jika harga naik >5 minit → cancel & re-place di -0.1% market. Jika turun → biarkan.
+2. **Anti double-buy**: Jangan beli baru jika ada PENDING_BUY aktif untuk coin yang sama.
+3. **Grid Gap per coin**: Jarak antara entry & sell target = `grid_gap_pct` (boleh set individu per coin dari frontend).
+4. **Standby BUY**: Selepas setiap fill, bot letak standby BUY di bawah entry terendah.
+5. **Startup recovery**: Bot check Hata API untuk semua layers bila restart.
+6. **Tidak pakai Groq/AI luar**: Sistem sepenuhnya autonomi (XGBoost sahaja).
+7. **Confidence threshold**: > 60% untuk trigger entry baru.
+8. **frozen_myr**: Gunakan `global_state.frozen_myr` untuk reserve baki sebelum order ditempatkan. Elak race condition bila semua 5 coin signal serentak.
+9. **fee_role**: Sentiasa infer dari `fee_qty` jika `is_maker` dari API tidak hadir. Jangan simpan 'unknown'.
+10. **Auto-healing & Pemantauan**: Memantau backend (port 8000) dan frontend (port 5173) secara berkala.
+11. **Sell order visibility**: Jangan tunjuk entry di frontend sebelum order berjaya di-place ke Hata (elak phantom entry).
+
+---
+
+## 📊 DAILY TELEGRAM REPORT
+
+- **Script**: `scratch/test_daily_report_direct.py`
+- **Jadual**: Pukul 11:00 PM setiap hari (via Antigravity `/schedule`)
+- **Data**: Query terus dari Hata API `/orderbook/sapi/trades/history`
+- **Endpoint betul**: `GET /orderbook/sapi/trades/history`
+  - Parameter wajib: `pair_name` (e.g. `ETHMYR`), `page` (integer ≥ 1), `rows` (integer ≤ 100)
+  - Parameter opsional: `start_time`, `end_time` (Unix timestamp dalam saat)
+- **Telegram**: Bot `Crypto_Hakim_Bot`, Group `SAHAM SIGNAL`
+  - Token: `8880063318:AAHeAoJ1E4m1BTJVmTJEKVz5TbNTwW9K98k`
+  - Chat ID: `-1003819849481`
+- **Nota**: `get_trade_history()` dalam `hata_api.py` telah diperbetulkan (endpoint lama `/orderbook/sapi/trades` = 404)
 
 ---
 
 ## 🔮 PERKARA YANG BOLEH DIPERTINGKATKAN (FUTURE IDEAS)
 
-- [ ] Trailing stop loss untuk PENDING_SELL
-- [ ] Dashboard stats: win rate, avg hold time
-- [ ] Notifikasi Telegram bila order fill
-- [ ] Backtest semula dengan logik 1% DCA baru
-- [ ] Cancel PENDING_SELL jika harga jatuh jauh dari TP (stop loss layer)
+- [ ] Trailing stop loss untuk sell order
+- [ ] Dashboard stats: win rate, avg hold time per group
+- [ ] Notifikasi Telegram realtime bila order fill (bukan sahaja daily report)
+- [ ] Cancel sell order jika harga jatuh jauh dari sell target (stop loss per layer)
 
 ---
 

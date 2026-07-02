@@ -1,5 +1,6 @@
 # 🧠 Investment AI — Agent Memory File
 # Baca file ini sebelum buat sebarang perubahan pada projek.
+# Versi semasa: **v5.5.9** | Dikemas kini: 2026-07-02
 
 ## Lokasi Projek
 `e:\PROJECTS\SEMUA PROJECT\INVESTMENT AI`
@@ -68,9 +69,11 @@ Sama seperti sistem lama — guna `_extract_hata_exec_data()`:
 | Function | Tujuan |
 |---|---|
 | `_grid_place_layer_sell()` | Place SELL untuk satu layer dengan fee recovery |
-| `_grid_update_standby_buy()` | Cancel old standby, place new standby BUY below |
+| `_grid_update_standby_buy()` | Cancel old standby, place new standby BUY below lowest layer |
 | `_check_grid_orders()` | Check semua individual sells + standby buy (dipanggil tiap 60s) |
-| `_extract_hata_exec_data()` | Baca actual exec qty, fee dari Hata API |
+| `_extract_hata_exec_data()` | Baca actual exec qty, fee dari Hata API trades[] |
+| `_smart_pending_buy_check()` | Cancel+replace PENDING_BUY jika harga naik >5min; hold jika turun |
+| `_sync_trade_history()` | Sync PnL dari Hata API `/orderbook/sapi/trades/history` per coin |
 
 ### State Per Coin (shared.py)
 ```json
@@ -83,6 +86,14 @@ Sama seperti sistem lama — guna `_extract_hata_exec_data()`:
   "trade_amount_myr": 50.0,  // Per coin, set dari frontend
   "is_auto": true,
   "tp_pct": 0.005            // Legacy, grid guna grid_gap_pct
+}
+```
+
+### Global State (shared.py)
+```json
+{
+  "frozen_myr": 45.0         // RM yang sedang 'dipesan' untuk order pending
+                             // Lifecycle: +amount bila order placed, -amount bila fills/cancel
 }
 ```
 
@@ -137,6 +148,8 @@ File: `backend/live_engine_old_system.py`
 3. Jangan beli baharu kalau ada PENDING_BUY aktif untuk coin yang sama
 4. Jangan commit .env file
 5. Versi commit: tulis `v_._._ ` depan message
+6. Jangan guna endpoint `/orderbook/sapi/trades` (lama/404) — guna `/orderbook/sapi/trades/history`
+7. Jangan simpan fee_role sebagai 'unknown' — infer dari fee_qty kalau API tak return is_maker
 
 ## Files Kritikal
 | File | Tujuan |
@@ -144,10 +157,22 @@ File: `backend/live_engine_old_system.py`
 | `backend/live_engine.py` | ★ Enjin utama bot |
 | `backend/shared.py` | State global + load/save |
 | `backend/api.py` | FastAPI endpoints |
-| `backend/hata_api.py` | Hata exchange wrapper |
+| `backend/hata_api.py` | Hata exchange wrapper (endpoint betul: `/orderbook/sapi/trades/history`) |
 | `backend/bot_state.json` | Memori bot (layers, PnL) |
 | `frontend/src/App.jsx` | Dashboard React |
 | `backend/live_engine_old_system.py` | Backup sistem lama |
+| `scratch/test_daily_report_direct.py` | ★ Daily PnL report → Telegram |
+
+## Daily Telegram Report
+- **Script**: `scratch/test_daily_report_direct.py`
+- **Jadual**: 11:00 PM setiap hari (Antigravity scheduled task)
+- **Endpoint Hata**: `GET /orderbook/sapi/trades/history`
+  - Params wajib: `pair_name` (e.g. `ETHMYR`), `page`, `rows` (max 100)
+  - Params opsional: `start_time`, `end_time` (Unix timestamp dalam saat)
+- **Telegram**:
+  - Bot: `Crypto_Hakim_Bot`
+  - Token: `8880063318:AAHeAoJ1E4m1BTJVmTJEKVz5TbNTwW9K98k`
+  - Chat ID: `-1003819849481` (Group: SAHAM SIGNAL)
 
 ## Cara Guna File Ini Dalam Chat Baru
 ```
