@@ -148,6 +148,40 @@ def set_max_layers(req: MaxLayersRequest):
     logger.info(f"[{coin}] Max layers set to {label}")
     return {"status": "ok", "coin": coin, "max_layers": req.max_layers}
 
+class MaxGroupsRequest(BaseModel):
+    coin: str
+    max_groups: int
+
+@app.post("/api/set-max-groups")
+def set_max_groups(req: MaxGroupsRequest):
+    """Set max groups per coin"""
+    coin = req.coin.upper()
+    if coin not in engine_state:
+        raise HTTPException(status_code=400, detail="Invalid coin")
+    if not (1 <= req.max_groups <= 10):
+        raise HTTPException(status_code=400, detail="max_groups must be between 1 and 10")
+    engine_state[coin]["max_groups"] = req.max_groups
+    shared.save_state()
+    logger.info(f"[{coin}] Max groups set to {req.max_groups}")
+    return {"status": "ok", "coin": coin, "max_groups": req.max_groups}
+
+class NewGroupGapRequest(BaseModel):
+    coin: str
+    gap_pct: float
+
+@app.post("/api/set-new-group-gap")
+def set_new_group_gap(req: NewGroupGapRequest):
+    """Set gap % below lowest layer to start a new group"""
+    coin = req.coin.upper()
+    if coin not in engine_state:
+        raise HTTPException(status_code=400, detail="Invalid coin")
+    if not (0.001 <= req.gap_pct <= 0.10):
+        raise HTTPException(status_code=400, detail="gap_pct must be between 0.1% and 10%")
+    engine_state[coin]["new_group_gap_pct"] = req.gap_pct
+    shared.save_state()
+    logger.info(f"[{coin}] New group gap set to {req.gap_pct*100:.2f}%")
+    return {"status": "ok", "coin": coin, "new_group_gap_pct": req.gap_pct}
+
 @app.post("/api/manual-buy")
 def manual_buy(action: ManualAction):
     coin = action.coin
@@ -496,3 +530,7 @@ def start_server():
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
+
+# Trigger reload
+
+# Trigger reload

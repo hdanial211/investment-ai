@@ -282,21 +282,31 @@ def cancel_order(symbol: str, order_id: str) -> dict:
         print(f"Error cancelling order {order_id}: {e}")
         return {"status": "error", "message": str(e)}
 
-def get_trade_history(pair: str, limit: int = 50) -> dict:
-    """Fetch trade history from Hata API for real P&L calculation"""
+def get_trade_history(pair: str, limit: int = 50, start_time: str = None, end_time: str = None) -> dict:
+    """Fetch trade history from Hata API for real P&L calculation.
+    Endpoint: /orderbook/sapi/trades/history"""
     if not HATA_API_KEY or not HATA_API_SECRET:
         return {"status": "simulated", "data": []}
         
-    endpoint = "/orderbook/sapi/trades"
+    endpoint = "/orderbook/sapi/trades/history"
     timestamp = str(int(time.time()))
-    clean_pair = pair.replace("_", "").upper()
+    clean_pair = pair.replace("_", "").replace("-", "").upper()
     
+    # We must construct parameters exactly matching Hata requirement:
+    # page (integer >= 1) and rows (integer <= 100) are required.
+    # For signature generation, all values must be stringified.
     params = {
-        "limit": str(limit),
-        "pair": clean_pair,
-        "timestamp": timestamp
+        "timestamp": timestamp,
+        "pair_name": clean_pair,
+        "page": "1",
+        "rows": str(min(limit, 100))
     }
     
+    if start_time:
+        params["start_time"] = str(start_time)
+    if end_time:
+        params["end_time"] = str(end_time)
+        
     signature = _generate_signature(params, HATA_API_SECRET)
     headers = {
         "X-API-KEY": HATA_API_KEY,
@@ -305,7 +315,19 @@ def get_trade_history(pair: str, limit: int = 50) -> dict:
     url = f"{BASE_URL}{endpoint}"
     
     try:
-        response = requests.get(url, params=params, headers=headers, timeout=10)
+        # Pass page and rows as integers in requests' params (though signature signs string forms)
+        req_params = {
+            "timestamp": int(timestamp),
+            "pair_name": clean_pair,
+            "page": 1,
+            "rows": min(limit, 100)
+        }
+        if start_time:
+            req_params["start_time"] = str(start_time)
+        if end_time:
+            req_params["end_time"] = str(end_time)
+            
+        response = requests.get(url, params=req_params, headers=headers, timeout=10)
         if response.status_code == 200:
             return response.json()
         else:

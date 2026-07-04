@@ -1078,13 +1078,20 @@ def _sync_trade_history():
                     total_sell_fees += fee_myr
                     sell_count += 1
 
-            # Net P&L = (sell revenue - sell fees) - (buy cost + buy fees in MYR not already counted)
-            # Note: buy fees are deducted from coin qty, not from MYR
-            # So the "lost" coin fee is implicitly lower sell revenue
+            # Net P&L Calculation:
+            # Grid system: setiap sell ada buy price yg berbeza.
+            # Realized P&L = sell_revenue - proportionate_buy_cost
+            # Kalau ada open positions (sell_qty < buy_qty), kira cost berdasarkan
+            # average buy price × qty yang dah sold (bukan semua buy cost)
             total_fees = total_buy_fees + total_sell_fees
-            realized_pnl = total_sell_revenue - (total_buy_cost * (total_sell_qty / total_buy_qty)) if total_buy_qty > 0 and total_sell_qty > 0 else 0.0
-            
-            # Store sync data
+            if total_buy_qty > 0 and total_sell_qty > 0:
+                avg_buy_price = total_buy_cost / total_buy_qty  # average harga beli per unit
+                matched_buy_cost = avg_buy_price * total_sell_qty  # cost untuk qty yg dah sold sahaja
+                realized_pnl = total_sell_revenue - matched_buy_cost
+            else:
+                realized_pnl = 0.0
+
+            # Store sync data (untuk display sahaja — TIDAK override total_pnl)
             shared.engine_state[coin_id]["trade_history"] = {
                 "buy_count": buy_count,
                 "sell_count": sell_count,
@@ -1100,15 +1107,21 @@ def _sync_trade_history():
                 "newest_trade": trades[0].get("created_at", "") if trades else ""
             }
 
-            # Update total_pnl with synced realized P&L (more accurate)
-            if realized_pnl != 0:
+            # JANGAN override total_pnl dengan nilai sync.
+            # total_pnl dikira secara real-time masa sell fill berlaku (lebih tepat).
+            # Sync hanya update trade_history untuk display sahaja.
+            # Kalau total_pnl masih 0 (restart bot / bot baru), boleh set dari sync.
+            current_pnl = shared.engine_state[coin_id].get("total_pnl", 0.0)
+            if current_pnl == 0.0 and realized_pnl != 0.0:
                 shared.engine_state[coin_id]["total_pnl"] = realized_pnl
+                logger.info(f"[{coin_id}] SYNC: Initialized total_pnl dari Hata history: RM{realized_pnl:.2f}")
 
             logger.info(f"[{coin_id}] SYNC: {len(trades)} trades | "
                         f"Buys: {buy_count} (RM{total_buy_cost:.2f}) | "
                         f"Sells: {sell_count} (RM{total_sell_revenue:.2f}) | "
                         f"Fees: RM{total_fees:.4f} | "
-                        f"Realized P&L: RM{realized_pnl:.2f}")
+                        f"Realized P&L (Hata calc): RM{realized_pnl:.2f} | "
+                        f"Bot total_pnl: RM{shared.engine_state[coin_id].get('total_pnl', 0.0):.2f}")
 
         except Exception as e:
             logger.error(f"[{coin_id}] SYNC ERROR: {e}")

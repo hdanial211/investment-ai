@@ -142,6 +142,31 @@ function App() {
     }
   }
 
+  const setMaxGroups = async (n) => {
+    const val = parseInt(n)
+    if (isNaN(val) || val < 1 || val > 10) return
+    try {
+      await axios.post('http://localhost:8000/api/set-max-groups', {
+        coin: selectedCoin,
+        max_groups: val
+      })
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const setNewGroupGap = async (gap_pct) => {
+    if (isNaN(gap_pct) || gap_pct < 0.001 || gap_pct > 0.10) return
+    try {
+      await axios.post('http://localhost:8000/api/set-new-group-gap', {
+        coin: selectedCoin,
+        gap_pct: gap_pct
+      })
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
   const [syncing, setSyncing] = useState(false)
   const syncHistory = async () => {
     setSyncing(true)
@@ -158,54 +183,63 @@ function App() {
     current_price: 0.0,
     last_signal: 0.0,
     confidence: 0.0,
-    layers: [],
+    groups: [],
     total_pnl: 0.0,
     trade_amount_myr: 250.0,
-    risk_level: 1,
-    tp_pct: 0.005
+    max_groups: 3,
+    new_group_gap_pct: 0.02,
+    max_layers: 5,
+    grid_gap_pct: 0.01,
   }
 
   const tradeAmount = coinData.trade_amount_myr || 250.0;
-  const tpPct = coinData.tp_pct || 0.005;
   const gridGapPct = coinData.grid_gap_pct || 0.01;
-  const standbyBuyId = coinData.standby_buy_order_id || null;
-  const standbyBuyPrice = coinData.standby_buy_price || 0;
-  const systemMode = coinData.system_mode || 'grid';
-  const maxLayersCustom = coinData.max_layers || 0;  // 0 = ikut risk_level
-  const riskDefaultMax = coinData.risk_level === 3 ? 3 : coinData.risk_level === 2 ? 5 : 6;
-  const effectiveMaxLayers = maxLayersCustom > 0 ? maxLayersCustom : riskDefaultMax;
-  const maxLayers = `${effectiveMaxLayers} Lapis${maxLayersCustom > 0 ? ' (Custom)' : ' (Auto)'}`;
-  
-  const getStrategyName = (coin, level) => {
-    if (level === 3) {
-      if (coin === 'ETH' || coin === 'SOL') return "The Whale Imitator (Gap 5%)";
-      return "Heavy Scalping (Gap 1%)";
-    }
-    if (level === 2) return "Scalp & Run + Trailing (Gap 0.5%)";
-    return "DCA Asas / Deep Value (Gap 2%-5%)";
-  };
+  const maxGroups = coinData.max_groups || 3;
+  const newGroupGapPct = coinData.new_group_gap_pct || 0.02;
+  const maxLayers = coinData.max_layers || 5;
 
-  // Calculate overall PnL across all coins
+  // Calculate overall realized PnL across all coins (dari bot tracking)
   const totalPnL = Object.values(state.coins).reduce((sum, c) => sum + (c.total_pnl || 0), 0)
 
-  // Calculate consolidated sell info for current coin
-  const holdingLayers = (coinData.layers || []).filter(l => l.status === 'HOLDING')
-  const consolidatedSellId = coinData.consolidated_sell_order_id
-  let consolidatedInfo = null
-  if (holdingLayers.length > 0) {
-    const totalCost = holdingLayers.reduce((sum, l) => sum + (l.actual_cost_myr || l.amount_myr || 0), 0)
-    const totalQty = holdingLayers.reduce((sum, l) => sum + (l.net_qty || l.quantity || 0), 0)
-    const avgEntry = totalQty > 0 ? totalCost / totalQty : 0
-    const sellPrice = holdingLayers[0]?.consolidated_sell_price || (avgEntry * (1 + tpPct))
-    consolidatedInfo = { totalCost, totalQty, avgEntry, sellPrice }
+  // Calculate unrealized PnL dari open HOLDING layers (berdasarkan harga semasa vs entry price)
+  const calcUnrealizedPnL = (coinId) => {
+    const coin = state.coins[coinId]
+    if (!coin) return 0
+    const price = coin.current_price || 0
+    if (price === 0) return 0
+    const groups = coin.groups || []
+    return groups.flatMap(g => g.layers || [])
+      .filter(l => l.status === 'HOLDING')
+      .reduce((sum, l) => {
+        const sellTarget = l.sell_target_price || 0
+        const buyCost = l.actual_cost_myr || l.amount_myr || 0
+        const netQty = l.net_qty || l.quantity || 0
+        // Unrealized = (current_price - entry_price) × net_qty
+        const unrealizedMyr = (price - (l.entry_price || 0)) * netQty
+        return sum + unrealizedMyr
+      }, 0)
   }
 
-  // Cascade & cycle info
-  const pendingBuyLayers = (coinData.layers || []).filter(l => l.status === 'PENDING_BUY')
+  const unrealizedPnL = calcUnrealizedPnL(selectedCoin)
+  const totalUnrealizedPnL = Object.keys(state.coins).reduce((sum, id) => sum + calcUnrealizedPnL(id), 0)
+
+  const activeGroups = coinData.groups || [];
   const lastCycleEntry = coinData.last_cycle_entry || 0
-  const minNewEntry = lastCycleEntry > 0 ? lastCycleEntry * 0.98 : 0
+  
+  let minNewEntry = 0;
+  if (activeGroups.length > 0) {
+    const allEntries = activeGroups.flatMap(g => g.layers || []).map(l => l.entry_price || 0);
+    if (allEntries.length > 0) {
+      minNewEntry = Math.min(...allEntries) * (1 - newGroupGapPct);
+    }
+  } else if (lastCycleEntry > 0) {
+    minNewEntry = lastCycleEntry * (1 - newGroupGapPct);
+  }
+
   const currentPrice = coinData.current_price || 0
-  const canNewEntry = lastCycleEntry <= 0 || currentPrice <= minNewEntry
+  const canNewEntry = activeGroups.length < maxGroups && (minNewEntry === 0 || currentPrice <= minNewEntry)
+
+
 
   return (
     <div className="dashboard">
@@ -269,8 +303,8 @@ function App() {
                       <div className={`confidence-dot ${c.confidence > 60 ? 'golden' : ''}`}></div>
                       <span>{c.confidence ? c.confidence.toFixed(1) : '0.0'}%</span>
                     </div>
-                    {c.layers && c.layers.length > 0 && (
-                      <span className="layers-count">{c.layers.length} L</span>
+                    {c.groups && c.groups.length > 0 && (
+                      <span className="layers-count">{c.groups.length} G</span>
                     )}
                   </div>
                 </div>
@@ -312,137 +346,103 @@ function App() {
               </section>
 
               <section className="panel layer-panel" style={{ flexGrow: 1 }}>
-                <h2><Layers size={20} /> Posisi Layering (DCA) Aktif: {selectedCoin}</h2>
+                <h2><Layers size={20} /> Multi-Group Grid: {selectedCoin}</h2>
                 <div style={{ marginTop: '1.5rem' }}>
-                  {!coinData.layers || coinData.layers.length === 0 ? (
+                  {activeGroups.length === 0 ? (
                     <div className="empty-state">
                       <AlertTriangle className="empty-state-icon" size={36} />
-                      <p>Tiada posisi terbuka pada masa ini untuk {selectedCoin}.</p>
+                      <p>Tiada posisi terbuka pada masa ini untuk {selectedCoin}. Menunggu setup ML...</p>
                     </div>
                   ) : (
-                    <div className="table-wrapper">
-                      <table className="layer-table">
-                        <thead>
-                          <tr>
-                            <th>#</th>
-                            <th>Entry (RM)</th>
-                            <th>Saiz (RM)</th>
-                            <th>Qty</th>
-                            <th>Fee</th>
-                            <th>Sell Target</th>
-                            <th>Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {coinData.layers.map(l => {
-                            const entryPriceMYR = l.entry_price || 0
-                            const netQty = l.net_qty || l.quantity || 0
-                            const actualCost = l.actual_cost_myr || l.amount_myr || 0
-                            const feeMyr = l.fee_myr || 0
-                            const feeRole = l.fee_role || ''
-                            const isMaker = feeRole === 'maker'
-                            const sellTarget = l.sell_target_price || 0
-                            const hasSell = !!l.sell_order_id
-                            return (
-                              <tr key={l.id}>
-                                <td>#{l.id}</td>
-                                <td>RM {entryPriceMYR > 0 ? entryPriceMYR.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}</td>
-                                <td>RM {actualCost ? actualCost.toFixed(2) : '0.00'}</td>
-                                <td>{netQty > 0 ? netQty.toFixed(6) : '-'}</td>
-                                <td>
-                                  {l.status === 'HOLDING' ? (
-                                    <span style={{ 
-                                      fontSize: '0.7rem', 
-                                      padding: '2px 6px', 
-                                      borderRadius: '4px',
-                                      background: isMaker ? 'rgba(0,230,118,0.15)' : 'rgba(255,179,0,0.15)',
-                                      color: isMaker ? '#00e676' : '#ffb300',
-                                      fontWeight: 'bold'
-                                    }}>
-                                      {isMaker ? 'Maker 0%' : feeMyr > 0 ? `Taker RM${feeMyr.toFixed(4)}` : '-'}
-                                    </span>
-                                  ) : '-'}
-                                </td>
-                                <td>
-                                  {l.status === 'HOLDING' ? (
-                                    <span style={{ fontSize: '0.75rem', color: hasSell ? '#00e676' : '#888', fontWeight: hasSell ? 'bold' : 'normal' }}>
-                                      {hasSell ? `RM ${sellTarget.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}` : '⏳ placing...'}
-                                    </span>
-                                  ) : '-'}
-                                </td>
-                                <td><span className={`status-badge ${l.status === 'HOLDING' ? 'holding' : l.status === 'PENDING_BUY' ? 'pending' : 'open'}`}>{l.status || 'TERBUKA'}</span></td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-
-                      {/* Grid Paired Orders Summary */}
-                      {holdingLayers.length > 0 && (
-                        <div style={{ 
-                          marginTop: '1rem', 
-                          background: 'rgba(0, 229, 255, 0.06)', 
-                          border: '1px solid rgba(0, 229, 255, 0.25)', 
-                          borderRadius: '8px', 
-                          padding: '12px 16px' 
-                        }}>
-                          <h4 style={{ color: '#00e5ff', margin: '0 0 10px 0', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <TrendingUp size={16} /> Grid Paired Orders
-                            <span style={{ fontSize: '0.72rem', background: 'rgba(0,230,118,0.15)', color: '#00e676', padding: '2px 8px', borderRadius: '12px', marginLeft: '6px' }}>MAKER 0% FEE</span>
-                          </h4>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.83rem' }}>
-                            {holdingLayers.map(l => (
-                              <div key={l.id} style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '6px', padding: '8px 10px' }}>
-                                <div style={{ color: '#888', fontSize: '0.72rem', marginBottom: '3px' }}>Layer #{l.id}</div>
-                                <div style={{ color: '#fff' }}>Buy @ RM{(l.entry_price||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
-                                <div style={{ color: l.sell_order_id ? '#00e676' : '#888', fontWeight: 'bold' }}>
-                                  {l.sell_order_id 
-                                    ? `✅ Sell @ RM${(l.sell_target_price||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`
-                                    : '⏳ Placing sell...'}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                          {standbyBuyId && (
-                            <div style={{ marginTop: '10px', padding: '8px 10px', background: 'rgba(255,179,0,0.08)', border: '1px solid rgba(255,179,0,0.25)', borderRadius: '6px', fontSize: '0.82rem' }}>
-                              <span style={{ color: '#ffb300', fontWeight: 'bold' }}>📡 Standby BUY: </span>
-                              <span style={{ color: '#fff' }}>RM {standbyBuyPrice > 0 ? standbyBuyPrice.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) : '...'}</span>
-                              <span style={{ color: '#888', fontSize: '0.72rem', marginLeft: '8px' }}>#{standbyBuyId}</span>
+                    <div className="groups-wrapper" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      {activeGroups.map(group => {
+                        const layers = group.layers || [];
+                        const standbyId = group.standby_buy_order_id;
+                        const standbyPrice = group.standby_buy_price || 0;
+                        
+                        return (
+                          <div key={group.id} className="group-card" style={{ 
+                            background: 'rgba(0, 229, 255, 0.05)', 
+                            border: '1px solid rgba(0, 229, 255, 0.2)', 
+                            borderRadius: '10px', 
+                            padding: '16px' 
+                          }}>
+                            <div className="group-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                              <h3 style={{ margin: 0, color: '#00e5ff', fontSize: '1.1rem' }}>Group #{group.id}</h3>
+                              <span style={{ fontSize: '0.8rem', background: 'rgba(0,230,118,0.15)', color: '#00e676', padding: '4px 10px', borderRadius: '12px' }}>
+                                {layers.length} Layers
+                              </span>
                             </div>
-                          )}
-                          <p style={{ margin: '8px 0 0 0', fontSize: '0.72rem', color: '#666' }}>
-                            *Setiap layer ada sell sendiri. Standby BUY sentiasa aktif di bawah. Fee auto-dikira dari Hata API.
-                          </p>
-                          {pendingBuyLayers.length > 0 && (
-                            <p style={{ margin: '6px 0 0 0', fontSize: '0.8rem', color: '#ffb300' }}>
-                              ⏳ Cascade: {pendingBuyLayers.length} pending BUY menunggu (Layer {pendingBuyLayers[0]?.id} @ RM {pendingBuyLayers[0]?.entry_price?.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4})})
-                            </p>
-                          )}
-                        </div>
-                      )}
-
-                      {/* 2% Gap Status — shown when no layers active */}
-                      {(!coinData.layers || coinData.layers.length === 0) && lastCycleEntry > 0 && (
-                        <div style={{ 
-                          marginTop: '1rem', 
-                          background: canNewEntry ? 'rgba(0, 230, 118, 0.08)' : 'rgba(255, 179, 0, 0.08)', 
-                          border: `1px solid ${canNewEntry ? 'rgba(0, 230, 118, 0.3)' : 'rgba(255, 179, 0, 0.3)'}`, 
-                          borderRadius: '8px', 
-                          padding: '10px 14px',
-                          fontSize: '0.85rem'
-                        }}>
-                          <span style={{ color: canNewEntry ? '#00e676' : '#ffb300', fontWeight: 'bold' }}>
-                            {canNewEntry ? '✅ Boleh entry baharu' : '🔒 Entry disekat — tunggu 2% gap'}
-                          </span>
-                          <p style={{ margin: '4px 0 0 0', color: '#888', fontSize: '0.75rem' }}>
-                            Last cycle entry: RM {lastCycleEntry.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4})} | 
-                            Min entry: RM {minNewEntry.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4})} | 
-                            Harga sekarang: RM {currentPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4})}
-                          </p>
-                        </div>
-                      )}
+                            
+                            <table className="layer-table" style={{ marginBottom: '12px' }}>
+                              <thead>
+                                <tr>
+                                  <th>Layer</th>
+                                  <th>Entry (RM)</th>
+                                  <th>Net Qty</th>
+                                  <th>Fees (RM)</th>
+                                  <th>Sell Target (RM)</th>
+                                  <th>Status</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {layers.map(l => (
+                                  <tr key={l.id}>
+                                    <td>#{l.id}</td>
+                                    <td>{(l.entry_price||0).toFixed(2)}</td>
+                                    <td>{(l.net_qty||l.quantity||0).toFixed(6)}</td>
+                                    <td>
+                                      {l.fee_myr !== undefined ? (
+                                        <span style={{ color: '#ffb300', fontSize: '0.85rem' }}>
+                                          {(l.fee_myr||0).toFixed(4)} <br/>
+                                          <span style={{ fontSize: '0.7rem', color: '#888' }}>({l.fee_role||'maker'})</span>
+                                        </span>
+                                      ) : '-'}
+                                    </td>
+                                    <td>
+                                      {l.status === 'HOLDING' ? (
+                                        <span style={{ color: l.sell_order_id ? '#00e676' : '#888', fontWeight: l.sell_order_id ? 'bold' : 'normal' }}>
+                                          {l.sell_order_id ? (l.sell_target_price||0).toFixed(2) : 'placing...'}
+                                        </span>
+                                      ) : '-'}
+                                    </td>
+                                    <td><span className={`status-badge ${l.status === 'HOLDING' ? 'holding' : 'pending'}`}>{l.status}</span></td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                            
+                            {standbyId && (
+                              <div style={{ padding: '10px 12px', background: 'rgba(255,179,0,0.08)', border: '1px solid rgba(255,179,0,0.2)', borderRadius: '6px', fontSize: '0.85rem' }}>
+                                <span style={{ color: '#ffb300', fontWeight: 'bold' }}>📡 Standby BUY Layer {layers.length + 1}: </span>
+                                <span style={{ color: '#fff' }}>RM {(standbyPrice||0).toFixed(2)}</span>
+                                <span style={{ color: '#888', fontSize: '0.75rem', marginLeft: '10px' }}>ID: {standbyId}</span>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
+
+                  {/* New Group Entry Status */}
+                  <div style={{ 
+                    marginTop: '1.5rem', 
+                    background: canNewEntry ? 'rgba(0, 230, 118, 0.08)' : 'rgba(255, 179, 0, 0.08)', 
+                    border: `1px solid ${canNewEntry ? 'rgba(0, 230, 118, 0.3)' : 'rgba(255, 179, 0, 0.3)'}`, 
+                    borderRadius: '8px', 
+                    padding: '12px 16px',
+                    fontSize: '0.85rem'
+                  }}>
+                    <span style={{ color: canNewEntry ? '#00e676' : '#ffb300', fontWeight: 'bold' }}>
+                      {canNewEntry ? '✅ Boleh buka Group Baharu (Jika ada ML Signal)' : '🔒 Buka Group Baharu disekat'}
+                    </span>
+                    <p style={{ margin: '6px 0 0 0', color: '#888', fontSize: '0.8rem', lineHeight: '1.5' }}>
+                      Harga sekarang: RM {currentPrice.toFixed(4)}<br/>
+                      Syarat Mula Group Baharu: Mesti kurang dari RM {minNewEntry.toFixed(4)} (Gap {newGroupGapPct*100}% bawah dari entry terendah) <br/>
+                      Max Groups Dibuka: {activeGroups.length} / {maxGroups}
+                    </p>
+                  </div>
                 </div>
               </section>
             </div>
@@ -462,17 +462,36 @@ function App() {
                     )}
                   </div>
                   <div className="stat-box">
-                    <h3>Untung Bersih (Semua) <span style={{ fontSize: '0.65rem', color: '#888' }}>via Hata</span></h3>
+                    <h3>Realized P&L (Semua) <span style={{ fontSize: '0.65rem', color: '#888' }}>sell complete</span></h3>
                     <p className={`value ${totalPnL >= 0 ? 'profit' : 'loss'}`}>
                       RM {totalPnL >= 0 ? '+' : ''}{totalPnL.toFixed(2)}
+                    </p>
+                    {totalUnrealizedPnL !== 0 && (
+                      <span style={{ fontSize: '0.8rem', color: totalUnrealizedPnL >= 0 ? '#00e676' : '#ff5252', display: 'block', marginTop: '4px' }}>
+                        Unrealized: {totalUnrealizedPnL >= 0 ? '+' : ''}RM {totalUnrealizedPnL.toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="stats-row">
+                  <div className="stat-box">
+                    <h3>Realized P&L ({selectedCoin})</h3>
+                    <p className={`value ${(coinData.total_pnl || 0) >= 0 ? 'profit' : 'loss'}`} style={{ fontSize: '1.2rem' }}>
+                      RM {(coinData.total_pnl || 0) >= 0 ? '+' : ''}{(coinData.total_pnl || 0).toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="stat-box">
+                    <h3>Unrealized P&L ({selectedCoin}) <span style={{ fontSize: '0.65rem', color: '#888' }}>open pos.</span></h3>
+                    <p className={`value ${unrealizedPnL >= 0 ? 'profit' : 'loss'}`} style={{ fontSize: '1.2rem' }}>
+                      {unrealizedPnL >= 0 ? '+' : ''}RM {unrealizedPnL.toFixed(2)}
                     </p>
                   </div>
                 </div>
                 <div className="stats-row">
-                  <div className="stat-box" style={{ gridColumn: 'span 2' }}>
-                    <h3>Untung Bersih ({selectedCoin}) <span style={{ fontSize: '0.65rem', color: '#888' }}>via Hata</span></h3>
-                    <p className={`value ${coinData.total_pnl >= 0 ? 'profit' : 'loss'}`} style={{ fontSize: '1.4rem' }}>
-                      RM {coinData.total_pnl >= 0 ? '+' : ''}{coinData.total_pnl ? coinData.total_pnl.toFixed(2) : '0.00'}
+                  <div className="stat-box" style={{ gridColumn: 'span 2', background: 'rgba(0,255,180,0.04)', border: '1px solid rgba(0,255,180,0.15)' }}>
+                    <h3>NET TOTAL ({selectedCoin}) <span style={{ fontSize: '0.65rem', color: '#888' }}>realized + unrealized</span></h3>
+                    <p className={`value ${((coinData.total_pnl || 0) + unrealizedPnL) >= 0 ? 'profit' : 'loss'}`} style={{ fontSize: '1.4rem' }}>
+                      RM {((coinData.total_pnl || 0) + unrealizedPnL) >= 0 ? '+' : ''}{((coinData.total_pnl || 0) + unrealizedPnL).toFixed(2)}
                     </p>
                   </div>
                 </div>
@@ -675,66 +694,30 @@ function App() {
                   })()}
 
 
-                  <label>Take Profit (%) — per coin</label>
-
+                  <label>Max Groups (Kumpulan Grid) — per coin</label>
                   <div className="amount-controls" style={{ marginBottom: '1rem' }}>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                       <input 
                         type="number" 
                         className="amount-input"
-                        value={tpPct ? (tpPct * 100).toFixed(1) : ''} 
+                        value={maxGroups || ''} 
                         onChange={(e) => {
-                          const val = parseFloat(e.target.value)
-                          if (!isNaN(val)) setTP(val / 100)
+                          const val = parseInt(e.target.value)
+                          if (!isNaN(val)) setMaxGroups(val)
                         }}
-                        min="0.1"
-                        max="50"
-                        step="0.1"
-                        placeholder="Cth: 0.5 = 0.5%"
+                        min="1"
+                        max="10"
+                        step="1"
+                        placeholder="Cth: 3"
                         style={{ flex: 1, fontSize: '1.2rem', padding: '10px' }}
                       />
-                      <button 
-                        onClick={() => setTP({BTC: 0.004, ETH: 0.005, SOL: 0.008, XRP: 0.006, LTC: 0.004}[selectedCoin] || 0.005)}
-                        style={{ 
-                          padding: '10px 14px', 
-                          background: 'rgba(0, 229, 255, 0.12)', 
-                          border: '1px solid rgba(0, 229, 255, 0.3)', 
-                          borderRadius: '8px', 
-                          color: '#00e5ff', 
-                          cursor: 'pointer',
-                          fontSize: '0.85rem',
-                          fontWeight: 'bold',
-                          whiteSpace: 'nowrap'
-                        }}
-                      >
-                        Guna AI: {({BTC: '0.4', ETH: '0.5', SOL: '0.8', XRP: '0.6', LTC: '0.4'}[selectedCoin] || '0.5')}%
-                      </button>
+                      <span style={{ color: '#aaa', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>groups</span>
                     </div>
-                    <div style={{ 
-                      marginTop: '8px', 
-                      background: 'rgba(0, 229, 255, 0.06)', 
-                      border: '1px solid rgba(0, 229, 255, 0.15)', 
-                      borderRadius: '6px', 
-                      padding: '8px 12px',
-                      fontSize: '0.78rem',
-                      color: '#aaa'
-                    }}>
-                      <span style={{ color: '#00e5ff', fontWeight: 'bold' }}>💡 AI Suggestion ({selectedCoin}):</span>{' '}
-                      {{
-                        BTC: '0.4% — Large cap, volatility rendah, scalp cepat',
-                        ETH: '0.5% — Medium volatility, sweet spot DCA layering',
-                        SOL: '0.8% — High volatility, swing besar',
-                        XRP: '0.6% — Medium-high volatility, spread agak besar',
-                        LTC: '0.4% — Low volatility macam BTC, scalp cepat'
-                      }[selectedCoin] || '0.5% — Default'}
-                    </div>
-                    <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#888' }}>
-                      *Fee auto-kira dari Hata API (Maker 0% / Taker 0.25%) — TP sell price auto-recover fee
-                    </p>
                   </div>
 
+
                   {/* Grid Gap % Setting */}
-                  <label>Grid Gap (%) — Jarak antara Buy/Sell per coin</label>
+                  <label>Grid Gap (%) — Jarak antara Buy/Sell per layer</label>
                   <div className="amount-controls" style={{ marginBottom: '1rem' }}>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                       <input 
@@ -753,107 +736,68 @@ function App() {
                       />
                       <span style={{ color: '#00e676', fontWeight: 'bold', fontSize: '1rem', whiteSpace: 'nowrap' }}>%</span>
                     </div>
-                    <div style={{ 
-                      marginTop: '8px', 
-                      background: 'rgba(0, 230, 118, 0.06)', 
-                      border: '1px solid rgba(0, 230, 118, 0.15)', 
-                      borderRadius: '6px', 
-                      padding: '8px 12px',
-                      fontSize: '0.78rem',
-                      color: '#aaa'
-                    }}>
-                      <span style={{ color: '#00e676', fontWeight: 'bold' }}>💡 Grid Gap Sekarang ({selectedCoin}): {(gridGapPct * 100).toFixed(2)}%</span><br/>
-                      Entry @ RM{(coinData.current_price||0).toLocaleString()} → Sell @ RM{((coinData.current_price||0) * (1 + gridGapPct)).toLocaleString(undefined,{maximumFractionDigits:2})}, Standby Buy @ RM{((coinData.current_price||0) * (1 - gridGapPct)).toLocaleString(undefined,{maximumFractionDigits:2})}
-                    </div>
-                    <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#888' }}>
-                      *Semua orders (sell + standby buy) = Limit order → MAKER fee 0%
-                    </p>
                   </div>
 
                   {/* Max Layers Setting */}
-                  <label>Bilangan Layer Maksimum — per coin</label>
+                  <label>Max Layers / Group</label>
                   <div className="amount-controls" style={{ marginBottom: '1rem' }}>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                       <input 
                         type="number" 
                         className="amount-input"
-                        value={maxLayersCustom || ''}
+                        value={maxLayers || ''}
                         onChange={(e) => setMaxLayers(e.target.value)}
-                        min="0"
+                        min="1"
                         max="10"
                         step="1"
-                        placeholder={`0 = Auto (${riskDefaultMax} layers)`}
+                        placeholder="Cth: 5"
                         style={{ flex: 1, fontSize: '1.2rem', padding: '10px' }}
                       />
-                      <span style={{ color: '#aaa', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>max layers</span>
+                      <span style={{ color: '#aaa', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>layers</span>
                     </div>
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
-                      {[0,1,2,3,4,5,6].map(n => (
-                        <button key={n}
-                          onClick={() => setMaxLayers(n)}
-                          style={{
-                            padding: '6px 14px',
-                            borderRadius: '8px',
-                            border: `1px solid ${maxLayersCustom === n || (n === 0 && maxLayersCustom === 0) ? '#00e5ff' : '#333'}`,
-                            background: maxLayersCustom === n || (n === 0 && maxLayersCustom === 0) ? 'rgba(0,229,255,0.15)' : 'rgba(255,255,255,0.04)',
-                            color: maxLayersCustom === n || (n === 0 && maxLayersCustom === 0) ? '#00e5ff' : '#888',
-                            cursor: 'pointer',
-                            fontSize: '0.85rem',
-                            fontWeight: 'bold'
-                          }}
-                        >
-                          {n === 0 ? `Auto (${riskDefaultMax})` : `${n}x`}
-                        </button>
-                      ))}
-                    </div>
-                    <p style={{ margin: '6px 0 0 0', fontSize: '0.75rem', color: '#888' }}>
-                      Sekarang: <span style={{ color: '#00e676', fontWeight: 'bold' }}>{effectiveMaxLayers} layers max</span>
-                      {maxLayersCustom > 0 ? ' (Custom)' : ` (Auto dari Risk Level ${coinData.risk_level})`}
-                      {' '}— Grid akan letak standby BUY sampai max ni
-                    </p>
                   </div>
 
-                  <label>Tahap Risiko (Pilihan Strategi Pasif)</label>
-                  <div className="amount-controls" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
-                    <button 
-                      className={`amount-btn ${coinData.risk_level === 1 ? 'active' : ''}`} 
-                      onClick={() => setRiskLevel(1)}
-                      style={{ fontSize: '1rem', padding: '10px' }}
-                    >
-                      Tahap 1<br/><small>(Konservatif / 5%)</small>
-                    </button>
-                    <button 
-                      className={`amount-btn ${coinData.risk_level === 2 ? 'active' : ''}`} 
-                      onClick={() => setRiskLevel(2)}
-                      style={{ fontSize: '1rem', padding: '10px' }}
-                    >
-                      Tahap 2<br/><small>(Seimbang / 10%)</small>
-                    </button>
-                    <button 
-                      className={`amount-btn ${coinData.risk_level === 3 ? 'active' : ''}`} 
-                      onClick={() => setRiskLevel(3)}
-                      style={{ fontSize: '1rem', padding: '10px' }}
-                    >
-                      Tahap 3<br/><small>(Agresif / 25%)</small>
-                    </button>
+
+                  <label>Gap Untuk Group Baharu (%) — Jarak Harga Dari Entry Terendah</label>
+                  <div className="amount-controls" style={{ marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input 
+                        type="number" 
+                        className="amount-input"
+                        value={newGroupGapPct ? (newGroupGapPct * 100).toFixed(2) : ''} 
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value)
+                          if (!isNaN(val)) setNewGroupGap(val / 100)
+                        }}
+                        min="0.1"
+                        max="10"
+                        step="0.1"
+                        placeholder="Cth: 2.0 = 2%"
+                        style={{ flex: 1, fontSize: '1.2rem', padding: '10px' }}
+                      />
+                      <span style={{ color: '#00e676', fontWeight: 'bold', fontSize: '1rem', whiteSpace: 'nowrap' }}>%</span>
+                    </div>
                   </div>
-                  
+
                   <div style={{ marginTop: '1.5rem', background: '#111', padding: '15px', borderRadius: '8px', border: '1px solid #333' }}>
-                    <h4 style={{ color: '#00e5ff', marginBottom: '10px' }}>Tetapan Individu Aktif ({selectedCoin})</h4>
+                    <h4 style={{ color: '#00e5ff', marginBottom: '10px' }}>Tetapan Grid Semasa ({selectedCoin})</h4>
                     <p style={{ margin: '5px 0', fontSize: '0.9rem' }}>
-                      <strong style={{ color: '#aaa' }}>Strategi:</strong> {getStrategyName(selectedCoin, coinData.risk_level)}
+                      <strong style={{ color: '#aaa' }}>Max Groups:</strong> <span style={{ color: '#00e676' }}>{maxGroups} Groups</span>
                     </p>
                     <p style={{ margin: '5px 0', fontSize: '0.9rem' }}>
-                      <strong style={{ color: '#aaa' }}>Max Layers:</strong> <span style={{ color: '#00e676' }}>{effectiveMaxLayers}</span> {maxLayersCustom > 0 ? '(Custom)' : `(Auto - Risk ${coinData.risk_level})`}
+                      <strong style={{ color: '#aaa' }}>Max Layers / Group:</strong> <span style={{ color: '#00e676' }}>{maxLayers} Layers</span>
                     </p>
                     <p style={{ margin: '5px 0', fontSize: '0.9rem' }}>
-                      <strong style={{ color: '#aaa' }}>Grid Gap:</strong> <span style={{ color: '#00e676' }}>{(gridGapPct * 100).toFixed(2)}%</span> per step (MAKER 0% fee)
+                      <strong style={{ color: '#aaa' }}>Gap Dalam Group:</strong> <span style={{ color: '#00e676' }}>{(gridGapPct * 100).toFixed(2)}%</span> (Layer Drop & Sell Target)
+                    </p>
+                    <p style={{ margin: '5px 0', fontSize: '0.9rem' }}>
+                      <strong style={{ color: '#aaa' }}>Gap Group Baharu:</strong> <span style={{ color: '#00e676' }}>{(newGroupGapPct * 100).toFixed(2)}%</span> (Jarak mula Group Baru)
                     </p>
                     <p style={{ margin: '15px 0 5px 0', fontSize: '0.95rem' }}>
-                      <strong style={{ color: '#fff' }}>Saiz Trade: <span style={{ color: '#00e5ff' }}>RM {tradeAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></strong>
+                      <strong style={{ color: '#fff' }}>Saiz Trade: <span style={{ color: '#00e5ff' }}>RM {tradeAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> / Lapis</strong>
                     </p>
                     <p style={{ margin: '0', fontSize: '0.8rem', color: '#666' }}>
-                      *Bot layering sehingga {effectiveMaxLayers} layers. Setiap layer ada sell sendiri (Maker 0% fee). Standby BUY sentiasa aktif.
+                      *Setiap layer diurus berasingan dan fee auto-dikira dari Hata API (Maker 0%).
                     </p>
                   </div>
                 </div>
