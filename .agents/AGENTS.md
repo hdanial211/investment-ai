@@ -1,6 +1,6 @@
 # 🧠 Investment AI — Agent Memory File
 # Baca file ini sebelum buat sebarang perubahan pada projek.
-# Versi semasa: **v5.6.1** | Dikemas kini: 2026-07-04
+# Versi semasa: **v5.6.2** | Dikemas kini: 2026-07-04
 
 ## Lokasi Projek
 `e:\PROJECTS\SEMUA PROJECT\INVESTMENT AI`
@@ -12,6 +12,7 @@ GitHub: https://github.com/hdanial211/investment-ai
 - Taker fee: **0.25%** (order fill terus / market order)
 - Coins: BTC, ETH, SOL, XRP, LTC (semua pair dengan MYR)
 - API wrapper: `backend/hata_api.py`
+- 📘 **Full API Reference: [`HATA_API_REFERENCE.md`](../HATA_API_REFERENCE.md)** — Rujuk file ini untuk semua endpoint, auth, WebSocket, request/response format
 
 ## Architecture Ringkas
 ```
@@ -162,6 +163,7 @@ File: `backend/live_engine_old_system.py`
 | `frontend/src/App.jsx` | Dashboard React |
 | `backend/live_engine_old_system.py` | Backup sistem lama |
 | `scratch/test_daily_report_direct.py` | ★ Daily PnL report → Telegram |
+| `HATA_API_REFERENCE.md` | 📘 Full Hata API reference (auth, endpoints, WebSocket, formats) |
 
 ## Daily Telegram Report
 - **Script**: `scratch/test_daily_report_direct.py`
@@ -182,6 +184,9 @@ e:\PROJECTS\SEMUA PROJECT\INVESTMENT AI\PROJECT_MEMORY.md
 
 Dan juga:
 e:\PROJECTS\SEMUA PROJECT\INVESTMENT AI\.agents\AGENTS.md
+
+Untuk Hata API reference:
+e:\PROJECTS\SEMUA PROJECT\INVESTMENT AI\HATA_API_REFERENCE.md
 
 Kemudian [nyatakan permintaan anda di sini]
 ```
