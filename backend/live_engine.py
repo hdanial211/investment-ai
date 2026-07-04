@@ -3,6 +3,7 @@ import asyncio
 import websockets
 import json
 import logging
+import math
 import pandas as pd
 import numpy as np
 import joblib
@@ -88,10 +89,11 @@ hata_prices = {
 
 
 def truncate_float(val: float, decimals: int) -> float:
-    """Truncate float value to a specific number of decimal places without rounding up."""
-    eps = 1e-9
+    """Truncate float to N decimal places without rounding up.
+    Uses 1e-12 epsilon to fix IEEE754 representation errors
+    (e.g. 6.27 * 100 = 626.999...) without over-rounding real boundary values."""
     factor = 10 ** decimals
-    return int((val + eps) * factor) / factor
+    return math.floor(val * factor + 1e-12) / factor
 
 
 # ─────────────────────────────────────────────
@@ -171,8 +173,9 @@ def _extract_hata_exec_data(coin_id: str, order_data: dict, fallback_qty: float 
 
 
 # ─────────────────────────────────────────────
-# CORE: Place consolidated sell order
-# Cancel old sell → combine all HOLDING layers → 1 sell
+# LEGACY DCA: Place consolidated sell order
+# ⚠ DEPRECATED — Only used when system_mode == "dca" or startup_recovery legacy path
+# Grid mode uses _grid_place_layer_sell() instead
 # ─────────────────────────────────────────────
 def _place_consolidated_sell(coin_id: str):
     """Cancel existing sell, combine all HOLDING layers, place 1 consolidated sell order."""
@@ -271,9 +274,9 @@ def _place_consolidated_sell(coin_id: str):
 
 
 # ─────────────────────────────────────────────
-# Helper: Place next DCA BUY layer at 1% below entry
-# (Called after a consolidated SELL fills)
-# NOTE: This only places a BUY — sell is handled by consolidated
+# LEGACY DCA: Place next DCA BUY layer at 1% below entry
+# ⚠ DEPRECATED — Only used when system_mode == "dca"
+# Grid mode uses _grid_update_standby_buy() instead
 # ─────────────────────────────────────────────
 def _place_next_dca_buy(coin_id: str, last_entry_price: float):
     """After a consolidated SELL fills, place Limit BUY at 1% below last entry.
@@ -563,13 +566,22 @@ def _check_grid_group(coin_id: str, group: dict) -> bool:
                             logger.info(f"[{coin_id}] RE-PLACED PENDING_BUY {new_order_id} @ RM{new_entry:.{price_scale}f} ✓")
                         else:
                             logger.error(f"[{coin_id}] Re-place gagal: {new_res.get('message')} → remove layer")
+                            amt = l.get("amount_myr", 0.0)
+                            shared.global_state["frozen_myr"] = max(0.0, shared.global_state.get("frozen_myr", 0.0) - amt)
+                            logger.info(f"[{coin_id}] Unfroze RM{amt:.2f} (re-place failed). Frozen now: RM{shared.global_state['frozen_myr']:.2f}")
                             layers_to_delete_pending.append(l["id"])
                     else:
                         logger.warning(f"[{coin_id}] Re-place notional terlalu kecil → remove layer")
+                        amt = l.get("amount_myr", 0.0)
+                        shared.global_state["frozen_myr"] = max(0.0, shared.global_state.get("frozen_myr", 0.0) - amt)
+                        logger.info(f"[{coin_id}] Unfroze RM{amt:.2f} (notional too small). Frozen now: RM{shared.global_state['frozen_myr']:.2f}")
                         layers_to_delete_pending.append(l["id"])
                 else:
                     # ★ Signal dah habis → remove layer, tunggu setup baru
                     logger.info(f"[{coin_id}] Signal TIDAK BUY lagi → remove pending layer, tunggu setup baru")
+                    amt = l.get("amount_myr", 0.0)
+                    shared.global_state["frozen_myr"] = max(0.0, shared.global_state.get("frozen_myr", 0.0) - amt)
+                    logger.info(f"[{coin_id}] Unfroze RM{amt:.2f} (signal expired). Frozen now: RM{shared.global_state['frozen_myr']:.2f}")
                     layers_to_delete_pending.append(l["id"])
                 state_changed = True
 
@@ -773,17 +785,411 @@ def _check_grid_orders(coin_id: str) -> bool:
             shared.engine_state[coin_id]["last_cycle_entry"] = 0.0
             logger.info(f"[{coin_id}] ★ ALL GROUPS COMPLETE. last_cycle_entry reset. Seeking new ML entry freely...")
 
+    return state_changed
 
 # ─────────────────────────────────────────────
-# Startup Recovery: Sync all layers with Hata API
+# Startup Recovery: Sync all layers/groups with Hata API
 # Runs once on bot start / laptop restart
-# Migrates old per-layer sells to consolidated sell
+# ★ v5.6.6: Grid-aware — routes to grid or legacy DCA path
 # ─────────────────────────────────────────────
-async def startup_recovery():
-    """Reconcile all PENDING layers in bot_state.json with actual Hata API status.
-    Handles: fills missed while bot was offline, stuck orders, missing created_at.
-    Also migrates old per-layer sell orders to new consolidated sell system."""
+def _startup_recovery_grid(coin_id: str) -> bool:
+    """★ GRID MODE recovery: iterate groups[] → reconcile each layer with Hata API.
+    Returns True if any state changed."""
     import hata_api
+
+    groups = shared.engine_state[coin_id].get("groups", [])
+    if not groups:
+        return False
+
+    state_changed = False
+    groups_to_remove = []
+
+    logger.info(f"[{coin_id}] RECOVERY (GRID): {len(groups)} group(s) to check...")
+
+    for group in groups:
+        layers = group.get("layers", [])
+        if not layers:
+            groups_to_remove.append(group["id"])
+            continue
+
+        layers_to_remove = []
+        group_changed = False
+
+        for l in layers:
+            status = l.get("status", "HOLDING")
+
+            # ── PENDING_BUY: check if filled/cancelled while bot offline ──
+            if status == "PENDING_BUY":
+                buy_id = l.get("buy_order_id")
+                if not buy_id:
+                    l["status"] = "HOLDING"
+                    group_changed = True
+                    continue
+
+                res = hata_api.get_order_status(buy_id)
+                order_data = res.get("data")
+                if not order_data:
+                    # Cannot reach Hata — keep, check at next 60s cycle
+                    continue
+
+                order_status = order_data.get("status")
+                if order_status == "fulfilled":
+                    logger.info(f"[{coin_id}] RECOVERY (GRID): Group {group['id']} Buy {buy_id} filled while offline!")
+                    exec_info = _extract_hata_exec_data(coin_id, order_data, l.get("quantity", 0))
+                    l["exec_qty"] = exec_info["exec_qty"]
+                    l["fee_qty"] = exec_info["fee_qty"]
+                    l["net_qty"] = exec_info["net_qty"]
+                    l["actual_cost_myr"] = exec_info["actual_cost_myr"]
+                    l["fee_myr"] = exec_info["fee_myr"]
+                    l["fee_role"] = exec_info["fee_role"]
+                    l["status"] = "HOLDING"
+                    group_changed = True
+                    # Place sell for this layer
+                    _grid_place_layer_sell(coin_id, l)
+
+                elif order_status in ["cancelled", "rejected"]:
+                    logger.info(f"[{coin_id}] RECOVERY (GRID): Group {group['id']} Buy {buy_id} was {order_status}. Removing layer.")
+                    layers_to_remove.append(l["id"])
+                    group_changed = True
+
+                else:
+                    # Still open — patch created_at if missing, cancel if stuck >5min
+                    if "created_at" not in l:
+                        l["created_at"] = time.time()
+                        group_changed = True
+                    age_sec = time.time() - l.get("created_at", time.time())
+                    if age_sec > 300:
+                        logger.info(f"[{coin_id}] RECOVERY (GRID): Group {group['id']} Buy {buy_id} stuck >{age_sec/60:.1f}min. Cancelling...")
+                        hata_api.cancel_order(f"{coin_id}_MYR", buy_id)
+                        layers_to_remove.append(l["id"])
+                        group_changed = True
+
+            # ── HOLDING: ensure fee data + sell order exist ──
+            elif status == "HOLDING":
+                # Re-fetch fee data if missing
+                if "fee_role" not in l or "fee_myr" not in l:
+                    buy_id = l.get("buy_order_id")
+                    if buy_id:
+                        logger.info(f"[{coin_id}] RECOVERY (GRID): Re-fetching fee data for Group {group['id']} Layer {l.get('id')}...")
+                        buy_res = hata_api.get_order_status(buy_id)
+                        buy_data = buy_res.get("data")
+                        if buy_data and buy_data.get("status") == "fulfilled":
+                            exec_info = _extract_hata_exec_data(coin_id, buy_data, l.get("quantity", 0))
+                            l["exec_qty"] = exec_info["exec_qty"]
+                            l["fee_qty"] = exec_info["fee_qty"]
+                            l["net_qty"] = exec_info["net_qty"]
+                            l["actual_cost_myr"] = exec_info["actual_cost_myr"]
+                            l["fee_myr"] = exec_info["fee_myr"]
+                            l["fee_role"] = exec_info["fee_role"]
+                            group_changed = True
+                        else:
+                            l["fee_myr"] = 0.0
+                            l["fee_role"] = "unknown"
+                            group_changed = True
+                    else:
+                        l["fee_myr"] = 0.0
+                        l["fee_role"] = "unknown"
+                        group_changed = True
+
+                # Ensure sell order exists for this HOLDING layer
+                sell_id = l.get("sell_order_id")
+                if sell_id:
+                    # Verify sell is still active
+                    res = hata_api.get_order_status(sell_id)
+                    order_data = res.get("data")
+                    if order_data:
+                        sell_status = order_data.get("status")
+                        if sell_status == "fulfilled":
+                            # Sell filled while bot was offline!
+                            exec_info = _extract_hata_exec_data(coin_id, order_data)
+                            sell_received = exec_info["actual_cost_myr"]
+                            buy_cost = l.get("actual_cost_myr", l.get("amount_myr", 0))
+                            pnl = sell_received - buy_cost
+                            logger.info(f"[{coin_id}] RECOVERY (GRID): Group {group['id']} Layer {l['id']} sell filled while offline! PnL: RM{pnl:.2f}")
+                            layers_to_remove.append(l["id"])
+                            group_changed = True
+                        elif sell_status in ["cancelled", "rejected"]:
+                            # Sell was cancelled — clear and re-place
+                            logger.info(f"[{coin_id}] RECOVERY (GRID): Group {group['id']} Layer {l['id']} sell was {sell_status}. Re-placing...")
+                            l["sell_order_id"] = None
+                            _grid_place_layer_sell(coin_id, l)
+                            group_changed = True
+                else:
+                    # No sell order — place one
+                    logger.info(f"[{coin_id}] RECOVERY (GRID): Group {group['id']} Layer {l['id']} HOLDING but no sell. Placing...")
+                    _grid_place_layer_sell(coin_id, l)
+                    group_changed = True
+
+            # ── OPEN / PENDING_SELL: legacy statuses → convert to HOLDING ──
+            elif status in ["OPEN", "PENDING_SELL"]:
+                if status == "PENDING_SELL":
+                    old_sell = l.get("sell_order_id")
+                    if old_sell:
+                        hata_api.cancel_order(f"{coin_id}_MYR", old_sell)
+                        logger.info(f"[{coin_id}] RECOVERY (GRID): Cancelled old per-layer sell {old_sell}")
+                if "net_qty" not in l:
+                    sell_qty = l.get("sell_quantity", l.get("quantity", 0))
+                    l["net_qty"] = sell_qty
+                    l["exec_qty"] = l.get("quantity", 0)
+                    l["fee_qty"] = l.get("quantity", 0) - sell_qty if sell_qty < l.get("quantity", 0) else 0
+                    l["actual_cost_myr"] = l.get("amount_myr", 0)
+                l["status"] = "HOLDING"
+                _grid_place_layer_sell(coin_id, l)
+                group_changed = True
+
+        # Remove completed/cancelled layers
+        if layers_to_remove:
+            group["layers"] = [x for x in group.get("layers", []) if x.get("id") not in layers_to_remove]
+            group_changed = True
+
+        if group_changed:
+            state_changed = True
+
+        # Ensure standby BUY exists for group with HOLDING layers
+        holding_layers = [x for x in group.get("layers", []) if x.get("status") == "HOLDING"]
+        if holding_layers:
+            standby_id = group.get("standby_buy_order_id")
+            if standby_id:
+                # Verify standby is still active
+                res = hata_api.get_order_status(standby_id)
+                order_data = res.get("data")
+                if order_data:
+                    sb_status = order_data.get("status")
+                    if sb_status == "fulfilled":
+                        # Standby filled while offline — create new layer
+                        exec_info = _extract_hata_exec_data(coin_id, order_data, 0)
+                        standby_price = group.get("standby_buy_price", 0)
+                        trade_amount = shared.engine_state[coin_id].get("trade_amount_myr", 50.0)
+                        new_layer = {
+                            "id": max((x.get("id", 0) for x in group.get("layers", [])), default=0) + 1,
+                            "entry_price": standby_price,
+                            "amount_myr": trade_amount,
+                            "quantity": exec_info["exec_qty"],
+                            "exec_qty": exec_info["exec_qty"],
+                            "fee_qty": exec_info["fee_qty"],
+                            "net_qty": exec_info["net_qty"],
+                            "actual_cost_myr": exec_info["actual_cost_myr"],
+                            "fee_myr": exec_info["fee_myr"],
+                            "fee_role": exec_info["fee_role"],
+                            "status": "HOLDING",
+                            "buy_order_id": standby_id,
+                            "sell_order_id": None,
+                            "sell_target_price": 0.0,
+                            "created_at": time.time()
+                        }
+                        group["layers"].append(new_layer)
+                        logger.info(f"[{coin_id}] RECOVERY (GRID): Group {group['id']} standby BUY filled @ RM{standby_price:.4f}!")
+                        _grid_place_layer_sell(coin_id, new_layer)
+                        group["standby_buy_order_id"] = None
+                        group["standby_buy_price"] = 0.0
+                        holding_layers = [x for x in group.get("layers", []) if x.get("status") == "HOLDING"]
+                        state_changed = True
+                    elif sb_status in ["cancelled", "rejected"]:
+                        group["standby_buy_order_id"] = None
+                        group["standby_buy_price"] = 0.0
+                        state_changed = True
+
+            # After all layer recovery, ensure standby exists
+            holding_now = [x for x in group.get("layers", []) if x.get("status") == "HOLDING"]
+            has_standby = bool(group.get("standby_buy_order_id"))
+            strategy = _get_strategy(coin_id, shared.engine_state[coin_id].get("risk_level", 1))
+            if holding_now and not has_standby and len(holding_now) < strategy["max_layers"]:
+                lowest = min(x.get("entry_price", 0) for x in holding_now)
+                logger.info(f"[{coin_id}] RECOVERY (GRID): Group {group['id']} has {len(holding_now)} HOLDING but no standby. Placing below RM{lowest:.4f}...")
+                _grid_update_standby_buy(coin_id, group, lowest)
+                state_changed = True
+        else:
+            # No holding layers left — mark group for removal
+            if not [x for x in group.get("layers", []) if x.get("status") == "PENDING_BUY"]:
+                groups_to_remove.append(group["id"])
+
+    # Remove empty/complete groups
+    if groups_to_remove:
+        shared.engine_state[coin_id]["groups"] = [
+            g for g in shared.engine_state[coin_id].get("groups", [])
+            if g["id"] not in groups_to_remove
+        ]
+        state_changed = True
+        if not shared.engine_state[coin_id]["groups"]:
+            shared.engine_state[coin_id]["last_cycle_entry"] = 0.0
+            logger.info(f"[{coin_id}] RECOVERY (GRID): All groups complete. last_cycle_entry reset.")
+
+    return state_changed
+
+
+def _startup_recovery_legacy(coin_id: str) -> bool:
+    """Legacy DCA recovery path. Only used when system_mode == 'dca'.
+    Returns True if any state changed."""
+    import hata_api
+
+    layers = shared.engine_state[coin_id].get("layers", [])
+    if not layers:
+        return False
+
+    active_layers = []
+    coin_changed = False
+    needs_consolidated_sell = False
+    old_sell_ids_to_cancel = []
+    logger.info(f"[{coin_id}] RECOVERY (LEGACY DCA): {len(layers)} layer(s)...")
+
+    for l in layers:
+        status = l.get("status", "OPEN")
+
+        if status == "PENDING_SELL":
+            sell_id = l.get("sell_order_id")
+            if sell_id:
+                res = hata_api.get_order_status(sell_id)
+                order_data = res.get("data")
+                if order_data and order_data.get("status") == "fulfilled":
+                    exec_data = _extract_hata_exec_data(coin_id, order_data)
+                    sell_received = exec_data.get("actual_cost_myr", 0)
+                    buy_cost = l.get("actual_cost_myr", l.get("amount_myr", 0))
+                    pnl = sell_received - buy_cost
+                    logger.info(f"[{coin_id}] RECOVERY: Old sell {sell_id} filled! PnL: RM{pnl:.2f}")
+                    coin_changed = True
+                    continue
+                elif order_data and order_data.get("status") in ["cancelled", "rejected"]:
+                    logger.info(f"[{coin_id}] RECOVERY: Old sell {sell_id} cancelled. → HOLDING.")
+                else:
+                    old_sell_ids_to_cancel.append(sell_id)
+
+            if "net_qty" not in l:
+                buy_id = l.get("buy_order_id")
+                if buy_id:
+                    buy_res = hata_api.get_order_status(buy_id)
+                    buy_data = buy_res.get("data")
+                    if buy_data and buy_data.get("status") == "fulfilled":
+                        exec_info = _extract_hata_exec_data(coin_id, buy_data, l.get("quantity", 0))
+                        l["exec_qty"] = exec_info["exec_qty"]
+                        l["fee_qty"] = exec_info["fee_qty"]
+                        l["net_qty"] = exec_info["net_qty"]
+                        l["actual_cost_myr"] = exec_info["actual_cost_myr"]
+                    else:
+                        sell_qty = l.get("sell_quantity", l.get("quantity", 0))
+                        l["net_qty"] = sell_qty
+                        l["exec_qty"] = l.get("quantity", 0)
+                        l["fee_qty"] = l.get("quantity", 0) - sell_qty
+                        l["actual_cost_myr"] = l.get("amount_myr", 0)
+                else:
+                    sell_qty = l.get("sell_quantity", l.get("quantity", 0))
+                    l["net_qty"] = sell_qty
+                    l["exec_qty"] = l.get("quantity", 0)
+                    l["fee_qty"] = l.get("quantity", 0) - sell_qty
+                    l["actual_cost_myr"] = l.get("amount_myr", 0)
+
+            l["status"] = "HOLDING"
+            coin_changed = True
+            needs_consolidated_sell = True
+            active_layers.append(l)
+
+        elif status == "PENDING_BUY":
+            buy_id = l.get("buy_order_id")
+            if not buy_id:
+                l["status"] = "HOLDING"
+                coin_changed = True
+                needs_consolidated_sell = True
+                active_layers.append(l)
+                continue
+
+            res = hata_api.get_order_status(buy_id)
+            order_data = res.get("data")
+            if not order_data:
+                active_layers.append(l)
+                continue
+
+            order_status = order_data.get("status")
+            if order_status == "fulfilled":
+                logger.info(f"[{coin_id}] RECOVERY: Buy {buy_id} filled!")
+                exec_info = _extract_hata_exec_data(coin_id, order_data, l.get("quantity", 0))
+                l["exec_qty"] = exec_info["exec_qty"]
+                l["fee_qty"] = exec_info["fee_qty"]
+                l["net_qty"] = exec_info["net_qty"]
+                l["actual_cost_myr"] = exec_info["actual_cost_myr"]
+                l["status"] = "HOLDING"
+                coin_changed = True
+                needs_consolidated_sell = True
+                active_layers.append(l)
+            elif order_status in ["cancelled", "rejected"]:
+                logger.info(f"[{coin_id}] RECOVERY: Buy {buy_id} {order_status}. Removing.")
+                coin_changed = True
+            else:
+                if "created_at" not in l:
+                    l["created_at"] = time.time()
+                    coin_changed = True
+                age_sec = time.time() - l["created_at"]
+                if age_sec > 300:
+                    logger.info(f"[{coin_id}] RECOVERY: Buy {buy_id} stuck >{age_sec/60:.1f}min. Cancelling...")
+                    hata_api.cancel_order(f"{coin_id}_MYR", buy_id)
+                    coin_changed = True
+                else:
+                    active_layers.append(l)
+
+        elif status == "HOLDING":
+            if "fee_role" not in l or "fee_myr" not in l:
+                buy_id = l.get("buy_order_id")
+                if buy_id:
+                    buy_res = hata_api.get_order_status(buy_id)
+                    buy_data = buy_res.get("data")
+                    if buy_data and buy_data.get("status") == "fulfilled":
+                        exec_info = _extract_hata_exec_data(coin_id, buy_data, l.get("quantity", 0))
+                        l.update({k: exec_info[k] for k in ["exec_qty", "fee_qty", "net_qty", "actual_cost_myr", "fee_myr", "fee_role"]})
+                        coin_changed = True
+                    else:
+                        l["fee_myr"] = 0.0
+                        l["fee_role"] = "unknown"
+                        coin_changed = True
+                else:
+                    l["fee_myr"] = 0.0
+                    l["fee_role"] = "unknown"
+                    coin_changed = True
+            active_layers.append(l)
+            needs_consolidated_sell = True
+
+        elif status == "OPEN":
+            if "net_qty" not in l:
+                sell_qty = l.get("sell_quantity", l.get("quantity", 0))
+                l["net_qty"] = sell_qty
+                l["exec_qty"] = l.get("quantity", 0)
+                l["fee_qty"] = l.get("quantity", 0) - sell_qty if sell_qty < l.get("quantity", 0) else 0
+                l["actual_cost_myr"] = l.get("amount_myr", 0)
+            l["status"] = "HOLDING"
+            coin_changed = True
+            needs_consolidated_sell = True
+            active_layers.append(l)
+
+        else:
+            active_layers.append(l)
+
+    for sell_id in old_sell_ids_to_cancel:
+        hata_api.cancel_order(f"{coin_id}_MYR", sell_id)
+        logger.info(f"[{coin_id}] RECOVERY: Cancelled old sell {sell_id}")
+
+    if coin_changed:
+        shared.engine_state[coin_id]["layers"] = active_layers
+
+    if needs_consolidated_sell:
+        holding_count = len([l for l in active_layers if l.get('status') == 'HOLDING'])
+        logger.info(f"[{coin_id}] RECOVERY: Consolidated sell for {holding_count} HOLDING layers...")
+        _place_consolidated_sell(coin_id)
+
+    current_layers = shared.engine_state[coin_id].get("layers", [])
+    has_pending = any(l.get("status") == "PENDING_BUY" for l in current_layers)
+    holding_in_recovery = [l for l in current_layers if l.get("status") == "HOLDING"]
+    if holding_in_recovery and not has_pending:
+        strategy = _get_strategy(coin_id, shared.engine_state[coin_id].get("risk_level", 1))
+        if len(current_layers) < strategy["max_layers"]:
+            last_entry = holding_in_recovery[-1].get("entry_price", 0)
+            if last_entry > 0:
+                logger.info(f"[{coin_id}] RECOVERY CASCADE: DCA BUY below RM{last_entry:.4f}")
+                _place_next_dca_buy(coin_id, last_entry)
+
+    return coin_changed
+
+
+async def startup_recovery():
+    """Reconcile all layers/groups with actual Hata API status on bot start.
+    ★ v5.6.6: Grid-aware — routes to _startup_recovery_grid or _startup_recovery_legacy
+    based on each coin's system_mode setting."""
     loop = asyncio.get_running_loop()
     logger.info("=" * 60)
     logger.info("STARTUP RECOVERY: Syncing all 5 coin layers with Hata API...")
@@ -791,212 +1197,32 @@ async def startup_recovery():
 
     def _recover():
         state_changed = False
+
+        # ★ Reset frozen_myr on startup — will be recalculated from active PENDING_BUY layers
+        shared.global_state["frozen_myr"] = 0.0
+
         for coin_id in shared.engine_state:
-            layers = shared.engine_state[coin_id].get("layers", [])
-            if not layers:
-                continue
-
-            active_layers = []
-            coin_changed = False
-            needs_consolidated_sell = False
-            old_sell_ids_to_cancel = []
-            logger.info(f"[{coin_id}] Recovering {len(layers)} layer(s)...")
-
-            for l in layers:
-                status = l.get("status", "OPEN")
-
-                # ── MIGRATE: Old PENDING_SELL layers → HOLDING ──
-                # Old system had per-layer sells. Cancel them and convert to HOLDING.
-                if status == "PENDING_SELL":
-                    sell_id = l.get("sell_order_id")
-                    if sell_id:
-                        # Check if sell already filled
-                        res = hata_api.get_order_status(sell_id)
-                        order_data = res.get("data")
-                        if order_data and order_data.get("status") == "fulfilled":
-                            # Old sell filled — count P&L and remove layer
-                            exec_data = _extract_hata_exec_data(coin_id, order_data)
-                            sell_received = exec_data.get("actual_cost_myr", 0)
-                            buy_cost = l.get("actual_cost_myr", l.get("amount_myr", 0))
-                            pnl = sell_received - buy_cost
-                            # P&L dikira dari Hata API sync, bukan di sini
-                            logger.info(f"[{coin_id}] RECOVERY: Old sell {sell_id} was filled! PnL: RM{pnl:.2f}")
-                            coin_changed = True
-                            continue  # Don't append — layer complete
-                        elif order_data and order_data.get("status") in ["cancelled", "rejected"]:
-                            # Already cancelled — convert to HOLDING
-                            logger.info(f"[{coin_id}] RECOVERY: Old sell {sell_id} already cancelled. Converting to HOLDING.")
-                        else:
-                            # Still active — need to cancel it
-                            old_sell_ids_to_cancel.append(sell_id)
-                            logger.info(f"[{coin_id}] RECOVERY: Will cancel old per-layer sell {sell_id}")
-                    
-                    # Convert to HOLDING — need exec data if not present
-                    if "net_qty" not in l:
-                        # Fetch buy order to get actual exec data
-                        buy_id = l.get("buy_order_id")
-                        if buy_id:
-                            buy_res = hata_api.get_order_status(buy_id)
-                            buy_data = buy_res.get("data")
-                            if buy_data and buy_data.get("status") == "fulfilled":
-                                exec_info = _extract_hata_exec_data(coin_id, buy_data, l.get("quantity", 0))
-                                l["exec_qty"] = exec_info["exec_qty"]
-                                l["fee_qty"] = exec_info["fee_qty"]
-                                l["net_qty"] = exec_info["net_qty"]
-                                l["actual_cost_myr"] = exec_info["actual_cost_myr"]
-                            else:
-                                # Fallback from stored data
-                                sell_qty = l.get("sell_quantity", l.get("quantity", 0))
-                                l["net_qty"] = sell_qty
-                                l["exec_qty"] = l.get("quantity", 0)
-                                l["fee_qty"] = l.get("quantity", 0) - sell_qty
-                                l["actual_cost_myr"] = l.get("amount_myr", 0)
-                        else:
-                            sell_qty = l.get("sell_quantity", l.get("quantity", 0))
-                            l["net_qty"] = sell_qty
-                            l["exec_qty"] = l.get("quantity", 0)
-                            l["fee_qty"] = l.get("quantity", 0) - sell_qty
-                            l["actual_cost_myr"] = l.get("amount_myr", 0)
-                    
-                    l["status"] = "HOLDING"
-                    coin_changed = True
-                    needs_consolidated_sell = True
-                    active_layers.append(l)
-
-                # ── PENDING_BUY ──────────────────────────────────
-                elif status == "PENDING_BUY":
-                    buy_id = l.get("buy_order_id")
-                    if not buy_id:
-                        l["status"] = "HOLDING"
-                        coin_changed = True
-                        needs_consolidated_sell = True
-                        active_layers.append(l)
-                        continue
-
-                    res = hata_api.get_order_status(buy_id)
-                    order_data = res.get("data")
-                    if not order_data:
-                        # Cannot reach Hata — keep layer, check next cycle
-                        active_layers.append(l)
-                        continue
-
-                    order_status = order_data.get("status")
-
-                    if order_status == "fulfilled":
-                        # Missed fill while bot was offline → extract exec data, mark HOLDING
-                        logger.info(f"[{coin_id}] RECOVERY: Buy {buy_id} was already filled!")
-                        exec_info = _extract_hata_exec_data(coin_id, order_data, l.get("quantity", 0))
-                        l["exec_qty"] = exec_info["exec_qty"]
-                        l["fee_qty"] = exec_info["fee_qty"]
-                        l["net_qty"] = exec_info["net_qty"]
-                        l["actual_cost_myr"] = exec_info["actual_cost_myr"]
-                        l["status"] = "HOLDING"
-                        coin_changed = True
-                        needs_consolidated_sell = True
-                        active_layers.append(l)
-
-                    elif order_status in ["cancelled", "rejected"]:
-                        logger.info(f"[{coin_id}] RECOVERY: Buy {buy_id} was {order_status}. Removing layer.")
-                        coin_changed = True
-                        # Do NOT append — layer is removed
-
-                    else:
-                        # Still active in Hata — patch created_at if missing, cancel if stuck
-                        if "created_at" not in l:
-                            l["created_at"] = time.time()
-                            coin_changed = True
-                            logger.info(f"[{coin_id}] RECOVERY: Patched created_at for buy {buy_id}.")
-
-                        age_sec = time.time() - l["created_at"]
-                        if age_sec > 300:
-                            logger.info(f"[{coin_id}] RECOVERY: Buy {buy_id} stuck >{age_sec/60:.1f} min. Auto-cancelling...")
-                            cancel_res = hata_api.cancel_order(f"{coin_id}_MYR", buy_id)
-                            logger.info(f"[{coin_id}] RECOVERY: Cancel result: {cancel_res}")
-                            coin_changed = True
-                            # Do NOT append — layer is removed
-                        else:
-                            active_layers.append(l)
-
-                # ── HOLDING (already converted) ─────────────────
-                elif status == "HOLDING":
-                    # Migrate: re-fetch fee data if missing (layers from before v5.3.3)
-                    if "fee_role" not in l or "fee_myr" not in l:
-                        buy_id = l.get("buy_order_id")
-                        if buy_id:
-                            logger.info(f"[{coin_id}] RECOVERY: Re-fetching fee data for Layer {l.get('id')} (buy {buy_id})...")
-                            buy_res = hata_api.get_order_status(buy_id)
-                            buy_data = buy_res.get("data")
-                            if buy_data and buy_data.get("status") == "fulfilled":
-                                exec_info = _extract_hata_exec_data(coin_id, buy_data, l.get("quantity", 0))
-                                l["exec_qty"] = exec_info["exec_qty"]
-                                l["fee_qty"] = exec_info["fee_qty"]
-                                l["net_qty"] = exec_info["net_qty"]
-                                l["actual_cost_myr"] = exec_info["actual_cost_myr"]
-                                l["fee_myr"] = exec_info["fee_myr"]
-                                l["fee_role"] = exec_info["fee_role"]
-                                coin_changed = True
-                                logger.info(f"[{coin_id}] RECOVERY: Layer {l.get('id')} fee updated: "
-                                            f"{exec_info['fee_role']} fee={exec_info['fee_qty']} (RM{exec_info['fee_myr']:.4f})")
-                            else:
-                                # Cannot re-fetch — set defaults
-                                l["fee_myr"] = 0.0
-                                l["fee_role"] = "unknown"
-                                coin_changed = True
-                        else:
-                            l["fee_myr"] = 0.0
-                            l["fee_role"] = "unknown"
-                            coin_changed = True
-                    active_layers.append(l)
-                    needs_consolidated_sell = True
-
-                # ── OPEN (legacy retry) ─────────────────────────
-                elif status == "OPEN":
-                    # Old OPEN layers = buy filled but sell failed
-                    # Convert to HOLDING
-                    if "net_qty" not in l:
-                        sell_qty = l.get("sell_quantity", l.get("quantity", 0))
-                        l["net_qty"] = sell_qty
-                        l["exec_qty"] = l.get("quantity", 0)
-                        l["fee_qty"] = l.get("quantity", 0) - sell_qty if sell_qty < l.get("quantity", 0) else 0
-                        l["actual_cost_myr"] = l.get("amount_myr", 0)
-                    l["status"] = "HOLDING"
-                    coin_changed = True
-                    needs_consolidated_sell = True
-                    active_layers.append(l)
-
-                else:
-                    active_layers.append(l)
-
-            # Cancel all old per-layer sells
-            for sell_id in old_sell_ids_to_cancel:
-                cancel_res = hata_api.cancel_order(f"{coin_id}_MYR", sell_id)
-                logger.info(f"[{coin_id}] RECOVERY: Cancelled old sell {sell_id}: {cancel_res}")
-
-            if coin_changed:
-                shared.engine_state[coin_id]["layers"] = active_layers
+            system_mode = shared.engine_state[coin_id].get("system_mode", "grid")
+            if system_mode == "grid":
+                changed = _startup_recovery_grid(coin_id)
+            else:
+                changed = _startup_recovery_legacy(coin_id)
+            if changed:
                 state_changed = True
 
-            # Place consolidated sell if we have HOLDING layers
-            if needs_consolidated_sell:
-                holding_count = len([l for l in active_layers if l.get('status') == 'HOLDING'])
-                logger.info(f"[{coin_id}] RECOVERY: Placing consolidated sell for {holding_count} HOLDING layers...")
-                _place_consolidated_sell(coin_id)
-                state_changed = True
-
-            # Cascade: if HOLDING layers exist but no PENDING_BUY, place next cascade buy
-            current_layers = shared.engine_state[coin_id].get("layers", [])
-            has_pending = any(l.get("status") == "PENDING_BUY" for l in current_layers)
-            holding_in_recovery = [l for l in current_layers if l.get("status") == "HOLDING"]
-            if holding_in_recovery and not has_pending:
-                risk_level = shared.engine_state[coin_id].get("risk_level", 1)
-                strategy = _get_strategy(coin_id, risk_level)
-                if len(current_layers) < strategy["max_layers"]:
-                    last_holding = holding_in_recovery[-1]
-                    last_entry = last_holding.get("entry_price", 0)
-                    if last_entry > 0:
-                        logger.info(f"[{coin_id}] RECOVERY CASCADE: Placing pending BUY for next layer below RM{last_entry:.4f}")
-                        _place_next_dca_buy(coin_id, last_entry)
-                        state_changed = True
+        # ★ Recalculate frozen_myr from all active PENDING_BUY layers across all groups
+        total_frozen = 0.0
+        for coin_id in shared.engine_state:
+            for group in shared.engine_state[coin_id].get("groups", []):
+                for l in group.get("layers", []):
+                    if l.get("status") == "PENDING_BUY":
+                        total_frozen += l.get("amount_myr", 0.0)
+            # Also check legacy layers
+            for l in shared.engine_state[coin_id].get("layers", []):
+                if l.get("status") == "PENDING_BUY":
+                    total_frozen += l.get("amount_myr", 0.0)
+        shared.global_state["frozen_myr"] = total_frozen
+        logger.info(f"STARTUP RECOVERY: Recalculated frozen_myr = RM{total_frozen:.2f}")
 
         if state_changed:
             shared.save_state()
@@ -1156,7 +1382,11 @@ async def update_hata_prices_loop():
             if bal_res:
                 avail, froz = bal_res
                 shared.global_state["balance_myr"] = avail
-                shared.global_state["frozen_myr"] = froz
+                # ★ BUG FIX: Don't overwrite bot's internal frozen_myr with Hata's value.
+                # frozen_myr is managed internally by the bot for pending orders:
+                #   +amount when order placed (process_kline), -amount when fills/cancel (_check_grid_group)
+                # Hata's frozen value is stored separately for display/debug only.
+                shared.global_state["hata_frozen_myr"] = froz
             shared.global_state["usdt_myr_rate"] = rate
 
             # 3. Check all pending orders for all 5 coins (NEW CONSOLIDATED FLOW)
