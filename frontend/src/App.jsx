@@ -198,30 +198,8 @@ function App() {
   const newGroupGapPct = coinData.new_group_gap_pct || 0.02;
   const maxLayers = coinData.max_layers || 5;
 
-  // Calculate overall realized PnL across all coins (dari bot tracking)
+  // P&L dari Hata API sync (sell - buy - fees) — simple & tepat
   const totalPnL = Object.values(state.coins).reduce((sum, c) => sum + (c.total_pnl || 0), 0)
-
-  // Calculate unrealized PnL dari open HOLDING layers (berdasarkan harga semasa vs entry price)
-  const calcUnrealizedPnL = (coinId) => {
-    const coin = state.coins[coinId]
-    if (!coin) return 0
-    const price = coin.current_price || 0
-    if (price === 0) return 0
-    const groups = coin.groups || []
-    return groups.flatMap(g => g.layers || [])
-      .filter(l => l.status === 'HOLDING')
-      .reduce((sum, l) => {
-        const sellTarget = l.sell_target_price || 0
-        const buyCost = l.actual_cost_myr || l.amount_myr || 0
-        const netQty = l.net_qty || l.quantity || 0
-        // Unrealized = (current_price - entry_price) × net_qty
-        const unrealizedMyr = (price - (l.entry_price || 0)) * netQty
-        return sum + unrealizedMyr
-      }, 0)
-  }
-
-  const unrealizedPnL = calcUnrealizedPnL(selectedCoin)
-  const totalUnrealizedPnL = Object.keys(state.coins).reduce((sum, id) => sum + calcUnrealizedPnL(id), 0)
 
   const activeGroups = coinData.groups || [];
   const lastCycleEntry = coinData.last_cycle_entry || 0
@@ -462,36 +440,17 @@ function App() {
                     )}
                   </div>
                   <div className="stat-box">
-                    <h3>Realized P&L (Semua) <span style={{ fontSize: '0.65rem', color: '#888' }}>sell complete</span></h3>
+                    <h3>P&L (Semua) <span style={{ fontSize: '0.65rem', color: '#888' }}>sell - buy - fees</span></h3>
                     <p className={`value ${totalPnL >= 0 ? 'profit' : 'loss'}`}>
                       RM {totalPnL >= 0 ? '+' : ''}{totalPnL.toFixed(2)}
                     </p>
-                    {totalUnrealizedPnL !== 0 && (
-                      <span style={{ fontSize: '0.8rem', color: totalUnrealizedPnL >= 0 ? '#00e676' : '#ff5252', display: 'block', marginTop: '4px' }}>
-                        Unrealized: {totalUnrealizedPnL >= 0 ? '+' : ''}RM {totalUnrealizedPnL.toFixed(2)}
-                      </span>
-                    )}
                   </div>
                 </div>
                 <div className="stats-row">
-                  <div className="stat-box">
-                    <h3>Realized P&L ({selectedCoin})</h3>
-                    <p className={`value ${(coinData.total_pnl || 0) >= 0 ? 'profit' : 'loss'}`} style={{ fontSize: '1.2rem' }}>
+                  <div className="stat-box" style={{ gridColumn: 'span 2' }}>
+                    <h3>P&L ({selectedCoin}) <span style={{ fontSize: '0.65rem', color: '#888' }}>dari Hata API (2 July →)</span></h3>
+                    <p className={`value ${(coinData.total_pnl || 0) >= 0 ? 'profit' : 'loss'}`} style={{ fontSize: '1.4rem' }}>
                       RM {(coinData.total_pnl || 0) >= 0 ? '+' : ''}{(coinData.total_pnl || 0).toFixed(2)}
-                    </p>
-                  </div>
-                  <div className="stat-box">
-                    <h3>Unrealized P&L ({selectedCoin}) <span style={{ fontSize: '0.65rem', color: '#888' }}>open pos.</span></h3>
-                    <p className={`value ${unrealizedPnL >= 0 ? 'profit' : 'loss'}`} style={{ fontSize: '1.2rem' }}>
-                      {unrealizedPnL >= 0 ? '+' : ''}RM {unrealizedPnL.toFixed(2)}
-                    </p>
-                  </div>
-                </div>
-                <div className="stats-row">
-                  <div className="stat-box" style={{ gridColumn: 'span 2', background: 'rgba(0,255,180,0.04)', border: '1px solid rgba(0,255,180,0.15)' }}>
-                    <h3>NET TOTAL ({selectedCoin}) <span style={{ fontSize: '0.65rem', color: '#888' }}>realized + unrealized</span></h3>
-                    <p className={`value ${((coinData.total_pnl || 0) + unrealizedPnL) >= 0 ? 'profit' : 'loss'}`} style={{ fontSize: '1.4rem' }}>
-                      RM {((coinData.total_pnl || 0) + unrealizedPnL) >= 0 ? '+' : ''}{((coinData.total_pnl || 0) + unrealizedPnL).toFixed(2)}
                     </p>
                   </div>
                 </div>

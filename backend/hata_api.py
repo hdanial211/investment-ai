@@ -282,7 +282,7 @@ def cancel_order(symbol: str, order_id: str) -> dict:
         print(f"Error cancelling order {order_id}: {e}")
         return {"status": "error", "message": str(e)}
 
-def get_trade_history(pair: str, limit: int = 50, start_time: str = None, end_time: str = None) -> dict:
+def get_trade_history(pair: str, limit: int = 50, start_time: str = None, end_time: str = None, page: int = 1) -> dict:
     """Fetch trade history from Hata API for real P&L calculation.
     Endpoint: /orderbook/sapi/trades/history"""
     if not HATA_API_KEY or not HATA_API_SECRET:
@@ -292,13 +292,10 @@ def get_trade_history(pair: str, limit: int = 50, start_time: str = None, end_ti
     timestamp = str(int(time.time()))
     clean_pair = pair.replace("_", "").replace("-", "").upper()
     
-    # We must construct parameters exactly matching Hata requirement:
-    # page (integer >= 1) and rows (integer <= 100) are required.
-    # For signature generation, all values must be stringified.
     params = {
         "timestamp": timestamp,
         "pair_name": clean_pair,
-        "page": "1",
+        "page": str(page),
         "rows": str(min(limit, 100))
     }
     
@@ -315,11 +312,10 @@ def get_trade_history(pair: str, limit: int = 50, start_time: str = None, end_ti
     url = f"{BASE_URL}{endpoint}"
     
     try:
-        # Pass page and rows as integers in requests' params (though signature signs string forms)
         req_params = {
             "timestamp": int(timestamp),
             "pair_name": clean_pair,
-            "page": 1,
+            "page": page,
             "rows": min(limit, 100)
         }
         if start_time:
@@ -336,6 +332,27 @@ def get_trade_history(pair: str, limit: int = 50, start_time: str = None, end_ti
     except Exception as e:
         print(f"Error fetching trade history for {pair}: {e}")
         return {"status": "error", "message": str(e)}
+
+
+def get_all_trade_history(pair: str, start_time: str = None, end_time: str = None) -> list:
+    """Fetch ALL trade history with pagination (100 per page).
+    Returns flat list of all trades."""
+    all_trades = []
+    page = 1
+    max_pages = 20  # Safety limit: 20 × 100 = 2000 trades max
+    
+    while page <= max_pages:
+        res = get_trade_history(pair, limit=100, start_time=start_time, end_time=end_time, page=page)
+        trades = res.get("data", [])
+        if not trades:
+            break
+        all_trades.extend(trades)
+        if len(trades) < 100:
+            break  # Last page
+        page += 1
+        time.sleep(0.3)  # Rate limit
+    
+    return all_trades
 
 def get_my_orders(pair: str, status: str = "active") -> dict:
     """Fetch open/active orders from Hata API"""

@@ -628,9 +628,7 @@ def _check_grid_group(coin_id: str, group: dict) -> bool:
             buy_fee_myr = l.get("fee_myr", 0.0)
             real_pnl = sell_received_myr - buy_cost
 
-            shared.engine_state[coin_id]["total_pnl"] = (
-                shared.engine_state[coin_id].get("total_pnl", 0.0) + real_pnl
-            )
+            # P&L dikira dari Hata API sync (_sync_trade_history), bukan di sini
             logger.info(f"[{coin_id}] ★ Group {group['id']} Layer {l['id']} SELL FILLED! "
                         f"Buy RM{buy_cost:.2f} ({l.get('fee_role','?')} RM{buy_fee_myr:.4f}) "
                         f"| Sell RM{sell_received_myr:.2f} ({sell_fee_role} RM{sell_fee_myr:.4f}) "
@@ -821,7 +819,7 @@ async def startup_recovery():
                             sell_received = exec_data.get("actual_cost_myr", 0)
                             buy_cost = l.get("actual_cost_myr", l.get("amount_myr", 0))
                             pnl = sell_received - buy_cost
-                            shared.engine_state[coin_id]["total_pnl"] += pnl
+                            # P&L dikira dari Hata API sync, bukan di sini
                             logger.info(f"[{coin_id}] RECOVERY: Old sell {sell_id} was filled! PnL: RM{pnl:.2f}")
                             coin_changed = True
                             continue  # Don't append — layer complete
@@ -1018,35 +1016,42 @@ async def startup_recovery():
 # Calculates accurate P&L from actual buy/sell records
 # ─────────────────────────────────────────────
 def _sync_trade_history():
-    """Fetch complete trade history from Hata API for all coins.
-    Calculates accurate total P&L from actual executed trades."""
+    """Fetch trade history dari Hata API dan kira P&L.
+    Simple: sell_revenue - buy_cost - fees. Data dari 2 July onwards."""
     import hata_api
     from datetime import datetime
 
     logger.info("=" * 60)
-    logger.info("TRADE HISTORY SYNC: Starting full sync from Hata API...")
+    logger.info("TRADE HISTORY SYNC: Fetching from Hata API (dari 2 July)...")
     logger.info("=" * 60)
+
+    # Start dari 2 July 2025 00:00:00 MYT (UTC+8)
+    # Unix timestamp: 2025-07-02 00:00:00 MYT = 2025-07-01 16:00:00 UTC
+    start_timestamp = "1751385600"  # 2025-07-02 00:00:00 MYT
 
     coins = ["BTC", "ETH", "SOL", "XRP", "LTC"]
 
     for coin_id in coins:
         pair = f"{coin_id}_MYR"
         try:
-            # Fetch trade history (max 500 trades)
-            res = hata_api.get_trade_history(pair, limit=500)
-            trades = res.get("data", [])
+            # Fetch SEMUA trades dari 2 July (paginated)
+            trades = hata_api.get_all_trade_history(pair, start_time=start_timestamp)
 
             if not trades:
-                logger.info(f"[{coin_id}] No trade history found.")
+                logger.info(f"[{coin_id}] No trades found since July 2.")
+                shared.engine_state[coin_id]["trade_history"] = {
+                    "total_trades": 0, "buy_count": 0, "sell_count": 0,
+                    "total_buy_cost": 0, "total_sell_revenue": 0,
+                    "total_fees": 0, "pnl": 0,
+                    "last_sync": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                }
+                shared.engine_state[coin_id]["total_pnl"] = 0.0
                 continue
 
-            # Calculate P&L from all trades
-            total_buy_cost = 0.0     # Total MYR spent on buys
-            total_buy_qty = 0.0      # Total coin bought
-            total_buy_fees = 0.0     # Total fees on buys (in MYR)
-            total_sell_revenue = 0.0 # Total MYR received from sells
-            total_sell_qty = 0.0     # Total coin sold
-            total_sell_fees = 0.0    # Total fees on sells (in MYR)
+            # Simple: kumpul semua buy cost, sell revenue, fees
+            total_buy_cost = 0.0
+            total_sell_revenue = 0.0
+            total_fees_myr = 0.0
             buy_count = 0
             sell_count = 0
 
@@ -1054,10 +1059,9 @@ def _sync_trade_history():
                 side = t.get("side", "").upper()
                 price = float(t.get("price", 0))
                 qty = float(t.get("qty", 0))
-                quote_qty = float(t.get("quote_qty", price * qty))  # MYR amount
+                quote_qty = float(t.get("quote_qty", price * qty))
                 fee = float(t.get("fee", 0))
                 fee_asset = t.get("fee_asset", "")
-                is_maker = t.get("is_maker", False)
 
                 # Convert fee to MYR
                 if fee_asset == "MYR":
@@ -1067,61 +1071,39 @@ def _sync_trade_history():
                 else:
                     fee_myr = 0.0
 
+                total_fees_myr += fee_myr
+
                 if side == "BUY":
                     total_buy_cost += quote_qty
-                    total_buy_qty += qty
-                    total_buy_fees += fee_myr
                     buy_count += 1
                 elif side == "SELL":
                     total_sell_revenue += quote_qty
-                    total_sell_qty += qty
-                    total_sell_fees += fee_myr
                     sell_count += 1
 
-            # Net P&L Calculation:
-            # Grid system: setiap sell ada buy price yg berbeza.
-            # Realized P&L = sell_revenue - proportionate_buy_cost
-            # Kalau ada open positions (sell_qty < buy_qty), kira cost berdasarkan
-            # average buy price × qty yang dah sold (bukan semua buy cost)
-            total_fees = total_buy_fees + total_sell_fees
-            if total_buy_qty > 0 and total_sell_qty > 0:
-                avg_buy_price = total_buy_cost / total_buy_qty  # average harga beli per unit
-                matched_buy_cost = avg_buy_price * total_sell_qty  # cost untuk qty yg dah sold sahaja
-                realized_pnl = total_sell_revenue - matched_buy_cost
-            else:
-                realized_pnl = 0.0
+            # ★ P&L = SELL - BUY - FEES. Simple. Direct dari Hata.
+            pnl = total_sell_revenue - total_buy_cost - total_fees_myr
 
-            # Store sync data (untuk display sahaja — TIDAK override total_pnl)
+            # Set terus — ini satu-satunya sumber kebenaran
+            shared.engine_state[coin_id]["total_pnl"] = round(pnl, 4)
+
             shared.engine_state[coin_id]["trade_history"] = {
                 "buy_count": buy_count,
                 "sell_count": sell_count,
                 "total_trades": len(trades),
                 "total_buy_cost": round(total_buy_cost, 4),
                 "total_sell_revenue": round(total_sell_revenue, 4),
-                "total_buy_fees": round(total_buy_fees, 4),
-                "total_sell_fees": round(total_sell_fees, 4),
-                "total_fees": round(total_fees, 4),
-                "realized_pnl": round(realized_pnl, 4),
+                "total_fees": round(total_fees_myr, 4),
+                "pnl": round(pnl, 4),
                 "last_sync": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "oldest_trade": trades[-1].get("created_at", "") if trades else "",
                 "newest_trade": trades[0].get("created_at", "") if trades else ""
             }
 
-            # JANGAN override total_pnl dengan nilai sync.
-            # total_pnl dikira secara real-time masa sell fill berlaku (lebih tepat).
-            # Sync hanya update trade_history untuk display sahaja.
-            # Kalau total_pnl masih 0 (restart bot / bot baru), boleh set dari sync.
-            current_pnl = shared.engine_state[coin_id].get("total_pnl", 0.0)
-            if current_pnl == 0.0 and realized_pnl != 0.0:
-                shared.engine_state[coin_id]["total_pnl"] = realized_pnl
-                logger.info(f"[{coin_id}] SYNC: Initialized total_pnl dari Hata history: RM{realized_pnl:.2f}")
-
             logger.info(f"[{coin_id}] SYNC: {len(trades)} trades | "
-                        f"Buys: {buy_count} (RM{total_buy_cost:.2f}) | "
-                        f"Sells: {sell_count} (RM{total_sell_revenue:.2f}) | "
-                        f"Fees: RM{total_fees:.4f} | "
-                        f"Realized P&L (Hata calc): RM{realized_pnl:.2f} | "
-                        f"Bot total_pnl: RM{shared.engine_state[coin_id].get('total_pnl', 0.0):.2f}")
+                        f"Buy: RM{total_buy_cost:.2f} ({buy_count}) | "
+                        f"Sell: RM{total_sell_revenue:.2f} ({sell_count}) | "
+                        f"Fees: RM{total_fees_myr:.4f} | "
+                        f"P&L: RM{pnl:.2f}")
 
         except Exception as e:
             logger.error(f"[{coin_id}] SYNC ERROR: {e}")
@@ -1309,11 +1291,10 @@ async def update_hata_prices_loop():
                                 
                                 # Real P&L = what we received - what we spent
                                 real_pnl = sell_received_myr - total_buy_cost
-                                shared.engine_state[coin_id]["total_pnl"] += real_pnl
+                                # P&L dikira dari Hata API sync, bukan di sini
                                 
                                 logger.info(f"[{coin_id}] ★ CONSOLIDATED SELL FILLED! ★")
                                 logger.info(f"[{coin_id}]   Sold: RM{sell_received_myr:.2f} | Cost: RM{total_buy_cost:.2f} | PnL: RM{real_pnl:.2f}")
-                                logger.info(f"[{coin_id}]   Total PnL: RM{shared.engine_state[coin_id]['total_pnl']:.2f}")
                                 
                                 # ★ ML PIPELINE: Log trade outcome for this coin's learning
                                 try:
