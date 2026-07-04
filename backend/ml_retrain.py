@@ -56,15 +56,27 @@ def should_retrain(coin_id: str) -> bool:
             except (ValueError, TypeError):
                 pass
         else:
-            # Never retrained — check if we have enough data
-            from ml_logger import get_training_data
-            df = get_training_data(coin_id, limit=MIN_TRAINING_SAMPLES)
-            if len(df) >= MIN_TRAINING_SAMPLES:
+            # ★ FIX: Never retrained — use LOWER threshold for first retrain
+            # Previously required 50+ DB trades which was too high.
+            # Now triggers first retrain after just 15 completed trades.
+            FIRST_RETRAIN_THRESHOLD = 15
+            if trades_since >= FIRST_RETRAIN_THRESHOLD:
                 logger.info(
-                    f"[{coin_id}] RETRAIN CHECK: Never retrained but have "
-                    f"{len(df)} logged trades. Retrain needed."
+                    f"[{coin_id}] RETRAIN CHECK: Never retrained, {trades_since} trades "
+                    f"completed (first retrain threshold: {FIRST_RETRAIN_THRESHOLD}). "
+                    f"Retrain needed."
                 )
                 return True
+            
+            # ★ FIX: Initialize last_retrain_at so 3-day timer starts ticking
+            # Without this, coins that haven't retrained yet never trigger the time check
+            if coin_id in shared.engine_state:
+                shared.engine_state[coin_id]["last_retrain_at"] = datetime.utcnow().isoformat()
+                shared.save_state()
+                logger.info(
+                    f"[{coin_id}] RETRAIN CHECK: Initialized last_retrain_at for 3-day timer. "
+                    f"Trades so far: {trades_since}/{FIRST_RETRAIN_THRESHOLD}"
+                )
         
         return False
         

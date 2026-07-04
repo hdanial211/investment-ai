@@ -49,32 +49,10 @@ def calculate_features(df: pd.DataFrame) -> pd.DataFrame:
     df.ta.atr(length=14, append=True)
     df.ta.stochrsi(length=14, append=True)
 
-    # 7. Price Returns (Target untuk ML)
-    # Kita melihat 10 lilin (minit) ke hadapan
-    lookahead = 10
-    
-    # Cari paras tertinggi dan terendah dalam 10 minit ke hadapan
-    df['future_max'] = df['high'].rolling(window=lookahead, min_periods=1).max().shift(-lookahead)
-    df['future_min'] = df['low'].rolling(window=lookahead, min_periods=1).min().shift(-lookahead)
-    
-    df['max_return'] = (df['future_max'] - df['close']) / df['close'] * 100
-    df['min_return'] = (df['close'] - df['future_min']) / df['close'] * 100
-    
-    # Label: 
-    # Yuran pertukaran (Fee) Hata = 0.1% * 2 (buy & sell) = 0.2%.
-    # Kita nak untung sekurang-kurangnya 0.6% dan mengelak drawdown lebih 0.4% dalam 10 minit tersebut
-    def classify_signal(row):
-        if pd.isna(row['max_return']) or pd.isna(row['min_return']):
-            return 0
-            
-        if row['max_return'] >= 0.4 and row['min_return'] <= 0.25:
-            return 1 # Strong BUY
-        elif row['min_return'] >= 0.4 and row['max_return'] <= 0.25:
-            return -1 # Strong SELL
-        return 0
-        
-    df['target'] = df.apply(classify_signal, axis=1)
-    df.drop(columns=['future_max', 'future_min', 'max_return', 'min_return'], inplace=True)
+    # NOTE: Target label (Triple Barrier) dikira BERASINGAN dalam:
+    #   - ml_retrain.py (untuk retrain)
+    #   - ai_model.py (untuk initial training)
+    # Function ini HANYA return features, TANPA target column.
 
     # Buang baris yang ada NaN disebabkan oleh calculation indicator
     df = df.dropna()

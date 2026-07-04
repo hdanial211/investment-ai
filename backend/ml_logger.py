@@ -239,6 +239,18 @@ def log_trade_outcome(coin_id: str, entry_price: float, exit_price: float,
             shared.engine_state[coin_id]["active_trade_cycle_id"] = None
             shared.save_state()
 
+        # ★ FIX: Recalculate adaptive threshold SETIAP trade outcome
+        # Sebelum ini hanya dikira masa retrain — menyebabkan threshold stuck
+        # walau win rate berubah drastik (cth: LTC 36.8% tapi threshold masih 60%)
+        try:
+            from ml_adaptive import recalculate_threshold_for_coin
+            new_threshold = recalculate_threshold_for_coin(coin_id)
+            logger.info(
+                f"[{coin_id}] ML LOG: Adaptive threshold recalculated → {new_threshold*100:.0f}%"
+            )
+        except Exception as thresh_err:
+            logger.error(f"[{coin_id}] ML LOG: Threshold recalc error: {thresh_err}")
+
         logger.info(
             f"[{coin_id}] ML LOG: Trade outcome={outcome} | "
             f"PnL=RM{pnl_myr:.2f} ({pnl_pct*100:.2f}%) | "
