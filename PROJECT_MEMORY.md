@@ -1,5 +1,5 @@
 # 🧠 INVESTMENT AI — PROJECT MEMORY FILE
-> Dikemas kini: 2026-07-02 | Versi Semasa: **v5.5.9 — Grid Multi-Group + Daily Telegram Report**
+> Dikemas kini: 2026-07-04 | Versi Semasa: **v5.6.3 — Paginated Hata Sync + Accurate Cash Flow P&L**
 > GitHub: https://github.com/hdanial211/investment-ai
 > Lokasi Projek: `e:\PROJECTS\SEMUA PROJECT\INVESTMENT AI`
 
@@ -335,6 +335,8 @@ wss://stream.binance.com:9443/stream?streams=btcusdt@kline_1m/ethusdt@kline_1m/s
 | v5.5.7 | Sell Placement Race Condition Fix | Retry 1s + save_state() terus selepas sell order placed, elak status 'placing...' tergantung. |
 | v5.5.8 | frozen_myr Balance Reservation | Tambah `frozen_myr` dalam global_state untuk reserve baki sebelum order dihantar. Elak semua 5 coin beli serentak sampai wallet kosong. |
 | v5.5.9 | Daily Telegram Report — Direct Hata API | Script `scratch/test_daily_report_direct.py` yang query live `/orderbook/sapi/trades/history` API Hata untuk kira PnL harian + posisi HOLDING semasa. Hantar ke Telegram group 'SAHAM SIGNAL' pukul 11PM setiap hari via Antigravity schedule. |
+| v5.6.0 | Standby BUY Price Cap | Capping standby BUY price at 0.05% below current market price (MAKER order) to avoid Taker fee when market drops below calculated grid. |
+| v5.6.1-3 | Paginated Hata Sync & Cash Flow PnL | Added paginated fetches via `get_all_trade_history()`. Changed P&L sync (`_sync_trade_history()`) to use simple cash flow `sells - buys - fees` starting July 2, 2026. Removed manual P&L increment logic in check order loops to avoid double-counting. |
 
 ---
 
