@@ -9,7 +9,7 @@ echo.
 echo [1/4] Menghidupkan Otak AI (Backend Server Python)...
 start "Backend - Investment AI" cmd /k "cd /d "%~dp0backend" && venv\Scripts\python -m uvicorn api:app --reload --port 8000"
 
-echo [2/4] Menghidupkan Paparan Dashboard (Frontend Next.js)...
+echo [2/4] Menghidupkan Paparan Dashboard (Frontend Vite+React)...
 start "Frontend - Investment AI" cmd /k "cd /d "%~dp0frontend" && npm run dev"
 
 echo [3/4] Enjin Pasukan Elit (Multi-Coin Unified Bot) kini disepadukan...
@@ -25,7 +25,7 @@ echo SEMUANYA SELESAI !
 echo.
 echo --------------------------------------------------------
 echo NOTA PENTING:
-echo Terdapat TIGA tetingkap/terminal hitam yang baru sahaja dibuka.
+echo Terdapat DUA tetingkap/terminal hitam yang baru sahaja dibuka.
 echo JANGAN TUTUP tetingkap-tetingkap tersebut. Kalau anda tutup,
 echo sistem paparan dan operasi bot automatik akan terhenti.
 echo Anda boleh "Minimize" sahaja.

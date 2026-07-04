@@ -10,7 +10,7 @@ import threading
 import time
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from shared import engine_state, global_state, save_state
+from shared import engine_state, global_state, save_state, truncate_float
 import shared
 import hata_api
 
@@ -79,9 +79,10 @@ def get_state():
 
 @app.post("/api/toggle-auto")
 def toggle_auto(toggle: AutoToggle):
-    if toggle.coin in engine_state:
-        engine_state[toggle.coin]["is_auto"] = toggle.is_auto
-        shared.save_state()
+    if toggle.coin not in engine_state:
+        raise HTTPException(status_code=400, detail="Invalid coin")
+    engine_state[toggle.coin]["is_auto"] = toggle.is_auto
+    shared.save_state()
     return {"status": "success", "is_auto": engine_state[toggle.coin]["is_auto"]}
 
 @app.post("/api/set-risk-level")
@@ -100,7 +101,9 @@ def set_amount(setting: AmountSetting):
 
 @app.post("/api/set-tp")
 def set_tp(setting: TPSetting):
-    """Set take profit percentage per coin from frontend"""
+    """Set take profit percentage per coin from frontend.
+    Note: Grid system uses grid_gap_pct for individual layer sells,
+    tp_pct is used as a reference/display value."""
     if setting.coin not in engine_state:
         raise HTTPException(status_code=400, detail="Invalid coin")
     if setting.tp_pct < 0.001 or setting.tp_pct > 0.5:
@@ -108,12 +111,6 @@ def set_tp(setting: TPSetting):
     
     engine_state[setting.coin]["tp_pct"] = setting.tp_pct
     shared.save_state()
-    
-    # If there are HOLDING layers, re-place consolidated sell with new TP%
-    holding_layers = [l for l in engine_state[setting.coin].get("layers", []) if l.get("status") == "HOLDING"]
-    if holding_layers:
-        from live_engine import _place_consolidated_sell
-        _place_consolidated_sell(setting.coin)
     
     return {"status": "success", "tp_pct": engine_state[setting.coin]["tp_pct"]}
 
@@ -231,30 +228,48 @@ def manual_buy(action: ManualAction):
 
 @app.post("/api/panic-sell")
 def panic_sell(action: ManualAction):
+    """Emergency sell all positions for a coin.
+    Works with the multi-group grid system."""
     coin = action.coin
     if coin not in engine_state:
         raise HTTPException(status_code=400, detail="Invalid coin")
     
-    # 1. Cancel consolidated sell order if exists
-    consolidated_sell_id = engine_state[coin].get("consolidated_sell_order_id")
-    if consolidated_sell_id:
-        hata_api.cancel_order(f"{coin}_MYR", consolidated_sell_id)
-        engine_state[coin]["consolidated_sell_order_id"] = None
+    coin_state = engine_state[coin]
+    groups = coin_state.get("groups", [])
     
-    # 2. Cancel any pending buy orders
-    for layer in engine_state[coin]["layers"]:
-        if layer.get("status") == "PENDING_BUY":
-            buy_id = layer.get("buy_order_id")
-            if buy_id:
-                hata_api.cancel_order(f"{coin}_MYR", buy_id)
+    # 1. Cancel all sell orders and standby buys across all groups
+    for group in groups:
+        # Cancel standby buy
+        standby_id = group.get("standby_buy_order_id")
+        if standby_id:
+            try:
+                hata_api.cancel_order(f"{coin}_MYR", standby_id)
+            except Exception:
+                pass
+        
+        # Cancel individual layer sell orders + pending buys
+        for layer in group.get("layers", []):
+            if layer.get("status") == "PENDING_BUY" and layer.get("buy_order_id"):
+                try:
+                    hata_api.cancel_order(f"{coin}_MYR", layer["buy_order_id"])
+                except Exception:
+                    pass
+            if layer.get("sell_order_id"):
+                try:
+                    hata_api.cancel_order(f"{coin}_MYR", layer["sell_order_id"])
+                except Exception:
+                    pass
     
-    # 3. Sell all holding at market (use current_price - 2% to ensure fill)
-    current_price = engine_state[coin]["current_price"]
-    holding_layers = [l for l in engine_state[coin]["layers"] if l.get("status") == "HOLDING"]
+    # 2. Sell all holding qty at market (use current_price - 2% to ensure fill)
+    current_price = coin_state.get("current_price", 0)
+    all_holding_layers = []
+    for group in groups:
+        for layer in group.get("layers", []):
+            if layer.get("status") == "HOLDING":
+                all_holding_layers.append(layer)
     
-    if holding_layers and current_price > 0:
-        # Sum up all net_qty from holding layers
-        total_qty = sum(l.get("net_qty", l.get("sell_quantity", l.get("quantity", 0))) for l in holding_layers)
+    if all_holding_layers and current_price > 0:
+        total_qty = sum(l.get("net_qty", l.get("quantity", 0)) for l in all_holding_layers)
         qty_scale = hata_api.COIN_SCALES.get(coin, {}).get("qty", 4)
         total_qty = truncate_float(total_qty, qty_scale)
         
@@ -266,21 +281,16 @@ def panic_sell(action: ManualAction):
             
             if total_qty > 0:
                 panic_price = current_price * 0.98  # 2% below to ensure fill
+                price_scale = hata_api.COIN_SCALES.get(coin, {}).get("price", 0)
+                if price_scale > 0:
+                    panic_price = truncate_float(panic_price, price_scale)
                 hata_api.place_limit_order(f"{coin}_MYR", "SELL", panic_price, total_qty)
     
-    # 4. Clear all layers
-    engine_state[coin]["layers"] = []
-    engine_state[coin]["consolidated_sell_order_id"] = None
+    # 3. Clear all groups
+    coin_state["groups"] = []
     shared.save_state()
     
     return {"status": "success", "message": f"All positions closed for {coin}"}
-
-
-def truncate_float(val: float, decimals: int) -> float:
-    """Truncate float value to a specific number of decimal places without rounding up."""
-    eps = 1e-9
-    factor = 10 ** decimals
-    return int((val + eps) * factor) / factor
 
 
 from fastapi import WebSocket, WebSocketDisconnect
@@ -467,22 +477,6 @@ def get_ml_history(coin: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-class GridGapRequest(BaseModel):
-    coin: str
-    grid_gap_pct: float
-
-
-@app.post("/api/set-grid-gap")
-def set_grid_gap(req: GridGapRequest):
-    """Set grid gap % for a specific coin"""
-    coin = req.coin.upper()
-    if coin not in engine_state:
-        raise HTTPException(status_code=400, detail="Invalid coin")
-    if not (0.001 <= req.grid_gap_pct <= 0.10):
-        raise HTTPException(status_code=400, detail="gap_pct must be between 0.1% and 10%")
-    engine_state[coin]["grid_gap_pct"] = req.grid_gap_pct
-    save_state()
-    return {"status": "ok", "coin": coin, "grid_gap_pct": req.grid_gap_pct}
 
 
 class RetrainRequest(BaseModel):
@@ -531,6 +525,45 @@ if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
 
-# Trigger reload
+# ─────────────────────────────────────────────
+# Order Management
+# ─────────────────────────────────────────────
 
-# Trigger reload
+class CancelOrderRequest(BaseModel):
+    coin: str
+    order_id: str
+
+@app.post("/api/cancel-order")
+def cancel_order(req: CancelOrderRequest):
+    """Cancel a specific order on Hata and clean up state."""
+    coin = req.coin.upper()
+    if coin not in engine_state:
+        raise HTTPException(status_code=400, detail="Invalid coin")
+    
+    pair = f"{coin}_MYR"
+    try:
+        result = hata_api.cancel_order(pair, req.order_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Hata cancel error: {e}")
+    
+    # Clean up matching order from state (groups/layers/standby)
+    for group in engine_state[coin].get("groups", []):
+        # Check standby buy
+        if group.get("standby_buy_order_id") == req.order_id:
+            group["standby_buy_order_id"] = None
+            group["standby_buy_price"] = 0.0
+        # Check layers
+        for layer in group.get("layers", []):
+            if layer.get("buy_order_id") == req.order_id and layer.get("status") == "PENDING_BUY":
+                layer["status"] = "CANCELLED"
+            if layer.get("sell_order_id") == req.order_id:
+                layer["sell_order_id"] = None
+        # Remove cancelled layers
+        group["layers"] = [l for l in group["layers"] if l.get("status") != "CANCELLED"]
+    
+    # Remove empty groups
+    engine_state[coin]["groups"] = [g for g in engine_state[coin]["groups"] if g.get("layers")]
+    
+    shared.save_state()
+    logger.info(f"[{coin}] Order {req.order_id} cancelled via API")
+    return {"status": "ok", "coin": coin, "order_id": req.order_id, "hata_result": result}

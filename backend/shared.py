@@ -1,8 +1,17 @@
 # shared.py
 import log_config
 import json
+import logging
 import os
+import tempfile
+import threading
 import time
+
+logger = logging.getLogger(__name__)
+
+# Thread-safe lock for save_state() — prevents concurrent writes
+# from FastAPI thread + live_engine thread corrupting bot_state.json
+_state_lock = threading.Lock()
 
 global_state = {
     "balance_myr": 10000.00,
@@ -62,9 +71,23 @@ AI_SUGGESTED_TP = {
 }
 
 def _migrate_coin_state(coin: dict) -> dict:
-    """Migrate old flat-layer state to new multi-group state."""
+    """Migrate old flat-layer state to new multi-group state.
+    Also cleans orphaned fields from the old DCA system."""
+    # Clean orphaned flat-layer fields (from old DCA system)
+    _orphan_fields = ["consolidated_sell_order_id"]
+    for field in _orphan_fields:
+        coin.pop(field, None)
+
     # If already has 'groups', it's the new format
     if "groups" in coin:
+        # Clean leftover flat 'layers' if groups already exist
+        if "layers" in coin and not coin["layers"]:
+            coin.pop("layers", None)
+        # Clean leftover flat standby fields if groups already exist
+        if coin.get("standby_buy_order_id") is None:
+            coin.pop("standby_buy_order_id", None)
+        if coin.get("standby_buy_price", 0.0) == 0.0:
+            coin.pop("standby_buy_price", None)
         # Ensure new fields exist
         coin.setdefault("max_groups", 3)
         coin.setdefault("new_group_gap_pct", 0.02)
@@ -75,7 +98,6 @@ def _migrate_coin_state(coin: dict) -> dict:
     old_layers = coin.pop("layers", [])
     old_standby_id = coin.pop("standby_buy_order_id", None)
     old_standby_price = coin.pop("standby_buy_price", 0.0)
-    coin.pop("consolidated_sell_order_id", None)  # Remove old DCA field
 
     coin["groups"] = []
     if old_layers:
@@ -118,7 +140,19 @@ def load_state():
                     default_state[coin]["tp_pct"] = AI_SUGGESTED_TP[coin]
             return default_state
         except Exception as e:
-            print(f"Error loading state: {e}")
+            logger.error(f"Error loading state: {e}")
+            # Return fresh state instead of None to prevent crashes
+            fresh = {
+                "ETH": create_coin_state(),
+                "BTC": create_coin_state(),
+                "SOL": create_coin_state(),
+                "XRP": create_coin_state(),
+                "LTC": create_coin_state()
+            }
+            for c in fresh:
+                if c in AI_SUGGESTED_TP:
+                    fresh[c]["tp_pct"] = AI_SUGGESTED_TP[c]
+            return fresh
 
     # Fresh state
     fresh = {
@@ -136,11 +170,36 @@ def load_state():
 engine_state = load_state()
 
 def save_state():
-    try:
-        with open(STATE_FILE, "w") as f:
-            json.dump(engine_state, f, indent=4)
-    except Exception as e:
-        print(f"Error saving state: {e}")
+    """Thread-safe atomic save — writes to temp file first, then renames.
+    Prevents data corruption from concurrent writes or mid-write crashes."""
+    with _state_lock:
+        try:
+            # Atomic write: write to temp file in same directory, then rename
+            dir_name = os.path.dirname(STATE_FILE)
+            fd, tmp_path = tempfile.mkstemp(suffix=".tmp", dir=dir_name)
+            try:
+                with os.fdopen(fd, "w") as f:
+                    json.dump(engine_state, f, indent=4)
+                # Atomic rename (on Windows, need to remove target first)
+                if os.path.exists(STATE_FILE):
+                    os.replace(tmp_path, STATE_FILE)
+                else:
+                    os.rename(tmp_path, STATE_FILE)
+            except Exception:
+                # Clean up temp file on failure
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+                raise
+        except Exception as e:
+            logger.error(f"Error saving state: {e}")
+
+
+def truncate_float(val: float, decimals: int) -> float:
+    """Truncate float value to specific decimal places without rounding up.
+    Shared utility used by api.py and live_engine.py."""
+    eps = 1e-9
+    factor = 10 ** decimals
+    return int((val + eps) * factor) / factor
 
 
 def compute_system_status() -> dict:
