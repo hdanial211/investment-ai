@@ -74,7 +74,7 @@ Sama seperti sistem lama — guna `_extract_hata_exec_data()`:
 | `_check_grid_orders()` | Check semua individual sells + standby buy (dipanggil tiap 60s) |
 | `_extract_hata_exec_data()` | Baca actual exec qty, fee dari Hata API trades[] |
 | `_smart_pending_buy_check()` | Cancel+replace PENDING_BUY jika harga naik >5min; hold jika turun |
-| `_sync_trade_history()` | Sync PnL dari Hata API `/orderbook/sapi/trades/history` per coin |
+| `_sync_trade_history()` | Sync PnL dari Hata API `/orderbook/sapi/trades/history` per coin. **P&L (v5.6.3)**: Aliran tunai terus `sells - buys - fees` bermula **2 Julai 2026**. |
 
 ### State Per Coin (shared.py)
 ```json
