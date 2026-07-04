@@ -12,6 +12,13 @@ class Settings(BaseSettings):
     hata_api_key: str = ""
     hata_api_secret: str = ""
 
+    # Hata Exchange URLs & Settings
+    hata_base_url: str = "https://my-api.hata.io"
+    hata_ws_url: str = "wss://websocket-my.hata.io/sapi/connection/websocket"
+    hata_auth_url: str = "https://api.hata.io"
+    hata_request_timeout: int = 10
+    hata_max_retries: int = 3
+
     # Telegram
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
