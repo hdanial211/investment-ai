@@ -52,43 +52,61 @@ def generate_direct_report(target_date_str=None):
         if not trades:
             continue
             
-        # Pengiraan P&L TERUS dari Hata API — tanpa matching manual
-        buy_total_myr = 0.0   # Total MYR keluar untuk BUY (termasuk fee)
-        sell_total_myr = 0.0  # Total MYR masuk dari SELL (tolak fee jika ada)
-        coin_fee_myr = 0.0
+        buy_trades = []
+        sell_trades = []
         
         for t in trades:
             is_buy = t.get("is_buy")  # boolean
             price = float(t.get("price", 0))
             qty = float(t.get("qty", 0))
-            fee_raw = float(t.get("fee", 0))
+            fee = float(t.get("fee", 0))
             
-            value_myr = price * qty  # Nilai transaksi dalam MYR
-            
+            # Estimate fee in MYR
             if is_buy:
-                # BUY: fee dalam unit coin → convert ke MYR
-                fee_myr = fee_raw * price
-                buy_total_myr += value_myr + fee_myr
-                coin_fee_myr += fee_myr
+                fee_myr = fee * price
+                buy_trades.append({"price": price, "qty": qty, "fee_myr": fee_myr})
                 coin_stats[coin]["buys"] += 1
+                coin_stats[coin]["fees"] += fee_myr
+                total_fees += fee_myr
             else:
-                # SELL: fee dalam MYR (biasanya 0 sebab maker = 0%)
-                fee_myr = fee_raw  # SELL fee terus dalam MYR
-                sell_total_myr += value_myr - fee_myr
-                coin_fee_myr += fee_myr
+                fee_myr = fee
+                sell_trades.append({"price": price, "qty": qty, "fee_myr": fee_myr})
                 coin_stats[coin]["sells"] += 1
+                coin_stats[coin]["fees"] += fee_myr
+                total_fees += fee_myr
             
             coin_stats[coin]["trades"] += 1
             total_trades += 1
-        
-        # PnL = MYR masuk (sell) - MYR keluar (buy+fee)
-        pnl_realized = sell_total_myr - buy_total_myr
+            
+        gap_pct = 0.005 # default fallback 0.5%
+        try:
+            gap_pct = float(hata_api.shared.engine_state[coin].get("grid_gap_pct", 0.005))
+        except Exception:
+            pass
+            
+        pnl_realized = 0.0
+        for s in sell_trades:
+            # Match with a buy in the same day first
+            matched_buy = None
+            for b in buy_trades:
+                if b["price"] < s["price"]:
+                    matched_buy = b
+                    buy_trades.remove(b)
+                    break
+            
+            if matched_buy:
+                profit = (s["price"] - matched_buy["price"]) * s["qty"] - s["fee_myr"] - matched_buy["fee_myr"]
+                pnl_realized += profit
+                coin_stats[coin]["win"] += 1
+            else:
+                # Fallback: estimate buy price using grid_gap_pct
+                est_buy_price = s["price"] / (1.0 + gap_pct)
+                profit = (s["price"] - est_buy_price) * s["qty"] - s["fee_myr"]
+                pnl_realized += profit
+                coin_stats[coin]["win"] += 1
+                
         coin_stats[coin]["pnl"] = pnl_realized
-        coin_stats[coin]["fees"] = coin_fee_myr
         total_pnl += pnl_realized
-        total_fees += coin_fee_myr
-        
-        print(f"[{coin}] Buy MYR: RM{buy_total_myr:.4f} | Sell MYR: RM{sell_total_myr:.4f} | PnL: RM{pnl_realized:+.4f} | Fees: RM{coin_fee_myr:.4f}")
 
     # ── STEP 4: Semak status active groups & layers HOLDING dari bot_state.json ──
     state_file = r"e:\PROJECTS\SEMUA PROJECT\INVESTMENT AI\backend\bot_state.json"
