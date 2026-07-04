@@ -1025,9 +1025,8 @@ def _sync_trade_history():
     logger.info("TRADE HISTORY SYNC: Fetching from Hata API (dari 2 July)...")
     logger.info("=" * 60)
 
-    # Start dari 2 July 2025 00:00:00 MYT (UTC+8)
-    # Unix timestamp: 2025-07-02 00:00:00 MYT = 2025-07-01 16:00:00 UTC
-    start_timestamp = "1751385600"  # 2025-07-02 00:00:00 MYT
+    # Start dari 2 July 2026 00:00:00 MYT (UTC+8)
+    start_timestamp = "1782921600"  # 2026-07-02 00:00:00 MYT
 
     coins = ["BTC", "ETH", "SOL", "XRP", "LTC"]
 
@@ -1050,7 +1049,7 @@ def _sync_trade_history():
                 continue
 
             # Simple: kumpul semua buy cost, sell revenue, fees
-            # Hata trade fields (from API docs): is_buy, price, qty, fee, is_maker, trade_id, time
+            # Hata trade fields (from API docs): is_buy, price, qty, fee, is_maker, trade_id, created_at
             total_buy_cost = 0.0
             total_sell_revenue = 0.0
             total_fees_myr = 0.0
@@ -1096,8 +1095,8 @@ def _sync_trade_history():
                 "total_fees": round(total_fees_myr, 4),
                 "pnl": round(pnl, 4),
                 "last_sync": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "oldest_trade": trades[-1].get("time", "") if trades else "",
-                "newest_trade": trades[0].get("time", "") if trades else ""
+                "oldest_trade": trades[-1].get("created_at", "") if trades else "",
+                "newest_trade": trades[0].get("created_at", "") if trades else ""
             }
 
             logger.info(f"[{coin_id}] SYNC: {len(trades)} fulfilled trades | "

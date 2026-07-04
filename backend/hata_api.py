@@ -346,8 +346,8 @@ def get_all_trade_history(pair: str, start_time: str = None, end_time: str = Non
     while page <= max_pages:
         res = get_trade_history(pair, limit=100, start_time=start_time, end_time=end_time, page=page)
         
-        # Hata API docs: response = { "trades": [...], "pages": N }
-        trades = res.get("trades", [])
+        # Hata API: response = { "data": { "trades": [...], "pages": N }, "status": "success" }
+        trades = res.get("data", {}).get("trades", [])
         
         if not trades:
             break

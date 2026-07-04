@@ -1,6 +1,6 @@
 # 🧠 Investment AI — Agent Memory File
 # Baca file ini sebelum buat sebarang perubahan pada projek.
-# Versi semasa: **v5.6.2** | Dikemas kini: 2026-07-04
+# Versi semasa: **v5.6.3** | Dikemas kini: 2026-07-04
 
 ## Lokasi Projek
 `e:\PROJECTS\SEMUA PROJECT\INVESTMENT AI`
