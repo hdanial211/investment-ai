@@ -21,25 +21,49 @@ def test_groq():
         "coins": {
             "XRP": {
                 "current_price": 4.72,
-                "layers": [
+                "grid_gap_pct": 0.01,
+                "system_mode": "grid",
+                "groups": [
                     {
-                        "id": 2,
-                        "entry_price": 4.726,
-                        "take_profit": 4.75,
-                        "status": "PENDING_SELL"
+                        "id": 1,
+                        "layers": [
+                            {
+                                "id": 1,
+                                "entry_price": 4.726,
+                                "sell_target_price": 4.773,
+                                "status": "HOLDING",
+                                "net_qty": 6.26,
+                                "actual_cost_myr": 30.0,
+                                "fee_role": "taker"
+                            }
+                        ]
                     }
-                ]
+                ],
+                "standby_buy_order_id": "123456",
+                "standby_buy_price": 4.679
             },
             "LTC": {
                 "current_price": 182.4,
-                "layers": [
+                "grid_gap_pct": 0.01,
+                "system_mode": "grid",
+                "groups": [
                     {
                         "id": 1,
-                        "entry_price": 182.3,
-                        "take_profit": 183.21,
-                        "status": "PENDING_BUY"
+                        "layers": [
+                            {
+                                "id": 1,
+                                "entry_price": 182.3,
+                                "sell_target_price": 184.12,
+                                "status": "HOLDING",
+                                "net_qty": 0.164,
+                                "actual_cost_myr": 30.0,
+                                "fee_role": "maker"
+                            }
+                        ]
                     }
-                ]
+                ],
+                "standby_buy_order_id": "789012",
+                "standby_buy_price": 180.48
             }
         }
     }

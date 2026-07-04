@@ -25,36 +25,54 @@ def check_live_orders():
     print("=" * 60)
 
     for coin, info in state.items():
-        layers = info.get("layers", [])
-        if not layers:
-            print(f"{coin}: No active layers.")
+        if not isinstance(info, dict):
             continue
-        
-        for l in layers:
-            layer_id = l.get("id")
-            status = l.get("status")
-            buy_order_id = l.get("buy_order_id")
-            sell_order_id = l.get("sell_order_id")
-            
-            print(f"\n[{coin}] Layer {layer_id} - State Status: {status}")
-            
-            if buy_order_id:
-                print(f"  Buy Order ID: {buy_order_id}")
-                buy_res = hata_api.get_order_status(buy_order_id)
-                buy_data = buy_res.get("data")
-                if buy_data:
-                    print(f"    Hata Status: {buy_data.get('status')} | orig_qty: {buy_data.get('orig_qty')} | exec_qty: {buy_data.get('exec_qty')}")
-                else:
-                    print(f"    Hata Error: {buy_res}")
-                    
-            if sell_order_id:
-                print(f"  Sell Order ID: {sell_order_id}")
-                sell_res = hata_api.get_order_status(sell_order_id)
-                sell_data = sell_res.get("data")
-                if sell_data:
-                    print(f"    Hata Status: {sell_data.get('status')} | orig_qty: {sell_data.get('orig_qty')} | exec_qty: {sell_data.get('exec_qty')}")
-                else:
-                    print(f"    Hata Error: {sell_res}")
+
+        # Grid Paired Orders: iterate groups[].layers[]
+        groups = info.get("groups", [])
+        all_layers = []
+        for g in groups:
+            all_layers.extend(g.get("layers", []))
+
+        if not all_layers:
+            print(f"{coin}: No active layers.")
+        else:
+            for l in all_layers:
+                layer_id = l.get("id")
+                status = l.get("status")
+                buy_order_id = l.get("buy_order_id")
+                sell_order_id = l.get("sell_order_id")
+
+                print(f"\n[{coin}] Layer {layer_id} - State Status: {status}")
+
+                if buy_order_id:
+                    print(f"  Buy Order ID: {buy_order_id}")
+                    buy_res = hata_api.get_order_status(buy_order_id)
+                    buy_data = buy_res.get("data")
+                    if buy_data:
+                        print(f"    Hata Status: {buy_data.get('status')} | orig_qty: {buy_data.get('orig_qty')} | exec_qty: {buy_data.get('exec_qty')}")
+                    else:
+                        print(f"    Hata Error: {buy_res}")
+
+                if sell_order_id:
+                    print(f"  Sell Order ID: {sell_order_id}")
+                    sell_res = hata_api.get_order_status(sell_order_id)
+                    sell_data = sell_res.get("data")
+                    if sell_data:
+                        print(f"    Hata Status: {sell_data.get('status')} | orig_qty: {sell_data.get('orig_qty')} | exec_qty: {sell_data.get('exec_qty')}")
+                    else:
+                        print(f"    Hata Error: {sell_res}")
+
+        # Check standby buy order
+        standby_id = info.get("standby_buy_order_id")
+        if standby_id:
+            print(f"\n[{coin}] Standby BUY Order ID: {standby_id}")
+            sb_res = hata_api.get_order_status(standby_id)
+            sb_data = sb_res.get("data")
+            if sb_data:
+                print(f"    Hata Status: {sb_data.get('status')} | price: {sb_data.get('price')} | orig_qty: {sb_data.get('orig_qty')}")
+            else:
+                print(f"    Hata Error: {sb_res}")
 
     print("=" * 60)
 

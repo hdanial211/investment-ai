@@ -1,3 +1,9 @@
+# ╔══════════════════════════════════════════════════════════╗
+# ║  ⚠️  WARNING: THIS SCRIPT PLACES REAL ORDERS ON HATA!  ║
+# ║  It will place LIVE SELL orders and then cancel them.   ║
+# ║  Only run if you understand the consequences.           ║
+# ╚══════════════════════════════════════════════════════════╝
+
 import sys
 import os
 import time
