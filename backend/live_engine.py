@@ -423,6 +423,17 @@ def _grid_update_standby_buy(coin_id: str, group: dict, from_price: float):
         group["standby_buy_price"] = 0.0
 
     standby_price = round(from_price * (1.0 - gap_pct), price_scale)
+
+    # ★ CAP: standby BUY mesti sentiasa DI BAWAH harga semasa
+    # Elak TAKER fee (0.25%) kalau harga dah jatuh lebih jauh dari grid level
+    # Contoh: grid standby = 333.10 tapi market dah = 332.50 → cap ke 332.34 (0.05% bawah)
+    current_mkt_price = shared.engine_state[coin_id].get("current_price", 0)
+    if current_mkt_price > 0 and standby_price >= current_mkt_price:
+        capped_price = round(current_mkt_price * 0.9995, price_scale)
+        logger.info(f"[{coin_id}] Group {group['id']}: Standby grid price RM{standby_price:.{price_scale}f} ≥ market RM{current_mkt_price:.{price_scale}f} "
+                    f"→ CAP ke RM{capped_price:.{price_scale}f} (0.05% bawah market, MAKER 0%)")
+        standby_price = capped_price
+
     quantity = round(trade_amount / standby_price, qty_scale)
 
     min_notional = hata_api.COIN_SCALES.get(coin_id, {}).get("min_notional", 10.0)
