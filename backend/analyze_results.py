@@ -2,11 +2,11 @@ import os
 import re
 
 files = [
-    'backtesting result BTC',
-    'backtesting result SOL',
-    'backtesting result XRP',
-    'backtesting result LTC',
-    'backtesting result ETH'
+    'backtesting result BTC.md',
+    'backtesting result SOL.md',
+    'backtesting result XRP.md',
+    'backtesting result LTC.md',
+    'backtesting result ETH.md'
 ]
 
 results = {}

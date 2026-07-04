@@ -1,3 +1,16 @@
+"""
+⚠️ DEPRECATED — Legacy Backtest Engine (Simple Scalping)
+========================================================
+File ini TIDAK digunakan lagi. Semua backtesting sekarang menggunakan:
+  - backtest/dca_engine.py  (DCA Layering backtest)
+  - backtest/grid_engine.py (Grid Paired Orders backtest) [coming soon]
+
+Strategi dalam file ini (TP 0.6% / SL 0.4%) tidak relevan dengan
+sistem trading semasa (Grid Paired Orders v5.5+).
+
+Disimpan sebagai rujukan sahaja.
+"""
+
 import backtrader as bt
 import pandas as pd
 import logging

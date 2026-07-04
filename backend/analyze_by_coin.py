@@ -2,11 +2,11 @@ import os
 import re
 
 files = [
-    'backtesting result BTC',
-    'backtesting result SOL',
-    'backtesting result XRP',
-    'backtesting result LTC',
-    'backtesting result ETH'
+    'backtesting result BTC.md',
+    'backtesting result SOL.md',
+    'backtesting result XRP.md',
+    'backtesting result LTC.md',
+    'backtesting result ETH.md'
 ]
 
 markdown_content = "# Keputusan Keuntungan Bersih Mengikut Koin\n\n"
@@ -63,7 +63,11 @@ markdown_content += "Awak boleh pilih satu strategi yang konsisten di semua koin
 markdown_content += "> [!IMPORTANT]\n"
 markdown_content += "> Maklumkan pada saya jika awak sudah bersedia untuk pilih, kemudian kita akan siapkan `live_engine.py` dan push **v5.1.0** ke GitHub!"
 
-# Write directly to the artifact file
-artifact_path = r'C:\Users\User\.gemini\antigravity-ide\brain\43c2cc59-3dc4-46e4-9600-31f1a07b1a02\implementation_plan.md'
-with open(artifact_path, 'w', encoding='utf-8') as f:
+# Write to local analysis file
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+output_path = os.path.join(base_dir, 'backtesting analysis by coin.md')
+with open(output_path, 'w', encoding='utf-8') as f:
     f.write(markdown_content)
+
+print(f"Analysis written to: {output_path}")
+print(markdown_content)

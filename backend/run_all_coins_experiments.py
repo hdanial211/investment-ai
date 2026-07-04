@@ -73,7 +73,7 @@ for coin in coins:
     
     csv_path = os.path.join(base_dir, 'data', f'{coin}_USDT_1m.csv')
     model_path = os.path.join(base_dir, 'models', f'xgboost_scalping_{coin}_1y.pkl')
-    result_file = os.path.join(base_dir, f'backtesting result {coin}')
+    result_file = os.path.join(base_dir, f'backtesting result {coin}.md')
     
     # Initialize the file with a header
     with open(result_file, 'w', encoding='utf-8') as f:

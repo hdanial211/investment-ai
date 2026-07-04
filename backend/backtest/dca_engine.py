@@ -238,15 +238,17 @@ class DCALayeringStrategy(bt.Strategy):
             logger.debug("Order Canceled/Margin/Rejected")
             self.order = None
 
-def run_dca_backtest(csv_path, model_path, initial_cash=100000.0, trade_size_fiat=4000.0, commission=0.000, 
+def run_dca_backtest(csv_path, model_path, initial_cash=100000.0, trade_size_fiat=4000.0, commission=0.00125, 
                      drop_threshold=-0.05, take_profit_pct=0.10, max_layers_per_signal=6,
                      trailing_activation_pct=0.03, trailing_gap_pct=0.01, progress_callback=None,
                      enable_dca=True, stop_loss_pct=-0.004, ai_type="xgboost", use_martingale=False, use_dynamic_tp=False):
+    """Run DCA/Layering backtest.
+    
+    commission=0.00125 = 0.125% per side ≈ 0.25% round trip (Hata taker fee simulation).
+    """
     logger.info(f"Preparing data and {ai_type} AI predictions...")
     
     df = pd.read_csv(csv_path)
-    # Using full dataset as requested
-    pass
     if 'timestamp' in df.columns:
         df['timestamp'] = pd.to_datetime(df['timestamp'])
         

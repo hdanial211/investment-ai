@@ -3,13 +3,13 @@ import sys
 import json
 import traceback
 
-sys.path.insert(0, os.path.dirname(os.path.abspath('e:/PROJECTS/SEMUA PROJECT/INVESTMENT AI/backend/api.py')))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from backtest.dca_engine import run_dca_backtest
 
-base_dir = 'e:/PROJECTS/SEMUA PROJECT/INVESTMENT AI'
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 csv_path = os.path.join(base_dir, 'data', 'ETH_USDT_1m.csv')
 model_path = os.path.join(base_dir, 'models', 'xgboost_scalping_ETH_1y.pkl')
-result_file = os.path.join(base_dir, 'backtesting result')
+result_file = os.path.join(base_dir, 'backtesting result ETH batch10.md')
 
 experiments = [
     {

@@ -9,7 +9,7 @@ def add_analyzers(cerebro):
     """
     cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
     cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
-    cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe', riskfreerate=0.0, annualize=True, timeframe=bt.TimeFrame.Days)
+    cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe', riskfreerate=0.0, annualize=True, timeframe=bt.TimeFrame.Minutes)
     cerebro.addanalyzer(bt.analyzers.SQN, _name='sqn')
     cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
 
