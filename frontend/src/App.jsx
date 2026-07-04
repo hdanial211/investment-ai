@@ -492,7 +492,7 @@ function App() {
                       <div style={{ gridColumn: 'span 2' }}>
                         <span style={{ color: '#888' }}>Range: </span>
                         <span style={{ color: '#aaa', fontSize: '0.7rem' }}>
-                          {coinData.trade_history.oldest_trade || '?'} → {coinData.trade_history.newest_trade || '?'}
+                          {coinData.trade_history.oldest_trade ? new Date(coinData.trade_history.oldest_trade * 1000).toLocaleDateString() : '?'} → {coinData.trade_history.newest_trade ? new Date(coinData.trade_history.newest_trade * 1000).toLocaleDateString() : '?'}
                         </span>
                       </div>
                     </div>

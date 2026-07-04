@@ -1034,11 +1034,12 @@ def _sync_trade_history():
     for coin_id in coins:
         pair = f"{coin_id}_MYR"
         try:
-            # Fetch SEMUA trades dari 2 July (paginated)
+            # Fetch SEMUA fulfilled trades dari 2 July (paginated)
+            # Trade history API HANYA return executed/fulfilled trades
             trades = hata_api.get_all_trade_history(pair, start_time=start_timestamp)
 
             if not trades:
-                logger.info(f"[{coin_id}] No trades found since July 2.")
+                logger.info(f"[{coin_id}] No fulfilled trades since July 2.")
                 shared.engine_state[coin_id]["trade_history"] = {
                     "total_trades": 0, "buy_count": 0, "sell_count": 0,
                     "total_buy_cost": 0, "total_sell_revenue": 0,
@@ -1049,6 +1050,7 @@ def _sync_trade_history():
                 continue
 
             # Simple: kumpul semua buy cost, sell revenue, fees
+            # Hata trade fields (from API docs): is_buy, price, qty, fee, is_maker, trade_id, time
             total_buy_cost = 0.0
             total_sell_revenue = 0.0
             total_fees_myr = 0.0
@@ -1056,31 +1058,30 @@ def _sync_trade_history():
             sell_count = 0
 
             for t in trades:
-                side = t.get("side", "").upper()
+                is_buy = t.get("is_buy")          # boolean: True=BUY, False=SELL
                 price = float(t.get("price", 0))
                 qty = float(t.get("qty", 0))
-                quote_qty = float(t.get("quote_qty", price * qty))
                 fee = float(t.get("fee", 0))
-                fee_asset = t.get("fee_asset", "")
+                myr_amount = price * qty           # Hata tak ada quote_qty dalam trade history
 
-                # Convert fee to MYR
-                if fee_asset == "MYR":
-                    fee_myr = fee
-                elif fee_asset == coin_id:
+                # Fee conversion ke MYR:
+                # BUY → fee dalam coin (e.g. ETH), convert: fee × price
+                # SELL → fee dalam MYR, guna terus
+                if is_buy:
                     fee_myr = fee * price
                 else:
-                    fee_myr = 0.0
+                    fee_myr = fee
 
                 total_fees_myr += fee_myr
 
-                if side == "BUY":
-                    total_buy_cost += quote_qty
+                if is_buy:
+                    total_buy_cost += myr_amount
                     buy_count += 1
-                elif side == "SELL":
-                    total_sell_revenue += quote_qty
+                else:
+                    total_sell_revenue += myr_amount
                     sell_count += 1
 
-            # ★ P&L = SELL - BUY - FEES. Simple. Direct dari Hata.
+            # ★ P&L = SELL - BUY - FEES. Simple. Direct dari Hata fulfilled trades.
             pnl = total_sell_revenue - total_buy_cost - total_fees_myr
 
             # Set terus — ini satu-satunya sumber kebenaran
@@ -1095,11 +1096,11 @@ def _sync_trade_history():
                 "total_fees": round(total_fees_myr, 4),
                 "pnl": round(pnl, 4),
                 "last_sync": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "oldest_trade": trades[-1].get("created_at", "") if trades else "",
-                "newest_trade": trades[0].get("created_at", "") if trades else ""
+                "oldest_trade": trades[-1].get("time", "") if trades else "",
+                "newest_trade": trades[0].get("time", "") if trades else ""
             }
 
-            logger.info(f"[{coin_id}] SYNC: {len(trades)} trades | "
+            logger.info(f"[{coin_id}] SYNC: {len(trades)} fulfilled trades | "
                         f"Buy: RM{total_buy_cost:.2f} ({buy_count}) | "
                         f"Sell: RM{total_sell_revenue:.2f} ({sell_count}) | "
                         f"Fees: RM{total_fees_myr:.4f} | "

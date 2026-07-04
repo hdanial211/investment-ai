@@ -336,14 +336,19 @@ def get_trade_history(pair: str, limit: int = 50, start_time: str = None, end_ti
 
 def get_all_trade_history(pair: str, start_time: str = None, end_time: str = None) -> list:
     """Fetch ALL trade history with pagination (100 per page).
-    Returns flat list of all trades."""
+    Returns flat list of all fulfilled trades.
+    Hata API response format: { "trades": [...], "pages": N }
+    Trade history endpoint ONLY returns executed/fulfilled trades."""
     all_trades = []
     page = 1
     max_pages = 20  # Safety limit: 20 × 100 = 2000 trades max
     
     while page <= max_pages:
         res = get_trade_history(pair, limit=100, start_time=start_time, end_time=end_time, page=page)
-        trades = res.get("data", [])
+        
+        # Hata API docs: response = { "trades": [...], "pages": N }
+        trades = res.get("trades", [])
+        
         if not trades:
             break
         all_trades.extend(trades)
