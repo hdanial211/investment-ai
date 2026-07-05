@@ -55,3 +55,8 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+# ML/RL Artifacts
+ppo_crypto_tensorboard/
+ppo_lstm_tensorboard_*/
+*.zip

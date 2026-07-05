@@ -10,13 +10,15 @@ class CryptoTradingEnv(gym.Env):
     """
     metadata = {'render_modes': ['human']}
 
-    def __init__(self, df, feature_cols, initial_balance=1000.0, fee=0.001):
+    def __init__(self, df, feature_cols, initial_balance=1000.0,
+                 buy_fee=0.0025, sell_fee=0.0):
         super(CryptoTradingEnv, self).__init__()
         
         self.df = df.reset_index(drop=True)
         self.feature_cols = feature_cols
         self.initial_balance = initial_balance
-        self.fee = fee # 0.1% per side
+        self.buy_fee = buy_fee   # Taker 0.25% (entry buy)
+        self.sell_fee = sell_fee  # Maker 0% (pre-placed sell)
         
         # Actions: 0 = Wait, 1 = Buy (Enter Long)
         # AI no longer controls the SELL. Sell is governed by strict TP/SL math.
@@ -32,7 +34,7 @@ class CryptoTradingEnv(gym.Env):
         )
         
         # Hyperparameters for Scalping
-        self.TAKE_PROFIT = 0.006  # 0.6% target (Net ~0.4% after 0.2% round-trip fees)
+        self.TAKE_PROFIT = 0.006  # 0.6% target (Net ~0.35% after 0.25% buy fee)
         self.STOP_LOSS = -0.004   # 0.4% stop loss
         self.MAX_HOLD_TIME = 120  # Max 120 minutes per trade
         
@@ -92,7 +94,7 @@ class CryptoTradingEnv(gym.Env):
             if action == 1:
                 # Enter Trade
                 trade_amount = self.balance * 0.99
-                fee_paid = trade_amount * self.fee
+                fee_paid = trade_amount * self.buy_fee
                 self.crypto_held = (trade_amount - fee_paid) / current_price
                 self.balance -= trade_amount
                 self.position = 1
@@ -124,9 +126,8 @@ class CryptoTradingEnv(gym.Env):
                 
             if close_trade:
                 gross_revenue = self.crypto_held * current_price
-                fee_paid = gross_revenue * self.fee
+                fee_paid = gross_revenue * self.sell_fee
                 net_revenue = gross_revenue - fee_paid
-                profit_pct = (net_revenue - (self.balance + self.crypto_held * self.entry_price)) / (self.balance + self.crypto_held * self.entry_price) # Approximate
                 
                 self.balance += net_revenue
                 self.crypto_held = 0.0
