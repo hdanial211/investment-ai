@@ -14,7 +14,7 @@ class AIScalpingModel:
         self.model_path = model_path
         self.model = None
 
-    def train(self, csv_file_path):
+    def train(self, csv_file_path, coin_id=None):
         logger.info(f"Loading data from {csv_file_path}...")
         df = pd.read_csv(csv_file_path)
         
@@ -69,13 +69,22 @@ class AIScalpingModel:
                 labels[i] = label
             return labels
 
-        logger.info("Applying Triple Barrier Labelling (TP=0.6%, SL=-0.4%, Horizon=60m)...")
         closes = df_features['close'].values
         highs = df_features['high'].values
         lows = df_features['low'].values
         
-        # TP = 0.006 (0.6%), SL = -0.004 (-0.4%), Max Wait = 60 mins
-        labels = apply_triple_barrier(closes, highs, lows, 0.006, -0.004, 60)
+        # ★ v5.7.0: Use per-coin grid_gap_pct for Triple Barrier
+        grid_gap = 0.01  # default 1%
+        if coin_id:
+            try:
+                import shared
+                grid_gap = shared.engine_state.get(coin_id, {}).get("grid_gap_pct", 0.01)
+            except Exception:
+                pass
+        tp_pct = grid_gap
+        sl_pct = -grid_gap
+        logger.info(f"Applying Triple Barrier Labelling (TP=+{tp_pct*100:.2f}%, SL={sl_pct*100:.2f}%, Horizon=60m, coin={coin_id})...")
+        labels = apply_triple_barrier(closes, highs, lows, tp_pct, sl_pct, 60)
         df_features['target'] = labels
         
         df_features = df_features.iloc[:-60].reset_index(drop=True)

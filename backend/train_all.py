@@ -45,7 +45,7 @@ def main():
         if not os.path.exists(model_path):
             logger.info(f"Training AI Model for {symbol}...")
             ai = AIScalpingModel(model_path=model_path)
-            ai.train(csv_path)
+            ai.train(csv_path, coin_id=asset_name)
             logger.info(f"✅ AI Model for {symbol} successfully trained and saved!")
         else:
             logger.info(f"AI Model {model_name} already exists. Skipping.")

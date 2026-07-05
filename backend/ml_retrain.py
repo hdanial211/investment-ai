@@ -186,7 +186,15 @@ def retrain_coin(coin_id: str) -> bool:
         highs = df_features['high'].values
         lows = df_features['low'].values
         
-        labels = apply_triple_barrier(closes, highs, lows, 0.006, -0.004, 60)
+        # ★ v5.7.0: Use per-coin grid_gap_pct instead of hardcoded TP/SL
+        # TP = +grid_gap_pct (harga naik = sell target)
+        # SL = -grid_gap_pct (harga turun = masuk layer baru / loss)
+        grid_gap = shared.engine_state.get(coin_id, {}).get("grid_gap_pct", 0.01)
+        tp_pct = grid_gap       # e.g. ETH 0.005 = +0.5%
+        sl_pct = -grid_gap      # e.g. ETH -0.005 = -0.5%
+        logger.info(f"[{coin_id}] RETRAIN: Triple Barrier TP={tp_pct*100:.2f}% SL={sl_pct*100:.2f}% (grid_gap={grid_gap})")
+        
+        labels = apply_triple_barrier(closes, highs, lows, tp_pct, sl_pct, 60)
         df_features['target'] = labels
         df_features = df_features.iloc[:-60].reset_index(drop=True)
         
