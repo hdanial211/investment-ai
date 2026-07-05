@@ -208,6 +208,17 @@
 
 .ml-detail-row .profit { color: #10b981; }
 .ml-detail-row .loss { color: #ef4444; }
+.ml-detail-row .neutral { color: #fbbf24; }
+
+.ml-hata-divider {
+  margin: 0.4rem 0 0.2rem;
+  padding-top: 0.35rem;
+  border-top: 1px dashed rgba(0, 243, 255, 0.2);
+  font-size: 0.68rem;
+  color: #00f3ff;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
 
 .ml-retrain-btn {
   width: 100%;

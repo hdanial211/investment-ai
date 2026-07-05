@@ -181,23 +181,53 @@ function AILearning() {
                     <span>{s.total_predictions || 0}</span>
                   </div>
                   <div className="ml-detail-row">
-                    <span>Avg PnL/Trade</span>
-                    <span className={`${(s.avg_pnl_per_trade || 0) >= 0 ? 'profit' : 'loss'}`}>
-                      RM {(s.avg_pnl_per_trade || 0).toFixed(4)}
-                    </span>
-                  </div>
-                  <div className="ml-detail-row">
-                    <span>Model PnL</span>
-                    <span className={`${(s.total_model_pnl || 0) >= 0 ? 'profit' : 'loss'}`}>
-                      RM {(s.total_model_pnl || 0).toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="ml-detail-row">
                     <span>Mode</span>
                     <span style={{ color: getThresholdColor(threshold) }}>
                       {getThresholdLabel(threshold)}
                     </span>
                   </div>
+
+                  {/* ★ Real Hata API Data */}
+                  {s.hata_real && (
+                    <>
+                      <div className="ml-hata-divider">
+                        <span>📊 Hata API (Sebenar)</span>
+                      </div>
+                      <div className="ml-detail-row">
+                        <span>Cash P&L</span>
+                        <span className={`${(s.hata_real.cash_pnl || 0) >= 0 ? 'profit' : 'loss'}`}>
+                          RM {(s.hata_real.cash_pnl || 0).toFixed(2)}
+                        </span>
+                      </div>
+                      {s.hata_real.unsold_value > 0 && (
+                        <div className="ml-detail-row">
+                          <span>Unsold Held</span>
+                          <span className="neutral">RM {(s.hata_real.unsold_value || 0).toFixed(2)}</span>
+                        </div>
+                      )}
+                      <div className="ml-detail-row">
+                        <span>Expectancy</span>
+                        <span className={`${(s.hata_real.expectancy || 0) >= 0 ? 'profit' : 'loss'}`}>
+                          RM {(s.hata_real.expectancy || 0).toFixed(4)}/trade
+                        </span>
+                      </div>
+                      <div className="ml-detail-row">
+                        <span>Cycles (W/L)</span>
+                        <span>
+                          <span className="profit">{s.hata_real.win_count || 0}W</span>
+                          {' / '}
+                          <span className="loss">{s.hata_real.loss_count || 0}L</span>
+                        </span>
+                      </div>
+                      <div className="ml-detail-row">
+                        <span>Maker %</span>
+                        <span className={`${(s.hata_real.maker_pct || 0) >= 90 ? 'profit' : 'loss'}`}>
+                          {(s.hata_real.maker_pct || 0).toFixed(0)}%
+                        </span>
+                      </div>
+                    </>
+                  )}
+
                   <button
                     className={`ml-retrain-btn ${retraining[coin] ? 'loading' : ''}`}
                     onClick={(e) => { e.stopPropagation(); triggerRetrain(coin) }}
