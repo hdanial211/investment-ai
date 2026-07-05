@@ -1697,13 +1697,16 @@ async def process_kline(coin_id, kline):
             df_feat = calculate_features(df)
             latest = df_feat.iloc[-1:]
 
-            feature_cols = [c for c in latest.columns if c not in ['timestamp', 'target', 'ai_signal', 'future_close']]
-            X = latest[['open', 'high', 'low', 'close', 'volume', 'EMA_9', 'EMA_21', 'EMA_Trend', 'RSI_14', 'Volume_ROC'] +
-                       [c for c in feature_cols if c.startswith('BB')] +
-                       [c for c in feature_cols if c.startswith('MACD')] +
-                       [c for c in feature_cols if c.startswith('STOCH')] +
-                       [c for c in feature_cols if c.startswith('ATR')] +
-                       (['VWAP_D'] if 'VWAP_D' in feature_cols else (['VWAP'] if 'VWAP' in feature_cols else []))]
+            feature_cols = [c for c in latest.columns if c not in ['timestamp', 'target', 'ai_signal', 'future_close']]\r
+            X = latest[['open', 'high', 'low', 'close', 'volume', 'EMA_9', 'EMA_21', 'EMA_Trend', 'RSI_14', 'Volume_ROC'] +\r
+                       [c for c in feature_cols if c.startswith('BB')] +\r
+                       [c for c in feature_cols if c.startswith('MACD')] +\r
+                       [c for c in feature_cols if c.startswith('STOCH')] +\r
+                       [c for c in feature_cols if c.startswith('ATR')] +\r
+                       (['VWAP_D'] if 'VWAP_D' in feature_cols else (['VWAP'] if 'VWAP' in feature_cols else [])) +\r
+                       [c for c in ['Volatility_20', 'Trend_Strength', 'RSI_Slope', 'Volume_SMA_Ratio',\r
+                                    'Body_Size', 'Upper_Shadow', 'Lower_Shadow', 'Price_Position']\r
+                        if c in feature_cols]]
 
             probs = model.predict_proba(X)
             golden_prob = float(probs[0, 1])

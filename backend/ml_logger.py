@@ -495,3 +495,167 @@ def update_model_performance(coin_id: str, model_version: str, metrics: dict):
             
     except Exception as e:
         logger.error(f"[{coin_id}] Error updating model performance: {e}")
+
+
+# ─────────────────────────────────────────────
+# 6. Sync Real Trade Outcomes from Hata API
+# ─────────────────────────────────────────────
+def sync_outcomes_from_hata() -> dict:
+    """
+    Fetch REAL trade data dari Hata API (from 2 July 2026) dan analisis
+    per-coin performance. Ini adalah sumber kebenaran untuk AI Training.
+    
+    Returns dict per coin with: realized PnL, unrealized, expectancy, maker%,
+    trade cycles (paired buy→sell), dan raw stats.
+    
+    NOTE: Data SEBELUM 2 July tidak digunakan kerana bot belum stable.
+    """
+    import hata_api
+    
+    # 2 July 2026 00:00:00 MYT (UTC+8)
+    START_TIMESTAMP = "1782921600"
+    coins = ["BTC", "ETH", "SOL", "XRP", "LTC"]
+    
+    results = {}
+    
+    for coin_id in coins:
+        pair = f"{coin_id}_MYR"
+        try:
+            trades = hata_api.get_all_trade_history(pair, start_time=START_TIMESTAMP)
+            
+            if not trades:
+                results[coin_id] = {
+                    "total_fills": 0, "buy_count": 0, "sell_count": 0,
+                    "total_buy_cost": 0, "total_sell_revenue": 0,
+                    "total_fees": 0, "realized_pnl": 0,
+                    "unsold_qty": 0, "unsold_value": 0,
+                    "trade_cycles": [], "expectancy": 0,
+                    "maker_pct": 0, "avg_win": 0, "avg_loss": 0,
+                    "win_rate": 0, "win_count": 0, "loss_count": 0,
+                }
+                continue
+            
+            # ── Separate buys and sells ──
+            buys = []
+            sells = []
+            total_buy_cost = 0.0
+            total_sell_revenue = 0.0
+            total_fees_myr = 0.0
+            maker_count = 0
+            
+            for t in trades:
+                is_buy = t.get("is_buy")
+                price = float(t.get("price", 0))
+                qty = float(t.get("qty", 0))
+                fee = float(t.get("fee", 0))
+                myr_amount = price * qty
+                
+                # Fee conversion ke MYR
+                fee_myr = fee * price if is_buy else fee
+                total_fees_myr += fee_myr
+                
+                if t.get("is_maker"):
+                    maker_count += 1
+                
+                trade_info = {
+                    "price": price, "qty": qty, "myr_amount": myr_amount,
+                    "fee_myr": fee_myr, "is_maker": t.get("is_maker"),
+                    "created_at": t.get("created_at", "")
+                }
+                
+                if is_buy:
+                    total_buy_cost += myr_amount
+                    buys.append(trade_info)
+                else:
+                    total_sell_revenue += myr_amount
+                    sells.append(trade_info)
+            
+            # ── Pair buy→sell trade cycles (FIFO) ──
+            # Sort by timestamp ascending (oldest first)
+            buys_sorted = sorted(buys, key=lambda x: x["created_at"])
+            sells_sorted = sorted(sells, key=lambda x: x["created_at"])
+            
+            trade_cycles = []
+            buy_idx = 0
+            sell_idx = 0
+            
+            while buy_idx < len(buys_sorted) and sell_idx < len(sells_sorted):
+                b = buys_sorted[buy_idx]
+                s = sells_sorted[sell_idx]
+                
+                # Only pair if sell is AFTER buy
+                if s["created_at"] >= b["created_at"]:
+                    cycle_pnl = s["myr_amount"] - b["myr_amount"] - b["fee_myr"] - s["fee_myr"]
+                    trade_cycles.append({
+                        "buy_price": b["price"],
+                        "sell_price": s["price"],
+                        "buy_cost": b["myr_amount"],
+                        "sell_revenue": s["myr_amount"],
+                        "fees": b["fee_myr"] + s["fee_myr"],
+                        "pnl": round(cycle_pnl, 4),
+                        "outcome": "WIN" if cycle_pnl > 0 else "LOSS",
+                        "buy_at": b["created_at"],
+                        "sell_at": s["created_at"],
+                    })
+                    buy_idx += 1
+                    sell_idx += 1
+                else:
+                    sell_idx += 1
+            
+            # ── Calculate metrics ──
+            buy_qty_total = sum(b["qty"] for b in buys)
+            sell_qty_total = sum(s["qty"] for s in sells)
+            unsold_qty = buy_qty_total - sell_qty_total
+            
+            # Get current price for unsold value
+            import shared
+            current_price = shared.engine_state.get(coin_id, {}).get("current_price", 0)
+            unsold_value = unsold_qty * current_price if unsold_qty > 0 else 0
+            
+            cash_pnl = total_sell_revenue - total_buy_cost - total_fees_myr
+            
+            wins = [c for c in trade_cycles if c["outcome"] == "WIN"]
+            losses = [c for c in trade_cycles if c["outcome"] == "LOSS"]
+            
+            avg_win = sum(c["pnl"] for c in wins) / len(wins) if wins else 0
+            avg_loss = sum(c["pnl"] for c in losses) / len(losses) if losses else 0
+            win_rate = len(wins) / len(trade_cycles) if trade_cycles else 0
+            
+            # Expectancy = avg profit per completed trade cycle
+            expectancy = sum(c["pnl"] for c in trade_cycles) / len(trade_cycles) if trade_cycles else 0
+            
+            maker_pct = (maker_count / len(trades) * 100) if trades else 0
+            
+            results[coin_id] = {
+                "total_fills": len(trades),
+                "buy_count": len(buys),
+                "sell_count": len(sells),
+                "total_buy_cost": round(total_buy_cost, 4),
+                "total_sell_revenue": round(total_sell_revenue, 4),
+                "total_fees": round(total_fees_myr, 4),
+                "cash_pnl": round(cash_pnl, 4),
+                "unsold_qty": round(unsold_qty, 8),
+                "unsold_value": round(unsold_value, 2),
+                "realized_pnl": round(sum(c["pnl"] for c in trade_cycles), 4),
+                "trade_cycles": len(trade_cycles),
+                "win_count": len(wins),
+                "loss_count": len(losses),
+                "win_rate": round(win_rate * 100, 1),
+                "avg_win": round(avg_win, 4),
+                "avg_loss": round(avg_loss, 4),
+                "expectancy": round(expectancy, 4),
+                "maker_pct": round(maker_pct, 1),
+            }
+            
+            logger.info(
+                f"[{coin_id}] HATA SYNC: {len(trades)} fills | "
+                f"{len(trade_cycles)} cycles | WR={win_rate*100:.0f}% | "
+                f"Cash PnL=RM{cash_pnl:.2f} | Maker={maker_pct:.0f}%"
+            )
+            
+        except Exception as e:
+            logger.error(f"[{coin_id}] HATA SYNC ERROR: {e}")
+            results[coin_id] = {"error": str(e)}
+    
+    return results
+

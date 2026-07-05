@@ -143,6 +143,16 @@ def retrain_coin(coin_id: str) -> bool:
             'Volume_ROC'
         ] + bb_cols + macd_cols + stoch_cols + atr_cols
         
+        # ★ v5.7.0: New market regime & momentum features
+        new_features = [
+            'Volatility_20', 'Trend_Strength', 'RSI_Slope',
+            'Volume_SMA_Ratio', 'Body_Size', 'Upper_Shadow',
+            'Lower_Shadow', 'Price_Position'
+        ]
+        for nf in new_features:
+            if nf in df_features.columns:
+                feature_cols.append(nf)
+        
         vwap_col = 'VWAP_D' if 'VWAP_D' in df_features.columns else 'VWAP'
         if vwap_col in df_features.columns:
             feature_cols.append(vwap_col)

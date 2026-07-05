@@ -393,16 +393,40 @@ def sync_trade_history():
 
 @app.get("/api/ml-stats")
 def get_ml_stats():
-    """Get ML performance stats for all 5 coins (each independent)."""
+    """Get ML performance stats for all 5 coins (each independent).
+    Includes both ML DB stats and real Hata API data."""
     try:
         import ml_logger
         coins = ["BTC", "ETH", "SOL", "XRP", "LTC"]
         result = {}
         for coin_id in coins:
             result[coin_id] = ml_logger.get_ml_stats(coin_id)
+        
+        # ★ v5.7.0: Include real Hata API data
+        try:
+            hata_data = ml_logger.sync_outcomes_from_hata()
+            for coin_id in coins:
+                if coin_id in result and coin_id in hata_data:
+                    result[coin_id]["hata_real"] = hata_data[coin_id]
+        except Exception as hata_err:
+            logger.warning(f"ML stats: Could not fetch Hata data: {hata_err}")
+        
         return {"status": "ok", "data": result}
     except Exception as e:
         logger.error(f"ML stats error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/ml-sync-hata")
+def sync_ml_from_hata():
+    """Manually trigger sync of real trade outcomes from Hata API.
+    Returns per-coin analysis with realized PnL, expectancy, maker%, etc."""
+    try:
+        import ml_logger
+        result = ml_logger.sync_outcomes_from_hata()
+        return {"status": "ok", "data": result}
+    except Exception as e:
+        logger.error(f"ML Hata sync error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

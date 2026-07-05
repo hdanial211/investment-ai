@@ -54,6 +54,26 @@ def calculate_features(df: pd.DataFrame) -> pd.DataFrame:
     #   - ai_model.py (untuk initial training)
     # Function ini HANYA return features, TANPA target column.
 
+    # ─── 7. NEW: Market Regime & Momentum Features (v5.7.0) ───
+    # Volatility — detect sideways vs trending market
+    df['Volatility_20'] = df['close'].pct_change().rolling(20).std() * 100
+    df['Trend_Strength'] = abs(df['EMA_9'] - df['EMA_21']) / df['close'] * 100
+
+    # Momentum Quality — arah dan kekuatan momentum
+    df['RSI_Slope'] = df['RSI_14'].diff(5)
+    df['Volume_SMA_Ratio'] = df['volume'] / df['volume'].rolling(20).mean()
+
+    # Candle Analysis — kualiti candle sebelum entry
+    df['Body_Size'] = abs(df['close'] - df['open']) / df['close'] * 100
+    df['Upper_Shadow'] = (df['high'] - df[['open', 'close']].max(axis=1)) / df['close'] * 100
+    df['Lower_Shadow'] = (df[['open', 'close']].min(axis=1) - df['low']) / df['close'] * 100
+
+    # Price Position — dimana harga relative to 20-period range (0=bottom, 1=top)
+    rolling_low = df['low'].rolling(20).min()
+    rolling_high = df['high'].rolling(20).max()
+    rolling_range = rolling_high - rolling_low
+    df['Price_Position'] = ((df['close'] - rolling_low) / rolling_range).clip(0, 1)
+
     # Buang baris yang ada NaN disebabkan oleh calculation indicator
     df = df.dropna()
 
