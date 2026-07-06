@@ -1704,3 +1704,689 @@ Response (when symbol not sent):
   }
 }
 ```
+
+## Order Book
+
+**API Description:** Get current order book. Note that this request returns limited market depth. If you need to continuously monitor order book updates, please consider using Websocket Market Streams:
+* `<symbol>@depth<levels>`
+* `<symbol>@depth`
+
+You can use depth request together with `<symbol>@depth` streams to maintain a local order book.
+
+* **Method:** `depth`
+* **Note:** Retail Price Improvement(RPI) orders are not visible and excluded in the response message.
+
+### Request Example
+```json
+{
+    "id": "51e2affb-0aba-4821-ba75-f2625006eb43",
+    "method": "depth",
+    "params": {
+      "symbol": "BTCUSDT"
+    }
+}
+```
+
+* **Request Weight:** Adjusted based on the limit:
+  * 5, 10, 20, 50 = `2`
+  * 100 = `5`
+  * 500 = `10`
+  * 1000 = `20`
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | |
+| `limit` | `INT` | NO | Default 500; Valid limits:[5, 10, 20, 50, 100, 500, 1000] |
+
+### Response Example
+```json
+{
+  "id": "51e2affb-0aba-4821-ba75-f2625006eb43",
+  "status": 200,
+  "result": {
+    "lastUpdateId": 1027024,
+    "E": 1589436922972,   // Message output time
+    "T": 1589436922959,   // Transaction time
+    "bids": [
+      [
+        "4.00000000",     // PRICE
+        "431.00000000"    // QTY
+      ]
+    ],
+    "asks": [
+      [
+        "4.00000200",
+        "12.00000000"
+      ]
+    ]
+  },
+  "rateLimits": [
+    {
+      "rateLimitType": "REQUEST_WEIGHT",
+      "interval": "MINUTE",
+      "intervalNum": 1,
+      "limit": 2400,
+      "count": 5
+    }
+  ]
+}
+```
+
+## Symbol Price Ticker
+
+**API Description:** Latest price for a symbol or symbols.
+
+* **Method:** `ticker.price`
+
+### Request Example
+```json
+{
+    "id": "9d32157c-a556-4d27-9866-66760a174b57",
+    "method": "ticker.price",
+    "params": {
+        "symbol": "BTCUSDT"
+    }
+}
+```
+
+* **Request Weight:** 
+  * 1 for a single symbol
+  * 2 when the symbol parameter is omitted
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | NO | If the symbol is not sent, prices for all symbols will be returned in an array. |
+
+### Response Example
+```json
+{
+  "id": "9d32157c-a556-4d27-9866-66760a174b57",
+  "status": 200,
+  "result": {
+    "symbol": "BTCUSDT",
+    "price": "6000.01",
+    "time": 1589437530011   // Transaction time
+  },
+  "rateLimits": [
+    {
+      "rateLimitType": "REQUEST_WEIGHT",
+      "interval": "MINUTE",
+      "intervalNum": 1,
+      "limit": 2400,
+      "count": 2
+    }
+  ]
+}
+```
+
+OR (array)
+```json
+{
+  "id": "9d32157c-a556-4d27-9866-66760a174b57",
+  "status": 200,
+  "result": [
+    {
+      "symbol": "BTCUSDT",
+      "price": "6000.01",
+      "time": 1589437530011
+    }
+  ],
+  "rateLimits": [
+    {
+      "rateLimitType": "REQUEST_WEIGHT",
+      "interval": "MINUTE",
+      "intervalNum": 1,
+      "limit": 2400,
+      "count": 2
+    }
+  ]
+}
+```
+
+## Symbol Order Book Ticker
+
+**API Description:** Best price/qty on the order book for a symbol or symbols.
+
+* **Method:** `ticker.book`
+* **Note:** Retail Price Improvement(RPI) orders are not visible and excluded in the response message.
+
+### Request Example
+```json
+{
+    "id": "9d32157c-a556-4d27-9866-66760a174b57",
+    "method": "ticker.book",
+    "params": {
+        "symbol": "BTCUSDT"
+    }
+}
+```
+
+* **Request Weight:** 
+  * 2 for a single symbol
+  * 5 when the symbol parameter is omitted
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | NO | If the symbol is not sent, bookTickers for all symbols will be returned in an array. |
+
+> **Note:** The field `X-MBX-USED-WEIGHT-1M` in response header is not accurate from this endpoint, please ignore.
+
+### Response Example
+```json
+{
+  "id": "9d32157c-a556-4d27-9866-66760a174b57",
+  "status": 200,
+  "result": {
+    "lastUpdateId": 1027024,
+    "symbol": "BTCUSDT",
+    "bidPrice": "4.00000000",
+    "bidQty": "431.00000000",
+    "askPrice": "4.00000200",
+    "askQty": "9.00000000",
+    "time": 1589437530011   // Transaction time
+  },
+  "rateLimits": [
+    {
+      "rateLimitType": "REQUEST_WEIGHT",
+      "interval": "MINUTE",
+      "intervalNum": 1,
+      "limit": 2400,
+      "count": 2
+    }
+  ]
+}
+```
+
+OR (array)
+```json
+{
+  "id": "9d32157c-a556-4d27-9866-66760a174b57",
+  "status": 200,
+  "result": [
+    {
+      "lastUpdateId": 1027024,
+      "symbol": "BTCUSDT",
+      "bidPrice": "4.00000000",
+      "bidQty": "431.00000000",
+      "askPrice": "4.00000200",
+      "askQty": "9.00000000",
+      "time": 1589437530011
+    }
+  ],
+  "rateLimits": [
+    {
+      "rateLimitType": "REQUEST_WEIGHT",
+      "interval": "MINUTE",
+      "intervalNum": 1,
+      "limit": 2400,
+      "count": 2
+    }
+  ]
+}
+```
+
+## New Order (TRADE)
+
+**API Description:** Send in a new order.
+
+* **HTTP Request:** `POST /fapi/v1/order`
+* **Request Weight:** 1 on 10s order rate limit(`X-MBX-ORDER-COUNT-10S`); 1 on 1min order rate limit(`X-MBX-ORDER-COUNT-1M`); 0 on IP rate limit(`x-mbx-used-weight-1m`)
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | |
+| `side` | `ENUM` | YES | `BUY`, `SELL` |
+| `positionSide` | `ENUM` | NO | Default `BOTH` for One-way Mode; `LONG` or `SHORT` for Hedge Mode. It must be sent in Hedge Mode. |
+| `type` | `ENUM` | YES | `LIMIT`, `MARKET`, `STOP`, `STOP_MARKET`, `TAKE_PROFIT`, `TAKE_PROFIT_MARKET`, `TRAILING_STOP_MARKET` |
+| `timeInForce` | `ENUM` | NO | |
+| `quantity` | `DECIMAL` | NO | |
+| `reduceOnly` | `STRING` | NO | `"true"` or `"false"`. default `"false"`. Cannot be sent in Hedge Mode. |
+| `price` | `DECIMAL` | NO | |
+| `newClientOrderId` | `STRING` | NO | A unique id among open orders. Automatically generated if not sent. Can only be string following the rule: `^[\.A-Z\:/a-z0-9_-]{1,36}$` |
+| `newOrderRespType` | `ENUM` | NO | `"ACK"`, `"RESULT"`, default `"ACK"` |
+| `priceMatch` | `ENUM` | NO | only avaliable for LIMIT/STOP/TAKE_PROFIT order; can be set to `OPPONENT`/ `OPPONENT_5`/ `OPPONENT_10`/ `OPPONENT_20` : `/QUEUE`/ `QUEUE_5`/ `QUEUE_10`/ `QUEUE_20`; Can't be passed together with price. |
+| `selfTradePreventionMode` | `ENUM` | NO | `EXPIRE_TAKER`: expire taker order when STP triggers / `EXPIRE_MAKER`: expire taker order when STP triggers / `EXPIRE_BOTH`: expire both orders when STP triggers; default `EXPIRE_MAKER` |
+| `goodTillDate` | `LONG` | NO | order cancel time for `timeInForce` GTD, mandatory when timeInforce set to GTD; order the timestamp only retains second-level precision, ms part will be ignored; The goodTillDate timestamp must be greater than the current time plus 600 seconds and smaller than 253402300799000. |
+| `recvWindow` | `LONG` | NO | |
+| `timestamp` | `LONG` | YES | |
+
+> **Notes on Type-specific mandatory parameters:**
+> * `LIMIT`: `timeInForce`, `quantity`, `price`
+> * `MARKET`: `quantity`
+> 
+> * If `newOrderRespType` is sent as `RESULT`:
+>   * `MARKET` order: the final `FILLED` result of the order will be returned directly.
+>   * `LIMIT` order with special `timeInForce`: the final status result of the order (`FILLED` or `EXPIRED`) will be returned directly.
+> * `selfTradePreventionMode` is only effective when `timeInForce` set to `IOC` or `GTC` or `GTD`.
+> * In extreme market conditions, `timeInForce GTD` order auto cancel time might be delayed comparing to `goodTillDate`.
+
+### Response Example
+```json
+{
+  "clientOrderId": "testOrder",
+  "cumQty": "0",
+  "cumQuote": "0",          // Will be removed after CM migration
+  "executedQty": "0",
+  "orderId": 22542179,
+  "avgPrice": "0.00000",    // Will be removed after CM migration
+  "origQty": "10",
+  "price": "0",
+  "reduceOnly": false,
+  "side": "BUY",
+  "positionSide": "SHORT",
+  "status": "NEW",
+  "stopPrice": "0",         // ignored for LIMIT / MARKET orders
+  "closePosition": false,   // if Close-All
+  "symbol": "BTCUSDT",
+  "timeInForce": "GTD",
+  "type": "LIMIT",
+  "origType": "LIMIT",
+  "updateTime": 1566818724722,
+  "workingType": "CONTRACT_PRICE",
+  "priceProtect": false,             // if conditional order trigger is protected	
+  "priceMatch": "NONE",              // price match mode
+  "selfTradePreventionMode": "NONE", // self trading preventation mode
+  "goodTillDate": 1693207680000      // order pre-set auot cancel time for TIF GTD order
+}
+```
+
+## Place Multiple Orders (TRADE)
+
+**API Description:** Place Multiple Orders
+
+* **HTTP Request:** `POST /fapi/v1/batchOrders`
+* **Request Weight:** 5 on 10s order rate limit(`X-MBX-ORDER-COUNT-10S`); 1 on 1min order rate limit(`X-MBX-ORDER-COUNT-1M`); 5 on IP rate limit(`x-mbx-used-weight-1m`)
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `batchOrders` | `LIST<JSON>` | YES | order list. Max 5 orders. |
+| `recvWindow` | `LONG` | NO | |
+| `timestamp` | `LONG` | YES | |
+
+Where `batchOrders` is the list of order parameters in JSON.
+Example: `/fapi/v1/batchOrders?batchOrders=[{"type":"LIMIT","timeInForce":"GTC","symbol":"BTCUSDT","side":"BUY","price":"10001","quantity":"0.001"}]`
+
+**Batch Orders Parameter Rules** (same as New Order)
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | |
+| `side` | `ENUM` | YES | |
+| `positionSide` | `ENUM` | NO | Default `BOTH` for One-way Mode; `LONG` or `SHORT` for Hedge Mode. It must be sent with Hedge Mode. |
+| `type` | `ENUM` | YES | |
+| `timeInForce` | `ENUM` | NO | |
+| `quantity` | `DECIMAL` | YES | |
+| `reduceOnly` | `STRING` | NO | `"true"` or `"false"`. default `"false"`. |
+| `price` | `DECIMAL` | NO | |
+| `newClientOrderId` | `STRING` | NO | A unique id among open orders. Automatically generated if not sent. Can only be string following the rule: `^[\.A-Z\:/a-z0-9_-]{1,36}$` |
+| `newOrderRespType` | `ENUM` | NO | `"ACK"`, `"RESULT"`, default `"ACK"` |
+| `priceMatch` | `ENUM` | NO | only avaliable for LIMIT/STOP/TAKE_PROFIT order; can be set to `OPPONENT`/ `OPPONENT_5`/ `OPPONENT_10`/ `OPPONENT_20` : `/QUEUE`/ `QUEUE_5`/ `QUEUE_10`/ `QUEUE_20`; Can't be passed together with price. |
+| `selfTradePreventionMode` | `ENUM` | NO | `EXPIRE_TAKER` / `EXPIRE_MAKER` / `EXPIRE_BOTH`; default `NONE` |
+| `goodTillDate` | `LONG` | NO | order cancel time for `timeInForce` GTD. |
+
+> **Notes:**
+> * Batch orders are processed concurrently, and the order of matching is not guaranteed.
+> * The order of returned contents for batch orders is the same as the order of the order list.
+
+### Response Example
+```json
+[
+  {
+    "clientOrderId": "testOrder",
+    "cumQty": "0",
+    "cumQuote": "0",     // Will be removed after CM migration
+    "executedQty": "0",
+    "orderId": 22542179,
+    "avgPrice": "0.00000",     // Will be removed after CM migration
+    "origQty": "10",
+    "price": "0",
+    "reduceOnly": false,
+    "side": "BUY",
+    "positionSide": "SHORT",
+    "status": "NEW",
+    "stopPrice": "0",
+    "closePosition": false,
+    "symbol": "BTCUSDT",
+    "timeInForce": "GTC",
+    "type": "TRAILING_STOP_MARKET",
+    "origType": "TRAILING_STOP_MARKET",
+    "updateTime": 1566818724722,
+    "workingType": "CONTRACT_PRICE",
+    "priceProtect": false,             // if conditional order trigger is protected	
+    "priceMatch": "NONE",              // price match mode
+    "selfTradePreventionMode": "NONE", // self trading preventation mode
+    "goodTillDate": 1693207680000      // order pre-set auto cancel time for TIF GTD order
+  },
+  {
+    "code": -2022, 
+    "msg": "ReduceOnly Order is rejected."
+  }
+]
+```
+
+## Modify Order (TRADE)
+
+**API Description:** Order modify function, currently only LIMIT order modification is supported, modified orders will be reordered in the match queue.
+
+* **HTTP Request:** `PUT /fapi/v1/order`
+* **Request Weight:** 1 on 10s order rate limit(`X-MBX-ORDER-COUNT-10S`); 1 on 1min order rate limit(`X-MBX-ORDER-COUNT-1M`); 0 on IP rate limit(`x-mbx-used-weight-1m`)
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `orderId` | `LONG` | NO | |
+| `origClientOrderId` | `STRING` | NO | |
+| `symbol` | `STRING` | YES | |
+| `side` | `ENUM` | YES | `SELL`, `BUY` |
+| `quantity` | `DECIMAL` | YES | Order quantity, cannot be sent with `closePosition=true` |
+| `price` | `DECIMAL` | YES | |
+| `priceMatch` | `ENUM` | NO | only avaliable for LIMIT/STOP/TAKE_PROFIT order; can be set to `OPPONENT`/ `OPPONENT_5`/ `OPPONENT_10`/ `OPPONENT_20` : `/QUEUE`/ `QUEUE_5`/ `QUEUE_10`/ `QUEUE_20`; Can't be passed together with price. |
+| `recvWindow` | `LONG` | NO | |
+| `timestamp` | `LONG` | YES | |
+
+> **Notes:**
+> * Either `orderId` or `origClientOrderId` must be sent, and the `orderId` will prevail if both are sent.
+> * Both `quantity` and `price` must be sent, which is different from dapi modify order endpoint.
+> * When the new `quantity` or `price` doesn't satisfy `PRICE_FILTER` / `PERCENT_FILTER` / `LOT_SIZE`, amendment will be rejected and the order will stay as it is.
+> * However the order will be cancelled by the amendment in the following situations:
+>   * when the order is in partially filled status and the new quantity <= `executedQty`
+>   * When the order is `GTX` and the new price will cause it to be executed immediately
+> * One order can only be modified for less than 10000 times.
+
+### Response Example
+```json
+{
+  "orderId": 20072994037,
+  "symbol": "BTCUSDT",
+  "pair": "BTCUSDT",
+  "status": "NEW",
+  "clientOrderId": "LJ9R4QZDihCaS8UAOOLpgW",
+  "price": "30005",
+  "avgPrice": "0.0",     // Will be removed after CM migration
+  "origQty": "1",
+  "executedQty": "0",
+  "cumQty": "0",
+  "cumBase": "0",
+  "timeInForce": "GTC",
+  "type": "LIMIT",
+  "reduceOnly": false,
+  "closePosition": false,
+  "side": "BUY",
+  "positionSide": "LONG",
+  "stopPrice": "0",
+  "workingType": "CONTRACT_PRICE",
+  "priceProtect": false,
+  "origType": "LIMIT",
+  "priceMatch": "NONE",              // price match mode
+  "selfTradePreventionMode": "NONE", // self trading preventation mode
+  "goodTillDate": 0,                 // order pre-set auot cancel time for TIF GTD order
+  "updateTime": 1629182711600
+}
+```
+
+## Modify Multiple Orders (TRADE)
+
+**API Description:** Modify Multiple Orders (TRADE)
+
+* **HTTP Request:** `PUT /fapi/v1/batchOrders`
+* **Request Weight:** 5 on 10s order rate limit(`X-MBX-ORDER-COUNT-10S`); 1 on 1min order rate limit(`X-MBX-ORDER-COUNT-1M`); 5 on IP rate limit(`x-mbx-used-weight-1m`);
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `batchOrders` | `list<JSON>` | YES | order list. Max 5 orders. |
+| `recvWindow` | `LONG` | NO | |
+| `timestamp` | `LONG` | YES | |
+
+Where `batchOrders` is the list of order parameters in JSON:
+
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `orderId` | `LONG` | NO | |
+| `origClientOrderId` | `STRING` | NO | |
+| `symbol` | `STRING` | YES | |
+| `side` | `ENUM` | YES | `SELL`, `BUY` |
+| `quantity` | `DECIMAL` | YES | Order quantity, cannot be sent with `closePosition=true` |
+| `price` | `DECIMAL` | YES | |
+| `priceMatch` | `ENUM` | NO | only avaliable for LIMIT/STOP/TAKE_PROFIT order; can be set to `OPPONENT`/ `OPPONENT_5`/ `OPPONENT_10`/ `OPPONENT_20` : `/QUEUE`/ `QUEUE_5`/ `QUEUE_10`/ `QUEUE_20`; Can't be passed together with price. |
+| `stopPrice` | `DECIMAL` | NO | stop price, only `STOP`, `STOP_MARKET`, `TAKE_PROFIT`, `TAKE_PROFIT_MARKET` need |
+| `recvWindow` | `LONG` | NO | |
+| `timestamp` | `LONG` | YES | |
+
+> **Notes:**
+> * Parameter rules are same with Modify Order.
+> * Batch modify orders are processed concurrently, and the order of matching is not guaranteed.
+> * The order of returned contents for batch modify orders is the same as the order of the order list.
+> * One order can only be modified for less than 10000 times.
+
+### Response Example
+```json
+[
+  {
+    "orderId": 20072994037,
+    "symbol": "BTCUSDT",
+    "pair": "BTCUSDT",
+    "status": "NEW",
+    "clientOrderId": "LJ9R4QZDihCaS8UAOOLpgW",
+    "price": "30005",
+    "avgPrice": "0.0",     // Will be removed after CM migration
+    "origQty": "1",
+    "executedQty": "0",
+    "cumQty": "0",
+    "cumBase": "0",
+    "timeInForce": "GTC",
+    "type": "LIMIT",
+    "reduceOnly": false,
+    "closePosition": false,
+    "side": "BUY",
+    "positionSide": "LONG",
+    "stopPrice": "0",
+    "workingType": "CONTRACT_PRICE",
+    "priceProtect": false,
+    "origType": "LIMIT",
+    "priceMatch": "NONE",              // price match mode
+    "selfTradePreventionMode": "NONE", // self trading preventation mode
+    "goodTillDate": 0,                 // order pre-set auot cancel time for TIF GTD order
+    "updateTime": 1629182711600
+  },
+  {
+    "code": -2022, 
+    "msg": "ReduceOnly Order is rejected."
+  }
+]
+```
+
+## Get Order Modify History (USER_DATA)
+
+**API Description:** Get order modification history
+
+* **HTTP Request:** `GET /fapi/v1/orderAmendment`
+* **Request Weight:** 1
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | |
+| `orderId` | `LONG` | NO | |
+| `origClientOrderId` | `STRING` | NO | |
+| `startTime` | `LONG` | NO | Timestamp in ms to get modification history from INCLUSIVE |
+| `endTime` | `LONG` | NO | Timestamp in ms to get modification history until INCLUSIVE |
+| `limit` | `INT` | NO | Default 50; max 100 |
+| `recvWindow` | `LONG` | NO | |
+| `timestamp` | `LONG` | YES | |
+
+> **Notes:**
+> * Either `orderId` or `origClientOrderId` must be sent, and the `orderId` will prevail if both are sent.
+> * Order modify history longer than 3 months is not avaliable.
+
+### Response Example
+```json
+[
+    {
+        "amendmentId": 5363,	// Order modification ID
+        "symbol": "BTCUSDT",
+        "pair": "BTCUSDT",
+        "orderId": 20072994037,
+        "clientOrderId": "LJ9R4QZDihCaS8UAOOLpgW",
+        "time": 1629184560899,	// Order modification time
+        "amendment": {
+            "price": {
+                "before": "30004",
+                "after": "30003.2"
+            },
+            "origQty": {
+                "before": "1",
+                "after": "1"
+            },
+            "count": 3	// Order modification count, representing the number of times the order has been modified
+        }
+    },
+    {
+        "amendmentId": 5361,
+        "symbol": "BTCUSDT",
+        "pair": "BTCUSDT",
+        "orderId": 20072994037,
+        "clientOrderId": "LJ9R4QZDihCaS8UAOOLpgW",
+        "time": 1629184533946,
+        "amendment": {
+            "price": {
+                "before": "30005",
+                "after": "30004"
+            },
+            "origQty": {
+                "before": "1",
+                "after": "1"
+            },
+            "count": 2
+        }
+    },
+    {
+        "amendmentId": 5325,
+        "symbol": "BTCUSDT",
+        "pair": "BTCUSDT",
+        "orderId": 20072994037,
+        "clientOrderId": "LJ9R4QZDihCaS8UAOOLpgW",
+        "time": 1629182711787,
+        "amendment": {
+            "price": {
+                "before": "30002",
+                "after": "30005"
+            },
+            "origQty": {
+                "before": "1",
+                "after": "1"
+            },
+            "count": 1
+        }
+    }
+]
+```
+
+## Cancel Order (TRADE)
+
+**API Description:** Cancel an active order.
+
+* **HTTP Request:** `DELETE /fapi/v1/order`
+* **Request Weight:** 1
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | |
+| `orderId` | `LONG` | NO | |
+| `origClientOrderId` | `STRING` | NO | |
+| `recvWindow` | `LONG` | NO | |
+| `timestamp` | `LONG` | YES | |
+
+> **Note:** Either `orderId` or `origClientOrderId` must be sent.
+
+### Response Example
+```json
+{
+  "clientOrderId": "myOrder1",
+  "cumQty": "0",
+  "cumQuote": "0",          // Will be removed after CM migration
+  "executedQty": "0",
+  "orderId": 283194212,
+  "origQty": "11",
+  "origType": "TRAILING_STOP_MARKET",
+  "price": "0",
+  "avgPrice": "0.00",       // Will be removed after CM migration
+  "reduceOnly": false,
+  "side": "BUY",
+  "positionSide": "SHORT",
+  "status": "CANCELED",
+  "stopPrice": "9300",      // please ignore when order type is TRAILING_STOP_MARKET
+  "closePosition": false,   // if Close-All
+  "symbol": "BTCUSDT",
+  "timeInForce": "GTC",
+  "type": "TRAILING_STOP_MARKET",
+  "activatePrice": "9020",  // activation price, only return with TRAILING_STOP_MARKET order
+  "priceRate": "0.3",       // callback rate, only return with TRAILING_STOP_MARKET order
+  "updateTime": 1571110484038,
+  "workingType": "CONTRACT_PRICE",
+  "priceProtect": false,             // if conditional order trigger is protected	
+  "priceMatch": "NONE",              // price match mode
+  "selfTradePreventionMode": "NONE", // self trading preventation mode
+  "goodTillDate": 1693207680000      // order pre-set auot cancel time for TIF GTD order
+}
+```
+
+## Cancel Multiple Orders (TRADE)
+
+**API Description:** Cancel Multiple Orders
+
+* **HTTP Request:** `DELETE /fapi/v1/batchOrders`
+* **Request Weight:** 1
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | |
+| `orderIdList` | `LIST<LONG>` | NO | max length 10, e.g. `[1234567,2345678]` |
+| `origClientOrderIdList` | `LIST<STRING>` | NO | max length 10, e.g. `["my_id_1","my_id_2"]`, encode the double quotes. No space after comma. |
+| `recvWindow` | `LONG` | NO | |
+| `timestamp` | `LONG` | YES | |
+
+> **Note:** Either `orderIdList` or `origClientOrderIdList` must be sent.
+
+### Response Example
+```json
+[
+  {
+    "clientOrderId": "myOrder1",
+    "cumQty": "0",
+    "cumQuote": "0",          // Will be removed after CM migration
+    "executedQty": "0",
+    "orderId": 283194212,
+    "origQty": "11",
+    "origType": "TRAILING_STOP_MARKET",
+    "price": "0",
+    "reduceOnly": false,
+    "side": "BUY",
+    "positionSide": "SHORT",
+    "status": "CANCELED",
+    "stopPrice": "9300",      // please ignore when order type is TRAILING_STOP_MARKET
+    "closePosition": false,   // if Close-All
+    "symbol": "BTCUSDT",
+    "timeInForce": "GTC",
+    "type": "TRAILING_STOP_MARKET",
+    "activatePrice": "9020",  // activation price, only return with TRAILING_STOP_MARKET order
+    "priceRate": "0.3",       // callback rate, only return with TRAILING_STOP_MARKET order
+    "updateTime": 1571110484038,
+    "workingType": "CONTRACT_PRICE",
+    "priceProtect": false,             // if conditional order trigger is protected	
+    "priceMatch": "NONE",              // price match mode
+    "selfTradePreventionMode": "NONE", // self trading preventation mode
+    "goodTillDate": 1693207680000      // order pre-set auot cancel time for TIF GTD order
+  },
+  {
+    "code": -2011,
+    "msg": "Unknown order sent."
+  }
+]
+```
