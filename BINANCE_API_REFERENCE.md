@@ -915,3 +915,141 @@ Response (when symbol not sent):
   }
 ]
 ```
+
+## 24hr Ticker Price Change Statistics
+
+**API Description:** 24 hour rolling window price change statistics. Careful when accessing this with no symbol.
+
+* **HTTP Request:** `GET /fapi/v1/ticker/24hr`
+* **Request Weight:**
+  * 1 for a single symbol
+  * 40 when the symbol parameter is omitted
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | NO | If the symbol is not sent, tickers for all symbols will be returned in an array. |
+
+### Response Example
+Response:
+```json
+{
+  "symbol": "BTCUSDT",
+  "priceChange": "-94.99999800",
+  "priceChangePercent": "-95.960",
+  "weightedAvgPrice": "0.29628482",
+  "lastPrice": "4.00000200",
+  "lastQty": "200.00000000",
+  "openPrice": "99.00000000",
+  "highPrice": "100.00000000",
+  "lowPrice": "0.10000000",
+  "volume": "8913.30000000",
+  "quoteVolume": "15.30000000",
+  "openTime": 1499783499040,
+  "closeTime": 1499869899040,
+  "firstId": 28385,   // First tradeId
+  "lastId": 28460,    // Last tradeId
+  "count": 76         // Trade count
+}
+```
+
+Response (array):
+```json
+[
+  {
+    "symbol": "BTCUSDT",
+    "priceChange": "-94.99999800",
+    "priceChangePercent": "-95.960",
+    "weightedAvgPrice": "0.29628482",
+    "lastPrice": "4.00000200",
+    "lastQty": "200.00000000",
+    "openPrice": "99.00000000",
+    "highPrice": "100.00000000",
+    "lowPrice": "0.10000000",
+    "volume": "8913.30000000",
+    "quoteVolume": "15.30000000",
+    "openTime": 1499783499040,
+    "closeTime": 1499869899040,
+    "firstId": 28385,   // First tradeId
+    "lastId": 28460,    // Last tradeId
+    "count": 76         // Trade count
+  }
+]
+```
+
+## Symbol Price Ticker (Deprecated)
+
+**API Description:** Latest price for a symbol or symbols.
+
+* **HTTP Request:** `GET /fapi/v1/ticker/price`
+* **Request Weight:**
+  * 1 for a single symbol
+  * 2 when the symbol parameter is omitted
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | NO | If the symbol is not sent, prices for all symbols will be returned in an array. |
+
+### Response Example
+```json
+{
+  "symbol": "BTCUSDT",
+  "price": "6000.01",
+  "time": 1589437530011   // Transaction time
+}
+```
+
+## Symbol Price Ticker V2
+
+**API Description:** Latest price for a symbol or symbols.
+
+* **HTTP Request:** `GET /fapi/v2/ticker/price`
+* **Request Weight:**
+  * 1 for a single symbol
+  * 2 when the symbol parameter is omitted
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | NO | If the symbol is not sent, prices for all symbols will be returned in an array. |
+
+> **Note:** The field `X-MBX-USED-WEIGHT-1M` in response header is not accurate from this endpoint, please ignore.
+
+### Response Example
+```json
+{
+  "symbol": "BTCUSDT",
+  "price": "6000.01",
+  "time": 1589437530011   // Transaction time
+}
+```
+
+## Symbol Order Book Ticker
+
+**API Description:** Best price/qty on the order book for a symbol or symbols.
+
+* **HTTP Request:** `GET /fapi/v1/ticker/bookTicker`
+* **Note:** Retail Price Improvement(RPI) orders are not visible and excluded in the response message.
+* **Request Weight:**
+  * 2 for a single symbol
+  * 5 when the symbol parameter is omitted
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | NO | If the symbol is not sent, bookTickers for all symbols will be returned in an array. |
+
+> **Note:** The field `X-MBX-USED-WEIGHT-1M` in response header is not accurate from this endpoint, please ignore.
+
+### Response Example
+```json
+{
+  "symbol": "BTCUSDT",
+  "bidPrice": "4.00000000",
+  "bidQty": "431.00000000",
+  "askPrice": "4.00000200",
+  "askQty": "9.00000000",
+  "time": 1589437530011   // Transaction time
+}
+```
