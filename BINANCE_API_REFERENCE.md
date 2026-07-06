@@ -1441,3 +1441,266 @@ Response (without symbol):
   }
 ]
 ```
+
+## Query Index Price Constituents
+
+**API Description:** Query index price constituents
+
+* **HTTP Request:** `GET /fapi/v1/constituents`
+* **Request Weight:** 2
+* **Note:** Prices from constituents of TradFi perps will be hidden and displayed as -1.
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | |
+
+### Response Example
+```json
+{
+  "symbol": "BTCUSDT",
+  "time": 1745401553408,
+  "constituents": [
+    {
+      "exchange": "binance",
+      "symbol": "BTCUSDT",
+      "price": "94057.03000000",
+      "weight": "0.51282051"
+    },
+    {
+      "exchange": "coinbase",
+      "symbol": "BTC-USDT",
+      "price": "94140.58000000",
+      "weight": "0.15384615"
+    },
+    {
+      "exchange": "gateio",
+      "symbol": "BTC_USDT",
+      "price": "94060.10000000",
+      "weight": "0.02564103"
+    },
+    {
+      "exchange": "kucoin",
+      "symbol": "BTC-USDT",
+      "price": "94096.70000000",
+      "weight": "0.07692308"
+    },
+    {
+      "exchange": "mxc",
+      "symbol": "BTCUSDT",
+      "price": "94057.02000000",
+      "weight": "0.07692308"
+    },
+    {
+      "exchange": "bitget",
+      "symbol": "BTCUSDT",
+      "price": "94064.03000000",
+      "weight": "0.07692308"
+    },
+    {
+      "exchange": "bybit",
+      "symbol": "BTCUSDT",
+      "price": "94067.90000000",
+      "weight": "0.07692308"
+    }
+  ]
+}
+```
+
+## Query Insurance Fund Balance Snapshot
+
+**API Description:** Query Insurance Fund Balance Snapshot
+
+* **HTTP Request:** `GET /fapi/v1/insuranceBalance`
+* **Request Weight:** 1
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | NO | |
+
+### Response Example
+Response (pass symbol):
+```json
+{
+  "symbols":[
+    "BNBUSDT",
+    "BTCUSDT",
+    "BTCUSDT_250627",
+    "BTCUSDT_250926",
+    "ETHBTC",
+    "ETHUSDT",
+    "ETHUSDT_250627",
+    "ETHUSDT_250926"
+  ],
+  "assets":[
+    {
+      "asset":"USDC",
+      "marginBalance":"299999998.6497832",
+      "updateTime":1745366402000
+    },
+    {
+      "asset":"USDT",
+      "marginBalance":"793930579.315848",
+      "updateTime":1745366402000
+    },
+    {
+      "asset":"BTC",
+      "marginBalance":"61.73143554",
+      "updateTime":1745366402000
+    },
+    {
+      "asset":"BNFCR",
+      "marginBalance":"633223.99396922",
+      "updateTime":1745366402000
+    }
+  ]
+}
+```
+
+Response (not pass symbol):
+```json
+[
+  {
+    "symbols":[
+      "ADAUSDT",
+      "BCHUSDT",
+      "DOTUSDT",
+      "EOSUSDT",
+      "ETCUSDT",
+      "LINKUSDT",
+      "LTCUSDT",
+      "TRXUSDT",
+      "XLMUSDT",
+      "XMRUSDT",
+      "XRPUSDT"
+    ],
+    "assets":[
+      {
+        "asset":"USDT",
+        "marginBalance":"314151411.06482935",
+        "updateTime":1745366402000
+      }
+    ]
+  },
+  {
+    "symbols":[
+      "ACTUSDT",
+      "MUBARAKUSDT",
+      "OMUSDT",
+      "TSTUSDT"
+    ],
+    "assets":[
+      {
+        "asset":"USDT",
+        "marginBalance":"5166686.84431694",
+        "updateTime":1745366402000
+      }
+    ]
+  }
+]
+```
+
+## ADL Risk
+
+**API Description:** Query the symbol-level ADL risk rating. The ADL risk rating measures the likelihood of ADL during liquidation, and the rating takes into account the insurance fund balance, position concentration on the symbol, order book depth, price volatility, average leverage, unrealized PnL, and margin utilization at the symbol level. The rating can be high, medium and low, and is updated every 30 minutes.
+
+* **HTTP Request:** `GET /fapi/v1/symbolAdlRisk`
+* **Request Weight:** 1
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | NO | |
+
+### Response Example
+Response (with symbol):
+```json
+{
+  "symbol": "BTCUSDT",
+  "adlRisk": "low",  // ADL Risk rating
+  "updateTime": 1597370495002
+}
+```
+
+Response (when symbol not sent):
+```json
+[
+  {
+    "symbol": "BTCUSDT",
+    "adlRisk": "low",  // ADL Risk rating
+    "updateTime": 1597370495002
+  },
+  {
+    "symbol": "ETHUSDT",
+    "adlRisk": "high", // ADL Risk rating
+    "updateTime": 1597370495004
+  }
+]
+```
+
+## Trading Schedule
+
+**API Description:** Trading session schedules for the underlying assets of TradFi Perps are provided for a one-week period forward and one-week period backward starting from the day prior to the query time, covering the U.S. equity market, Korean equity market and the commodity market.
+
+**Session types per market:**
+* U.S. equity market: `"PRE_MARKET"`, `"REGULAR"`, `"AFTER_MARKET"`, `"OVERNIGHT"`, `"NO_TRADING"`.
+* Commodity market: `"REGULAR"`, `"NO_TRADING"`.
+* Korean equity market: `"REGULAR"`, `"NO_TRADING"`.
+
+* **HTTP Request:** `GET /fapi/v1/tradingSchedule`
+* **Request Weight:** 5
+
+### Request Parameters
+* NONE
+
+### Response Example
+```json
+{
+  "updateTime": 1761286643918,
+  "marketSchedules": {
+    "EQUITY": {
+      "sessions": [
+        {
+          "startTime": 1761177600000,
+          "endTime": 1761206400000,
+          "type": "OVERNIGHT"
+        },
+        {
+          "startTime": 1761206400000,
+          "endTime": 1761226200000,
+          "type": "PRE_MARKET"
+        }
+      ]
+    },
+    "COMMODITY": {
+      "sessions": [
+        {
+          "startTime": 1761724800000,
+          "endTime": 1761744600000,
+          "type": "NO_TRADING"
+        },
+        {
+          "startTime": 1761744600000,
+          "endTime": 1761768000000,
+          "type": "REGULAR"
+        }
+      ]
+    },
+    "KR_EQUITY": {
+      "sessions": [
+        {
+          "startTime": 1779958800000,
+          "endTime": 1780009200000,
+          "type": "NO_TRADING"
+        },
+        {
+          "startTime": 1780009200000,
+          "endTime": 1780030800000,
+          "type": "REGULAR"
+        }
+      ]
+    }
+  }
+}
+```
