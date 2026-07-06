@@ -2721,9 +2721,545 @@ Where `batchOrders` is the list of order parameters in JSON:
 ### Response Example
 ```json
 {
-  "amount": 100.0,
-  "code": 200,
   "msg": "Successfully modify position margin.",
   "type": 1
 }
+```
+
+## Position Information V3 (USER_DATA)
+
+**API Description:** Get current position information(only symbol that has position or open orders will be returned).
+
+* **HTTP Request:** `GET /fapi/v3/positionRisk`
+* **Request Weight:** 5
+* **Note:** Please use with user data stream `ACCOUNT_UPDATE` to meet your timeliness and accuracy needs.
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | NO | |
+| `recvWindow` | `LONG` | NO | |
+| `timestamp` | `LONG` | YES | |
+
+### Response Example
+
+For One-way position mode:
+```json
+[
+  {
+        "symbol": "ADAUSDT",                  // symbol
+        "positionSide": "BOTH",               // position side
+        "positionAmt": "30",                  // position amount, positive for long, negative for short
+        "entryPrice": "0.385",                // entry price
+        "breakEvenPrice": "0.385077",         // break-even price
+        "markPrice": "0.41047590",            // current mark price
+        "unRealizedProfit": "0.76427700",     // unrealized profit
+        "liquidationPrice": "0",              // liquidation price
+        "isolatedMargin": "0",                // isolated margin
+        "notional": "12.31427700",            // notional value of position
+        "marginAsset": "USDT",                // margin asset
+        "isolatedWallet": "0",                // isolated wallet (if isolated position)
+        "initialMargin": "0.61571385",        // initial margin required with current mark price
+        "maintMargin": "0.08004280",          // maintenance margin required
+        "positionInitialMargin": "0.61571385",// initial margin required for positions with current mark price
+        "openOrderInitialMargin": "0",        // initial margin required for open orders with current mark price
+        "adl": 2,                             // auto-deleverage ranking
+        "bidNotional": "0",                   // ignore
+        "askNotional": "0",                   // ignore
+        "updateTime": 1720736417660           // update time
+  }
+]
+```
+
+For Hedge position mode:
+```json
+[
+  {
+        "symbol": "ADAUSDT",                  // symbol
+        "positionSide": "LONG",               // position side
+        "positionAmt": "30",                  // position amount, positive for long, negative for short
+        "entryPrice": "0.385",                // entry price
+        "breakEvenPrice": "0.385077",         // break-even price
+        "markPrice": "0.41047590",            // current mark price
+        "unRealizedProfit": "0.76427700",     // unrealized profit
+        "liquidationPrice": "0",              // liquidation price
+        "isolatedMargin": "0",                // isolated margin
+        "notional": "12.31427700",            // notional value of position
+        "marginAsset": "USDT",                // margin asset
+        "isolatedWallet": "0",                // isolated wallet (if isolated position)
+        "initialMargin": "0.61571385",        // initial margin required with current mark price
+        "maintMargin": "0.08004280",          // maintenance margin required
+        "positionInitialMargin": "0.61571385",// initial margin required for positions with current mark price
+        "openOrderInitialMargin": "0",        // initial margin required for open orders with current mark price
+        "adl": 2,                             // auto-deleverage ranking
+        "bidNotional": "0",                   // ignore
+        "askNotional": "0",                   // ignore
+        "updateTime": 1720736417660           // update time
+  },
+  {
+        "symbol": "COMPUSDT",                 // symbol
+        "positionSide": "SHORT",              // position side
+        "positionAmt": "-1.000",              // position amount, positive for long, negative for short
+        "entryPrice": "70.92841",             // entry price
+        "breakEvenPrice": "70.900038636",     // break-even price
+        "markPrice": "49.72023376",           // current mark price
+        "unRealizedProfit": "21.20817624",    // unrealized profit
+        "liquidationPrice": "2260.56757210",  // liquidation price
+        "isolatedMargin": "0",                // isolated margin
+        "notional": "-49.72023376",           // notional value of position
+        "marginAsset": "USDT",                // margin asset
+        "isolatedWallet": "0",                // isolated wallet (if isolated position)
+        "initialMargin": "2.48601168",        // initial margin required with current mark price
+        "maintMargin": "0.49720233",          // maintenance margin required
+        "positionInitialMargin": "2.48601168",// initial margin required for positions with current mark price
+        "openOrderInitialMargin": "0",        // initial margin required for open orders with current mark price
+        "adl": 2,                             // auto-deleverage ranking
+        "bidNotional": "0",                   // ignore
+        "askNotional": "0",                   // ignore
+        "updateTime": 1708943511656           // update time
+  }
+]
+```
+
+## Position ADL Quantile Estimation (USER_DATA)
+
+**API Description:** Position ADL Quantile Estimation
+
+Values update every 30s. Values 0, 1, 2, 3, 4 shows the queue position and possibility of ADL from low to high.
+* For positions of the symbol are in One-way Mode or isolated margined in Hedge Mode, `"LONG"`, `"SHORT"`, and `"BOTH"` will be returned to show the positions' adl quantiles of different position sides.
+* If the positions of the symbol are crossed margined in Hedge Mode:
+  * `"HEDGE"` as a sign will be returned instead of `"BOTH"`;
+  * A same value caculated on unrealized pnls on long and short sides' positions will be shown for `"LONG"` and `"SHORT"` when there are positions in both of long and short sides.
+
+* **HTTP Request:** `GET /fapi/v1/adlQuantile`
+* **Request Weight:** 5
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | NO | |
+| `recvWindow` | `LONG` | NO | |
+| `timestamp` | `LONG` | YES | |
+
+### Response Example
+```json
+[
+  {
+    "symbol": "ETHUSDT", 
+    "adlQuantile": 
+      {
+        // if the positions of the symbol are crossed margined in Hedge Mode, "LONG" and "SHORT" will be returned a same quantile value, and "HEDGE" will be returned instead of "BOTH".
+        "LONG": 3,  
+        "SHORT": 3, 
+        "HEDGE": 0   // only a sign, ignore the value
+      }
+    },
+  {
+    "symbol": "BTCUSDT", 
+      }
+  }
+ ]
+```
+
+## Get Position Margin Change History (TRADE)
+
+**API Description:** Get Position Margin Change History
+
+* **HTTP Request:** `GET /fapi/v1/positionMargin/history`
+* **Request Weight:** 1
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | |
+| `type` | `INT` | NO | 1: Add position margin, 2: Reduce position margin |
+| `startTime` | `LONG` | NO | |
+| `endTime` | `LONG` | NO | Default current time if not pass |
+| `limit` | `INT` | NO | Default: 500 |
+| `recvWindow` | `LONG` | NO | |
+| `timestamp` | `LONG` | YES | |
+
+> **Notes:**
+> * Support querying future histories that are not older than 30 days
+> * The time between `startTime` and `endTime` can't be more than 30 days
+
+### Response Example
+```json
+[
+  {
+    "symbol": "BTCUSDT",
+    "type": 1,
+    "deltaType": "USER_ADJUST",
+    "amount": "23.36332311",
+    "asset": "USDT",
+    "time": 1578047897183,
+    "positionSide": "BOTH"
+  },
+  {
+    "symbol": "BTCUSDT",
+    "type": 1, 
+    "deltaType": "USER_ADJUST",
+    "amount": "100",
+    "asset": "USDT",
+    "time": 1578047900425,
+    "positionSide": "LONG" 
+  }
+]
+```
+
+## Test Order (TRADE)
+
+**API Description:** Testing order request, this order will not be submitted to matching engine
+
+* **HTTP Request:** `POST /fapi/v1/order/test`
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | |
+| `side` | `ENUM` | YES | |
+| `positionSide` | `ENUM` | NO | Default `BOTH` for One-way Mode ; `LONG` or `SHORT` for Hedge Mode. It must be sent in Hedge Mode. |
+| `type` | `ENUM` | YES | |
+| `timeInForce` | `ENUM` | NO | |
+| `quantity` | `DECIMAL` | NO | Cannot be sent with `closePosition=true`(Close-All) |
+| `reduceOnly` | `STRING` | NO | `"true"` or `"false"`. default `"false"`. Cannot be sent in Hedge Mode; cannot be sent with `closePosition=true` |
+| `price` | `DECIMAL` | NO | |
+| `newClientOrderId` | `STRING` | NO | A unique id among open orders. Automatically generated if not sent. Can only be string following the rule: `^[\.A-Z\:/a-z0-9_-]{1,36}$` |
+| `stopPrice` | `DECIMAL` | NO | Used with `STOP`/`STOP_MARKET` or `TAKE_PROFIT`/`TAKE_PROFIT_MARKET` orders. |
+| `closePosition` | `STRING` | NO | `true`, `false`; Close-All, used with `STOP_MARKET` or `TAKE_PROFIT_MARKET`. |
+| `activationPrice` | `DECIMAL` | NO | Used with `TRAILING_STOP_MARKET` orders, default as the latest price(supporting different workingType) |
+| `callbackRate` | `DECIMAL` | NO | Used with `TRAILING_STOP_MARKET` orders, min 0.1, max 5 where 1 for 1% |
+| `workingType` | `ENUM` | NO | stopPrice triggered by: `"MARK_PRICE"`, `"CONTRACT_PRICE"`. Default `"CONTRACT_PRICE"` |
+| `priceProtect` | `STRING` | NO | `"true"` or `"false"`, default `"false"`. Used with `STOP`/`STOP_MARKET` or `TAKE_PROFIT`/`TAKE_PROFIT_MARKET` orders. |
+| `newOrderRespType` | `ENUM` | NO | `"ACK"`, `"RESULT"`, default `"ACK"` |
+| `priceMatch` | `ENUM` | NO | only avaliable for LIMIT/STOP/TAKE_PROFIT order; can be set to `OPPONENT`/ `OPPONENT_5`/ `OPPONENT_10`/ `OPPONENT_20` : `/QUEUE`/ `QUEUE_5`/ `QUEUE_10`/ `QUEUE_20`; Can't be passed together with price. |
+| `selfTradePreventionMode` | `ENUM` | NO | `NONE`: No STP / `EXPIRE_TAKER`: expire taker order when STP triggers / `EXPIRE_MAKER`: expire taker order when STP triggers / `EXPIRE_BOTH`: expire both orders when STP triggers; default `NONE` |
+| `goodTillDate` | `LONG` | NO | order cancel time for `timeInForce` GTD, mandatory when timeInforce set to GTD; order the timestamp only retains second-level precision, ms part will be ignored; The goodTillDate timestamp must be greater than the current time plus 600 seconds and smaller than 253402300799000. |
+| `recvWindow` | `LONG` | NO | |
+| `timestamp` | `LONG` | YES | |
+
+> **Notes on Type-specific mandatory parameters:**
+> * `LIMIT`: `timeInForce`, `quantity`, `price`
+> * `MARKET`: `quantity`
+> * `STOP`/`TAKE_PROFIT`: `quantity`, `price`, `stopPrice`
+> * `STOP_MARKET`/`TAKE_PROFIT_MARKET`: `stopPrice`
+> * `TRAILING_STOP_MARKET`: `callbackRate`
+> 
+> * Order with type `STOP`, parameter `timeInForce` can be sent (default `GTC`).
+> * Order with type `TAKE_PROFIT`, parameter `timeInForce` can be sent (default `GTC`).
+> 
+> **Condition orders will be triggered when:**
+> * If parameter `priceProtect` is sent as `true`:
+>   * when price reaches the stopPrice, the difference rate between "MARK_PRICE" and "CONTRACT_PRICE" cannot be larger than the "triggerProtect" of the symbol
+>   * "triggerProtect" of a symbol can be got from `GET /fapi/v1/exchangeInfo`
+> * `STOP`, `STOP_MARKET`:
+>   * BUY: latest price ("MARK_PRICE" or "CONTRACT_PRICE") >= stopPrice
+>   * SELL: latest price ("MARK_PRICE" or "CONTRACT_PRICE") <= stopPrice
+> * `TAKE_PROFIT`, `TAKE_PROFIT_MARKET`:
+>   * BUY: latest price ("MARK_PRICE" or "CONTRACT_PRICE") <= stopPrice
+>   * SELL: latest price ("MARK_PRICE" or "CONTRACT_PRICE") >= stopPrice
+> * `TRAILING_STOP_MARKET`:
+>   * BUY: the lowest price after order placed <= activationPrice, and the latest price >= the lowest price * (1 + callbackRate)
+>   * SELL: the highest price after order placed >= activationPrice, and the latest price <= the highest price * (1 - callbackRate)
+>   * For `TRAILING_STOP_MARKET`, if you got such error code: `{"code": -2021, "msg": "Order would immediately trigger."}` means that the parameters you send do not meet the following requirements:
+>     * BUY: `activationPrice` should be smaller than latest price.
+>     * SELL: `activationPrice` should be larger than latest price.
+> 
+> **Other Rules:**
+> * If `newOrderRespType` is sent as `RESULT`:
+>   * `MARKET` order: the final `FILLED` result of the order will be return directly.
+>   * `LIMIT` order with special `timeInForce`: the final status result of the order (`FILLED` or `EXPIRED`) will be returned directly.
+> * `STOP_MARKET`, `TAKE_PROFIT_MARKET` with `closePosition=true`:
+>   * Follow the same rules for condition orders.
+>   * If triggered, close all current long position(if SELL) or current short position(if BUY).
+>   * Cannot be used with `quantity` paremeter
+>   * Cannot be used with `reduceOnly` parameter
+>   * In Hedge Mode, cannot be used with BUY orders in LONG position side. and cannot be used with SELL orders in SHORT position side
+> * `selfTradePreventionMode` is only effective when `timeInForce` set to `IOC` or `GTC` or `GTD`.
+> * In extreme market conditions, `timeInForce GTD` order auto cancel time might be delayed comparing to `goodTillDate`.
+
+### Response Example
+```json
+{
+  "clientOrderId": "testOrder",
+  "cumQty": "0",
+  "cumQuote": "0",
+  "executedQty": "0",
+  "orderId": 22542179,
+  "avgPrice": "0.00000",
+  "origQty": "10",
+  "price": "0",
+  "reduceOnly": false,
+  "side": "BUY",
+  "positionSide": "SHORT",
+  "status": "NEW",
+  "stopPrice": "9300",        // please ignore when order type is TRAILING_STOP_MARKET
+  "closePosition": false,     // if Close-All
+  "symbol": "BTCUSDT",
+  "timeInForce": "GTD",
+  "type": "TRAILING_STOP_MARKET",
+  "origType": "TRAILING_STOP_MARKET",
+  "activatePrice": "9020",    // activation price, only return with TRAILING_STOP_MARKET order
+  "priceRate": "0.3",         // callback rate, only return with TRAILING_STOP_MARKET order
+  "updateTime": 1566818724722,
+  "workingType": "CONTRACT_PRICE",
+  "priceProtect": false,      // if conditional order trigger is protected	
+  "priceMatch": "NONE",              // price match mode
+  "selfTradePreventionMode": "NONE", // self trading preventation mode
+  "goodTillDate": 1693207680000      // order pre-set auot cancel time for TIF GTD order
+}
+```
+
+## New Algo Order (TRADE)
+
+**API Description:** Send in a new algo (conditional) order. Use this endpoint to place TP/SL (Take Profit / Stop Loss) and trailing stop orders on USD-M Futures. Supported order types under `algoType=CONDITIONAL` are `STOP_MARKET`, `TAKE_PROFIT_MARKET`, `STOP`, `TAKE_PROFIT`, and `TRAILING_STOP_MARKET`.
+
+* **HTTP Request:** `POST /fapi/v1/algoOrder`
+* **Request Weight:** 1 on 10s order rate limit(`X-MBX-ORDER-COUNT-10S`); 1 on 1min order rate limit(`X-MBX-ORDER-COUNT-1M`); 0 on IP rate limit(`x-mbx-used-weight-1m`)
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `algoType` | `ENUM` | YES | Only support `CONDITIONAL` |
+| `symbol` | `STRING` | YES | |
+| `side` | `ENUM` | YES | |
+| `positionSide` | `ENUM` | NO | Default `BOTH` for One-way Mode ; `LONG` or `SHORT` for Hedge Mode. It must be sent in Hedge Mode. |
+| `type` | `ENUM` | YES | For CONDITIONAL algoType, `STOP_MARKET`/`TAKE_PROFIT_MARKET`/`STOP`/`TAKE_PROFIT`/`TRAILING_STOP_MARKET` as order type |
+| `timeInForce` | `ENUM` | NO | `IOC` or `GTC` or `FOK` or `GTX`, default `GTC` |
+| `quantity` | `DECIMAL` | NO | Cannot be sent with `closePosition=true`(Close-All) |
+| `price` | `DECIMAL` | NO | |
+| `triggerPrice` | `DECIMAL` | NO | |
+| `workingType` | `ENUM` | NO | triggerPrice triggered by: `MARK_PRICE`, `CONTRACT_PRICE`. Default `CONTRACT_PRICE` |
+| `priceMatch` | `ENUM` | NO | only avaliable for LIMIT/STOP/TAKE_PROFIT order; can be set to `OPPONENT`/ `OPPONENT_5`/ `OPPONENT_10`/ `OPPONENT_20` : `/QUEUE`/ `QUEUE_5`/ `QUEUE_10`/ `QUEUE_20`; Can't be passed together with price. |
+| `closePosition` | `STRING` | NO | `true`, `false`; Close-All, used with `STOP_MARKET` or `TAKE_PROFIT_MARKET`. |
+| `priceProtect` | `STRING` | NO | `"true"` or `"false"`, default `"false"`. Used with `STOP_MARKET` or `TAKE_PROFIT_MARKET` order. when price reaches the triggerPrice, the difference rate between "MARK_PRICE" and "CONTRACT_PRICE" cannot be larger than the Price Protection Threshold of the symbol. |
+| `reduceOnly` | `STRING` | NO | `"true"` or `"false"`. default `"false"`. Cannot be sent in Hedge Mode; cannot be sent with `closePosition=true` |
+| `activatePrice` | `DECIMAL` | NO | Used with `TRAILING_STOP_MARKET` orders, default as the latest price(supporting different workingType) |
+| `callbackRate` | `DECIMAL` | NO | Used with `TRAILING_STOP_MARKET` orders, min 0.1, max 10 where 1 for 1% |
+| `clientAlgoId` | `STRING` | NO | A unique id among open orders. Automatically generated if not sent. Can only be string following the rule: `^[\.A-Z\:/a-z0-9_-]{1,36}$` |
+| `newOrderRespType` | `ENUM` | NO | `"ACK"`, `"RESULT"`, default `"ACK"` |
+| `selfTradePreventionMode` | `ENUM` | NO | `EXPIRE_TAKER`/ `EXPIRE_MAKER`/ `EXPIRE_BOTH`; default `NONE` |
+| `goodTillDate` | `LONG` | NO | order cancel time for `timeInForce` GTD. |
+| `recvWindow` | `LONG` | NO | |
+| `timestamp` | `LONG` | YES | |
+
+> **Notes:**
+> * Algo order with type `STOP`, parameter `timeInForce` can be sent (default `GTC`).
+> * Algo order with type `TAKE_PROFIT`, parameter `timeInForce` can be sent (default `GTC`).
+> 
+> **Condition orders will be triggered when:**
+> * If parameter `priceProtect` is sent as `true`:
+>   * when price reaches the `triggerPrice`, the difference rate between "MARK_PRICE" and "CONTRACT_PRICE" cannot be larger than the "triggerProtect" of the symbol
+>   * "triggerProtect" of a symbol can be got from `GET /fapi/v1/exchangeInfo`
+> * `STOP`, `STOP_MARKET`:
+>   * BUY: latest price ("MARK_PRICE" or "CONTRACT_PRICE") >= triggerPrice
+>   * SELL: latest price ("MARK_PRICE" or "CONTRACT_PRICE") <= triggerPrice
+> * `TAKE_PROFIT`, `TAKE_PROFIT_MARKET`:
+>   * BUY: latest price ("MARK_PRICE" or "CONTRACT_PRICE") <= triggerPrice
+>   * SELL: latest price ("MARK_PRICE" or "CONTRACT_PRICE") >= triggerPrice
+> * `TRAILING_STOP_MARKET`:
+>   * BUY: the lowest price after order placed <= activatePrice, and the latest price >= the lowest price * (1 + callbackRate)
+>   * SELL: the highest price after order placed >= activatePrice, and the latest price <= the highest price * (1 - callbackRate)
+>   * For `TRAILING_STOP_MARKET`, if you got such error code: `{"code": -2021, "msg": "Order would immediately trigger."}` means that the parameters you send do not meet the following requirements:
+>     * BUY: `activatePrice` should be smaller than latest price.
+>     * SELL: `activatePrice` should be larger than latest price.
+> 
+> * `STOP_MARKET`, `TAKE_PROFIT_MARKET` with `closePosition=true`:
+>   * Follow the same rules for condition orders.
+>   * If triggered, close all current long position (if SELL) or current short position (if BUY).
+>   * Cannot be used with `quantity` paremeter
+>   * Cannot be used with `reduceOnly` parameter
+>   * In Hedge Mode, cannot be used with BUY orders in LONG position side. and cannot be used with SELL orders in SHORT position side
+> * `selfTradePreventionMode` is only effective when `timeInForce` set to `IOC` or `GTC` or `GTD`.
+
+### Response Example
+```json
+{
+   "algoId": 2146760,
+   "clientAlgoId": "6B2I9XVcJpCjqPAJ4YoFX7",
+   "algoType": "CONDITIONAL",
+   "orderType": "TAKE_PROFIT",
+   "symbol": "BNBUSDT",
+   "side": "SELL",
+   "positionSide": "BOTH",
+   "timeInForce": "GTC",
+   "quantity": "0.01",
+   "algoStatus": "NEW",
+   "triggerPrice": "750.000",
+   "price": "750.000",
+   "icebergQuantity": null,
+   "selfTradePreventionMode": "EXPIRE_MAKER",
+   "workingType": "CONTRACT_PRICE",
+   "priceMatch": "NONE",
+   "closePosition": false,
+   "priceProtect": false,
+   "reduceOnly": false,
+   "activatePrice": "", //TRAILING_STOP_MARKET order
+   "callbackRate": "",  //TRAILING_STOP_MARKET order
+   "createTime": 1750485492076,
+   "updateTime": 1750485492076,
+   "triggerTime": 0,
+   "goodTillDate": 0
+}
+```
+
+## Cancel Algo Order (TRADE)
+
+**API Description:** Cancel an active algo (conditional) order, including TP/SL (Take Profit / Stop Loss) and trailing stop orders on USD-M Futures.
+
+* **HTTP Request:** `DELETE /fapi/v1/algoOrder`
+* **Request Weight:** 1
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `algoId` | `LONG` | NO | |
+| `clientAlgoId` | `STRING` | NO | |
+| `recvWindow` | `LONG` | NO | |
+| `timestamp` | `LONG` | YES | |
+
+> **Note:** Either `algoId` or `clientAlgoId` must be sent.
+
+### Response Example
+```json
+{
+   "algoId": 2146760,
+   "clientAlgoId": "6B2I9XVcJpCjqPAJ4YoFX7",
+   "code": "200",
+   "msg": "success"
+}
+```
+
+## Cancel All Algo Open Orders (TRADE)
+
+**API Description:** Cancel all open algo (conditional) orders on a symbol, including TP/SL (Take Profit / Stop Loss) and trailing stop orders on USD-M Futures.
+
+* **HTTP Request:** `DELETE /fapi/v1/algoOpenOrders`
+* **Request Weight:** 1
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | |
+| `recvWindow` | `LONG` | NO | |
+| `timestamp` | `LONG` | YES | |
+
+### Response Example
+```json
+{
+  "code": 200, 
+  "msg": "The operation of cancel all open order is done."
+}
+```
+
+## Query Algo Order (USER_DATA)
+
+**API Description:** Check the status of an algo (conditional) order, such as TP/SL (Take Profit / Stop Loss) or trailing stop orders on USD-M Futures.
+
+> **Note:** These orders will not be found:
+> * order status is `CANCELED` or `EXPIRED` AND order has NO filled trade AND created time + 3 days < current time
+> * order create time + 90 days < current time
+
+* **HTTP Request:** `GET /fapi/v1/algoOrder`
+* **Request Weight:** 1
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `algoId` | `LONG` | NO | |
+| `clientAlgoId` | `STRING` | NO | |
+| `recvWindow` | `LONG` | NO | |
+| `timestamp` | `LONG` | YES | |
+
+> **Notes:**
+> * Either `algoId` or `clientAlgoId` must be sent.
+> * `algoId` is self-increment for each specific symbol
+
+### Response Example
+```json
+{
+   "algoId": 2146760,
+   "clientAlgoId": "6B2I9XVcJpCjqPAJ4YoFX7",
+   "algoType": "CONDITIONAL",
+   "orderType": "TAKE_PROFIT",
+   "symbol": "BNBUSDT",
+   "side": "SELL",
+   "positionSide": "BOTH",
+   "timeInForce": "GTC",
+   "quantity": "0.01",
+   "algoStatus": "CANCELED",
+   "actualOrderId": "",    // "" if not triggered; orderId if triggered
+   "actualPrice": "0.00000",   // 0 if not triggered; average price if filled/partially filled
+   "actualType": "LIMIT",  // optional field only when triggered
+   "actualQty": "0.01",    // optional field only when filled/partially filled
+   "triggerPrice": "750.000",
+   "price": "750.000",
+   "icebergQuantity": null,
+   "tpOrderType": "",
+   "selfTradePreventionMode": "EXPIRE_MAKER",
+   "workingType": "CONTRACT_PRICE",
+   "priceMatch": "NONE",
+   "closePosition": false,
+   "priceProtect": false,
+   "reduceOnly": false,
+   "createTime": 1750485492076,
+   "updateTime": 1750514545091,
+   "triggerTime": 0,
+   "goodTillDate": 0
+}
+```
+
+## Current All Algo Open Orders (USER_DATA)
+
+**API Description:** Get all open algo (conditional) orders on a symbol, including TP/SL (Take Profit / Stop Loss) and trailing stop orders on USD-M Futures.
+
+* **HTTP Request:** `GET /fapi/v1/openAlgoOrders`
+* **Request Weight:** 1 for a single symbol; 40 when the symbol parameter is omitted
+* **Note:** Careful when accessing this with no symbol.
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `algoType` | `STRING` | NO | |
+| `symbol` | `STRING` | NO | If the symbol is not sent, orders for all symbols will be returned in an array. |
+| `algoId` | `LONG` | NO | |
+| `recvWindow` | `LONG` | NO | |
+| `timestamp` | `LONG` | YES | |
+
+### Response Example
+```json
+[
+   {
+       "algoId": 2148627,
+       "clientAlgoId": "MRumok0dkhrP4kCm12AHaB",
+       "algoType": "CONDITIONAL",
+       "orderType": "TAKE_PROFIT",
+       "symbol": "BNBUSDT",
+       "side": "SELL",
+       "positionSide": "BOTH",
+       "timeInForce": "GTC",
+       "quantity": "0.01",
+       "algoStatus": "NEW",
+       "actualOrderId": "",
+       "actualPrice": "0.00000",
+       "triggerPrice": "750.000",
+       "price": "750.000",
+       "icebergQuantity": null,
+       "tpTriggerPrice": "0.000",
+       "tpPrice": "0.000",
+       "slTriggerPrice": "0.000",
+       "slPrice": "0.000",
+       "tpOrderType": "",
+       "selfTradePreventionMode": "EXPIRE_MAKER",
+       "workingType": "CONTRACT_PRICE",
+       "priceMatch": "NONE",
+       "closePosition": false,
+       "priceProtect": false,
+       "reduceOnly": false,
+       "createTime": 1750514941540,
+       "updateTime": 1750514941540,
+       "triggerTime": 0,
+       "goodTillDate": 0
+   }
+]
 ```
