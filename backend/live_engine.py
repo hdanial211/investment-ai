@@ -1709,7 +1709,18 @@ async def process_kline(coin_id, kline):
                              'Body_Size', 'Upper_Shadow', 'Lower_Shadow', 'Price_Position']
                  if c in feature_cols]
             )
-            X = latest[base_cols + extra_cols]
+            all_cols = base_cols + extra_cols
+
+            # ★ v5.7.0 FIX: Only pass features the model was trained with
+            # Old models don't know new features — after retrain they'll use all
+            try:
+                model_features = model.get_booster().feature_names
+                if model_features:
+                    all_cols = [c for c in model_features if c in latest.columns]
+            except Exception:
+                pass  # fallback to all_cols
+
+            X = latest[all_cols]
 
             probs = model.predict_proba(X)
             golden_prob = float(probs[0, 1])
