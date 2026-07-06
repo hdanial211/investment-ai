@@ -1236,3 +1236,208 @@ Response (array):
   }  
 ]
 ```
+
+## Long/Short Ratio
+
+**API Description:** Query symbol Long/Short Ratio
+
+* **HTTP Request:** `GET /futures/data/globalLongShortAccountRatio`
+* **Request Weight:** 0
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | |
+| `period` | `ENUM` | YES | `"5m"`,`"15m"`,`"30m"`,`"1h"`,`"2h"`,`"4h"`,`"6h"`,`"12h"`,`"1d"` |
+| `limit` | `LONG` | NO | default 30, max 500 |
+| `startTime` | `LONG` | NO | |
+| `endTime` | `LONG` | NO | |
+
+> **Notes:**
+> * If `startTime` and `endTime` are not sent, the most recent data is returned.
+> * Only the data of the latest 30 days is available.
+> * IP rate limit 1000 requests/5min
+
+### Response Example
+```json
+[
+  { 
+    "symbol":"BTCUSDT",  // long/short account num ratio of all traders
+    "longShortRatio":"0.1960",  //long account num ratio of all traders
+    "longAccount": "0.6622",   // short account num ratio of all traders
+    "shortAccount":"0.3378", 
+    "timestamp":"1583139600000"
+  },
+  {
+    "symbol":"BTCUSDT",
+    "longShortRatio":"1.9559",
+    "longAccount": "0.6617", 
+    "shortAccount":"0.3382", 	                
+    "timestamp":"1583139900000"
+  }   
+]
+```
+
+## Taker Buy/Sell Volume
+
+**API Description:** Taker Buy/Sell Volume
+
+* **HTTP Request:** `GET /futures/data/takerlongshortRatio`
+* **Request Weight:** 0
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | |
+| `period` | `ENUM` | YES | `"5m"`,`"15m"`,`"30m"`,`"1h"`,`"2h"`,`"4h"`,`"6h"`,`"12h"`,`"1d"` |
+| `limit` | `LONG` | NO | default 30, max 500 |
+| `startTime` | `LONG` | NO | |
+| `endTime` | `LONG` | NO | |
+
+> **Notes:**
+> * If `startTime` and `endTime` are not sent, the most recent data is returned.
+> * Only the data of the latest 30 days is available.
+> * IP rate limit 1000 requests/5min
+
+### Response Example
+```json
+[
+  { 
+    "buySellRatio":"1.5586",
+    "buyVol": "387.3300", 
+    "sellVol":"248.5030", 
+    "timestamp":"1585614900000"
+  },
+  { 
+    "buySellRatio":"1.3104",
+    "buyVol": "343.9290", 
+    "sellVol":"248.5030", 	                
+    "timestamp":"1583139900000"        
+  }    
+]
+```
+
+## Basis
+
+**API Description:** Query future basis
+
+* **HTTP Request:** `GET /futures/data/basis`
+* **Request Weight:** 0
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `pair` | `STRING` | YES | BTCUSDT |
+| `contractType` | `ENUM` | YES | `CURRENT_QUARTER`, `NEXT_QUARTER`, `PERPETUAL` |
+| `period` | `ENUM` | YES | `"5m"`,`"15m"`,`"30m"`,`"1h"`,`"2h"`,`"4h"`,`"6h"`,`"12h"`,`"1d"` |
+| `limit` | `LONG` | NO | Default 30, Max 500 |
+| `startTime` | `LONG` | NO | |
+| `endTime` | `LONG` | NO | |
+
+> **Notes:**
+> * If `startTime` and `endTime` are not sent, the most recent data is returned.
+> * Only the data of the latest 30 days is available.
+
+### Response Example
+```json
+[  
+  {
+    "indexPrice": "34400.15945055",
+    "contractType": "PERPETUAL",
+    "basisRate": "0.0004",
+    "futuresPrice": "34414.10",
+    "annualizedBasisRate": "",
+    "basis": "13.94054945",
+    "pair": "BTCUSDT",
+    "timestamp": 1698742800000
+  }
+]
+```
+
+## Composite Index Symbol Information
+
+**API Description:** Query composite index symbol information
+
+* **HTTP Request:** `GET /fapi/v1/indexInfo`
+* **Request Weight:** 1
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | NO | Only for composite index symbols |
+
+### Response Example
+```json
+[
+  { 
+    "symbol": "DEFIUSDT",
+    "time": 1589437530011,    // Current time
+    "component": "baseAsset", //Component asset
+    "baseAssetList":[
+      {
+        "baseAsset":"BAL",
+        "quoteAsset": "USDT",
+        "weightInQuantity":"1.04406228",
+        "weightInPercentage":"0.02783900"
+      },
+      {
+        "baseAsset":"BAND",
+        "quoteAsset": "USDT",
+        "weightInQuantity":"3.53782729",
+        "weightInPercentage":"0.03935200"
+      }
+    ]
+  }
+]
+```
+
+## Asset Index
+
+**CM-UM Integration (Effective 2026-06-30):** Renamed from Multi-Assets Mode Asset Index. The response now additionally pushes COIN-M settlement-asset price index entries (e.g., BTCUSD, ETHUSD, BNBUSD). The endpoint path `/fapi/v1/assetIndex` is unchanged.
+
+**API Description:** Asset index price.
+
+* **HTTP Request:** `GET /fapi/v1/assetIndex`
+* **Request Weight:** 1 for a single symbol; 10 when the symbol parameter is omitted
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | NO | Asset pair |
+
+### Response Example
+Response (with symbol):
+```json
+{
+  "symbol": "ADAUSD",
+  "time": 1635740268004,
+  "index": "1.92957370",
+  "bidBuffer": "0.10000000", 
+  "askBuffer": "0.10000000", 
+  "bidRate": "1.73661633",
+  "askRate": "2.12253107",
+  "autoExchangeBidBuffer": "0.05000000",
+  "autoExchangeAskBuffer": "0.05000000",
+  "autoExchangeBidRate": "1.83309501",
+  "autoExchangeAskRate": "2.02605238"
+}
+```
+
+Response (without symbol):
+```json
+[
+  {
+    "symbol": "ADAUSD",
+    "time": 1635740268004,
+    "index": "1.92957370",
+    "bidBuffer": "0.10000000", 
+    "askBuffer": "0.10000000", 
+    "bidRate": "1.73661633",
+    "askRate": "2.12253107",
+    "autoExchangeBidBuffer": "0.05000000",
+    "autoExchangeAskBuffer": "0.05000000",
+    "autoExchangeBidRate": "1.83309501",
+    "autoExchangeAskRate": "2.02605238"
+  }
+]
+```
