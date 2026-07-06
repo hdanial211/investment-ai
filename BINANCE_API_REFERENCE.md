@@ -286,3 +286,18 @@ Defines the minimum notional value allowed for an order on a symbol (`price * qu
 ```json
 {}
 ```
+
+## Check Server Time
+
+**API Description:** Test connectivity to the Rest API and get the current server time.
+
+* **HTTP Request:** `GET /fapi/v1/time`
+* **Request Weight:** 1
+* **Request Parameters:** NONE
+
+**Response Example:**
+```json
+{
+  "serverTime": 1499827319559
+}
+```
