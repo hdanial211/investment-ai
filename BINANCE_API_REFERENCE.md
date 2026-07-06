@@ -2390,3 +2390,340 @@ Where `batchOrders` is the list of order parameters in JSON:
   }
 ]
 ```
+
+## Cancel All Open Orders (TRADE)
+
+**API Description:** Cancel All Open Orders
+
+* **HTTP Request:** `DELETE /fapi/v1/allOpenOrders`
+* **Request Weight:** 1
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | |
+| `recvWindow` | `LONG` | NO | |
+| `timestamp` | `LONG` | YES | |
+
+### Response Example
+```json
+{
+  "code": 200, 
+  "msg": "The operation of cancel all open order is done."
+}
+```
+
+## Auto-Cancel All Open Orders (TRADE)
+
+**API Description:** Cancel all open orders of the specified symbol at the end of the specified countdown. The endpoint should be called repeatedly as heartbeats so that the existing countdown time can be canceled and replaced by a new one.
+
+**Example usage:**
+* Call this endpoint at 30s intervals with an `countdownTime` of 120000 (120s).
+* If this endpoint is not called within 120 seconds, all your orders of the specified symbol will be automatically canceled.
+* If this endpoint is called with an `countdownTime` of 0, the countdown timer will be stopped.
+
+> **Note:** The system will check all countdowns approximately every 10 milliseconds, so please note that sufficient redundancy should be considered when using this function. We do not recommend setting the countdown time to be too precise or too small.
+
+* **HTTP Request:** `POST /fapi/v1/countdownCancelAll`
+* **Request Weight:** 10
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | |
+| `countdownTime` | `LONG` | YES | countdown time, 1000 for 1 second. 0 to cancel the timer |
+| `recvWindow` | `LONG` | NO | |
+| `timestamp` | `LONG` | YES | |
+
+### Response Example
+```json
+{
+  "symbol": "BTCUSDT", 
+  "countdownTime": "100000"
+}
+```
+
+## Query Order (USER_DATA)
+
+**API Description:** Check an order's status.
+
+> **Note:** These orders will not be found:
+> * order status is `CANCELED` or `EXPIRED` AND order has NO filled trade AND created time + 3 days < current time
+> * order create time + 90 days < current time
+
+* **HTTP Request:** `GET /fapi/v1/order`
+* **Request Weight:** 1
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | |
+| `orderId` | `LONG` | NO | |
+| `origClientOrderId` | `STRING` | NO | |
+| `recvWindow` | `LONG` | NO | |
+| `timestamp` | `LONG` | YES | |
+
+> **Notes:**
+> * Either `orderId` or `origClientOrderId` must be sent.
+> * `orderId` is self-increment for each specific symbol.
+
+### Response Example
+```json
+{
+  "avgPrice": "0.00000",
+  "clientOrderId": "abc",
+  "cumQuote": "0",
+  "executedQty": "0",
+  "orderId": 1917641,
+  "origQty": "0.40",
+  "origType": "TRAILING_STOP_MARKET",
+  "price": "0",
+  "reduceOnly": false,
+  "side": "BUY",
+  "positionSide": "SHORT",
+  "status": "NEW",
+  "stopPrice": "9300",    // please ignore when order type is TRAILING_STOP_MARKET
+  "closePosition": false,   // if Close-All
+  "symbol": "BTCUSDT",
+  "time": 1579276756075,    // order time
+  "timeInForce": "GTC",
+  "type": "TRAILING_STOP_MARKET",
+  "activatePrice": "9020",   // activation price, only return with TRAILING_STOP_MARKET order
+  "priceRate": "0.3",     // callback rate, only return with TRAILING_STOP_MARKET order
+  "updateTime": 1579276756075,  // update time
+  "workingType": "CONTRACT_PRICE",
+  "priceProtect": false            // if conditional order trigger is protected
+}
+```
+
+## All Orders (USER_DATA)
+
+**API Description:** Get all account orders; active, canceled, or filled.
+
+> **Note:** These orders will not be found:
+> * order status is `CANCELED` or `EXPIRED` AND order has NO filled trade AND created time + 3 days < current time
+> * order create time + 90 days < current time
+
+* **HTTP Request:** `GET /fapi/v1/allOrders`
+* **Request Weight:** 5
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | |
+| `orderId` | `LONG` | NO | |
+| `startTime` | `LONG` | NO | |
+| `endTime` | `LONG` | NO | |
+| `limit` | `INT` | NO | Default 500; max 1000. |
+| `recvWindow` | `LONG` | NO | |
+| `timestamp` | `LONG` | YES | |
+
+> **Notes:**
+> * If `orderId` is set, it will get orders >= that `orderId`. Otherwise most recent orders are returned.
+> * The query time period must be less then 7 days (default as the recent 7 days).
+
+### Response Example
+```json
+[
+  {
+    "avgPrice": "0.00000",
+    "clientOrderId": "abc",
+    "cumQuote": "0",
+    "executedQty": "0",
+    "orderId": 1917641,
+    "origQty": "0.40",
+    "origType": "TRAILING_STOP_MARKET",
+    "price": "0",
+    "reduceOnly": false,
+    "side": "BUY",
+    "positionSide": "SHORT",
+    "status": "NEW",
+    "stopPrice": "9300",        // please ignore when order type is TRAILING_STOP_MARKET
+    "closePosition": false,     // if Close-All
+    "symbol": "BTCUSDT",
+    "time": 1579276756075,      // order time
+    "timeInForce": "GTC",
+    "type": "TRAILING_STOP_MARKET",
+    "activatePrice": "9020",    // activation price, only return with TRAILING_STOP_MARKET order
+    "priceRate": "0.3",         // callback rate, only return with TRAILING_STOP_MARKET order
+    "updateTime": 1579276756075,    // update time
+    "workingType": "CONTRACT_PRICE",
+    "priceProtect": false,              // if conditional order trigger is protected	
+    "priceMatch": "NONE",              // price match mode
+    "selfTradePreventionMode": "NONE", // self trading preventation mode
+    "goodTillDate": 0      // order pre-set auot cancel time for TIF GTD order
+  }
+]
+```
+
+## Current All Open Orders (USER_DATA)
+
+**API Description:** Get all open orders on a symbol.
+
+* **HTTP Request:** `GET /fapi/v1/openOrders`
+* **Request Weight:** 1 for a single symbol; 40 when the symbol parameter is omitted
+* **Note:** Careful when accessing this with no symbol.
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | NO | If the symbol is not sent, orders for all symbols will be returned in an array. |
+| `recvWindow` | `LONG` | NO | |
+| `timestamp` | `LONG` | YES | |
+
+### Response Example
+```json
+[
+  {
+    "avgPrice": "0.00000",
+    "clientOrderId": "abc",
+    "cumQuote": "0",
+    "executedQty": "0",
+    "orderId": 1917641,
+    "origQty": "0.40",
+    "origType": "TRAILING_STOP_MARKET",
+    "price": "0",
+    "reduceOnly": false,
+    "side": "BUY",
+    "positionSide": "SHORT",
+    "status": "NEW",
+    "stopPrice": "9300",        // please ignore when order type is TRAILING_STOP_MARKET
+    "closePosition": false,     // if Close-All
+    "symbol": "BTCUSDT",
+    "time": 1579276756075,      // order time
+    "timeInForce": "GTC",
+    "type": "TRAILING_STOP_MARKET",
+    "activatePrice": "9020",    // activation price, only return with TRAILING_STOP_MARKET order
+    "priceRate": "0.3",         // callback rate, only return with TRAILING_STOP_MARKET order
+    "updateTime": 1579276756075,    // update time
+    "workingType": "CONTRACT_PRICE",
+    "priceProtect": false,            // if conditional order trigger is protected	
+    "priceMatch": "NONE",              // price match mode
+    "selfTradePreventionMode": "NONE", // self trading preventation mode
+    "goodTillDate": 0      // order pre-set auot cancel time for TIF GTD order
+  }
+]
+```
+
+## Change Margin Type (TRADE)
+
+**API Description:** Change symbol level margin type
+
+* **HTTP Request:** `POST /fapi/v1/marginType`
+* **Request Weight:** 1
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | |
+| `marginType` | `ENUM` | YES | `ISOLATED`, `CROSSED` |
+| `recvWindow` | `LONG` | NO | |
+| `timestamp` | `LONG` | YES | |
+
+### Response Example
+```json
+{
+  "code": 200,
+  "msg": "success"
+}
+```
+
+## Change Position Mode (TRADE)
+
+**API Description:** Change user's position mode (Hedge Mode or One-way Mode ) on EVERY symbol.
+
+> **Note:** After CM migration, UM and CM share the same `dualSidePosition` setting. Calling this endpoint flips both UM and CM at once. If either side has any open order or open position, the change is rejected:
+> * `-4067` (open orders exist)
+> * `-4068` (open position exists)
+
+* **HTTP Request:** `POST /fapi/v1/positionSide/dual`
+* **Request Weight:** 1
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `dualSidePosition` | `STRING` | YES | `"true"`: Hedge Mode; `"false"`: One-way Mode |
+| `recvWindow` | `LONG` | NO | |
+| `timestamp` | `LONG` | YES | |
+
+### Response Example
+```json
+{
+  "code": 200,
+  "msg": "success"
+}
+```
+
+## Change Initial Leverage (TRADE)
+
+**API Description:** Change user's initial leverage of specific symbol market.
+
+* **HTTP Request:** `POST /fapi/v1/leverage`
+* **Request Weight:** 1
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | |
+| `leverage` | `INT` | YES | target initial leverage: int from 1 to 125 |
+| `recvWindow` | `LONG` | NO | |
+| `timestamp` | `LONG` | YES | |
+
+### Response Example
+```json
+{
+  "leverage": 21,
+  "maxNotionalValue": "1000000",
+  "symbol": "BTCUSDT"
+}
+```
+
+## Change Multi-Assets Mode (TRADE)
+
+**API Description:** Change user's Multi-Assets mode (Multi-Assets Mode or Single-Asset Mode) on Every symbol.
+
+* **HTTP Request:** `POST /fapi/v1/multiAssetsMargin`
+* **Request Weight:** 1
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `multiAssetsMargin` | `STRING` | YES | `"true"`: Multi-Assets Mode; `"false"`: Single-Asset Mode |
+| `recvWindow` | `LONG` | NO | |
+| `timestamp` | `LONG` | YES | |
+
+### Response Example
+```json
+{
+  "code": 200,
+  "msg": "success"
+}
+```
+
+## Modify Isolated Position Margin (TRADE)
+
+**API Description:** Modify Isolated Position Margin
+
+* **HTTP Request:** `POST /fapi/v1/positionMargin`
+* **Request Weight:** 1
+* **Note:** Only for isolated symbol
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | |
+| `positionSide` | `ENUM` | NO | Default `BOTH` for One-way Mode ; `LONG` or `SHORT` for Hedge Mode. It must be sent with Hedge Mode. |
+| `amount` | `DECIMAL` | YES | |
+| `type` | `INT` | YES | 1: Add position margin, 2: Reduce position margin |
+| `recvWindow` | `LONG` | NO | |
+| `timestamp` | `LONG` | YES | |
+
+### Response Example
+```json
+{
+  "amount": 100.0,
+  "code": 200,
+  "msg": "Successfully modify position margin.",
+  "type": 1
+}
+```
