@@ -563,3 +563,170 @@ Defines the minimum notional value allowed for an order on a symbol (`price * qu
   }
 ]
 ```
+
+## Compressed/Aggregate Trades List
+
+**API Description:** Get compressed, aggregate market trades. Market trades that fill in 100ms with the same price and the same taking side will have the quantity aggregated.
+
+* **HTTP Request:** `GET /fapi/v1/aggTrades`
+* **Note:** Retail Price Improvement (RPI) orders are aggregated and without special tags to be distinguished.
+* **Request Weight:** 20
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | |
+| `fromId` | `LONG` | NO | ID to get aggregate trades from INCLUSIVE. |
+| `startTime` | `LONG` | NO | Timestamp in ms to get aggregate trades from INCLUSIVE. |
+| `endTime` | `LONG` | NO | Timestamp in ms to get aggregate trades until INCLUSIVE. |
+| `limit` | `INT` | NO | Default 500; max 1000. |
+
+> **Notes:**
+> * Support querying futures trade histories that are not older than 24 hours
+> * If both `startTime` and `endTime` are sent, time between `startTime` and `endTime` must be less than 1 hour.
+> * If `fromId`, `startTime`, and `endTime` are not sent, the most recent aggregate trades will be returned.
+> * Only market trades will be aggregated and returned, which means the insurance fund trades and ADL trades won't be aggregated.
+> * Sending both `startTime`/`endTime` and `fromId` might cause response timeout, please send either `fromId` or `startTime`/`endTime`.
+
+### Response Example
+```json
+[
+  {
+    "a": 26129,         // Aggregate tradeId
+    "p": "0.01633102",  // Price
+    "q": "4.70443515",  // Quantity
+    "nq": "100",        // Normal quantity without the trades involving RPI orders
+    "f": 27781,         // First tradeId
+    "l": 27781,         // Last tradeId
+    "T": 1498793709153, // Timestamp
+    "m": true           // Was the buyer the maker?
+  }
+]
+```
+
+## Kline/Candlestick Data
+
+**API Description:** Kline/candlestick bars for a symbol. Klines are uniquely identified by their open time.
+
+* **HTTP Request:** `GET /fapi/v1/klines`
+* **Request Weight:** based on parameter LIMIT
+  * `[1, 100)` = `1`
+  * `[100, 500)` = `2`
+  * `[500, 1000]` = `5`
+  * `> 1000` = `10`
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | After CM migration, accepts both UM and CM symbols. |
+| `interval` | `ENUM` | YES | |
+| `startTime` | `LONG` | NO | |
+| `endTime` | `LONG` | NO | |
+| `limit` | `INT` | NO | Default 500; max 1500. |
+
+> **Note:** If `startTime` and `endTime` are not sent, the most recent klines are returned.
+
+### Response Example
+```json
+[
+  [
+    1499040000000,      // Open time
+    "0.01634790",       // Open
+    "0.80000000",       // High
+    "0.01575800",       // Low
+    "0.01577100",       // Close
+    "148976.11427815",  // Volume
+    1499644799999,      // Close time
+    "2434.19055334",    // Quote asset volume
+    308,                // Number of trades
+    "1756.87402397",    // Taker buy base asset volume
+    "28.46694368",      // Taker buy quote asset volume
+    "17928899.62484339" // Ignore.
+  ]
+]
+```
+
+## Continuous Contract Kline/Candlestick Data
+
+**API Description:** Kline/candlestick bars for a specific contract type. Klines are uniquely identified by their open time.
+
+* **HTTP Request:** `GET /fapi/v1/continuousKlines`
+* **Request Weight:** based on parameter LIMIT
+  * `[1, 100)` = `1`
+  * `[100, 500)` = `2`
+  * `[500, 1000]` = `5`
+  * `> 1000` = `10`
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `pair` | `STRING` | YES | After CM migration, accepts both UM and CM pair values. |
+| `contractType` | `ENUM` | YES | `PERPETUAL`, `CURRENT_QUARTER`, `NEXT_QUARTER`, `TRADIFI_PERPETUAL` |
+| `interval` | `ENUM` | YES | |
+| `startTime` | `LONG` | NO | |
+| `endTime` | `LONG` | NO | |
+| `limit` | `INT` | NO | Default 500; max 1500. |
+
+> **Note:** If `startTime` and `endTime` are not sent, the most recent klines are returned.
+
+### Response Example
+```json
+[
+  [
+    1607444700000,      // Open time
+    "18879.99",         // Open
+    "18900.00",         // High
+    "18878.98",         // Low
+    "18896.13",         // Close (or latest price)
+    "492.363",          // Volume
+    1607444759999,      // Close time
+    "9302145.66080",    // Quote asset volume
+    1874,               // Number of trades
+    "385.983",          // Taker buy volume
+    "7292402.33267",    // Taker buy quote asset volume
+    "0"                 // Ignore.
+  ]
+]
+```
+
+## Index Price Kline/Candlestick Data
+
+**API Description:** Kline/candlestick bars for the index price of a pair. Klines are uniquely identified by their open time.
+
+* **HTTP Request:** `GET /fapi/v1/indexPriceKlines`
+* **Request Weight:** based on parameter LIMIT
+  * `[1, 100)` = `1`
+  * `[100, 500)` = `2`
+  * `[500, 1000]` = `5`
+  * `> 1000` = `10`
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `pair` | `STRING` | YES | After CM migration, accepts both UM and CM pair values. |
+| `interval` | `ENUM` | YES | |
+| `startTime` | `LONG` | NO | |
+| `endTime` | `LONG` | NO | |
+| `limit` | `INT` | NO | Default 500; max 1500. |
+
+> **Note:** If `startTime` and `endTime` are not sent, the most recent klines are returned.
+
+### Response Example
+```json
+[
+  [
+    1591256400000,      // Open time
+    "9653.69440000",    // Open
+    "9653.69640000",    // High
+    "9651.38600000",    // Low
+    "9651.55200000",    // Close (or latest price)
+    "0",                // Ignore
+    1591256459999,      // Close time
+    "0",                // Ignore
+    60,                 // Ignore
+    "0",                // Ignore
+    "0",                // Ignore
+    "0"                 // Ignore
+  ]
+]
+```
