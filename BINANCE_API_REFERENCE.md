@@ -1053,3 +1053,186 @@ Response (array):
   "time": 1589437530011   // Transaction time
 }
 ```
+
+## Quarterly Contract Settlement Price
+
+**API Description:** Latest price for a symbol or symbols.
+
+* **HTTP Request:** `GET /futures/data/delivery-price`
+* **Request Weight:** 0
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `pair` | `STRING` | YES | e.g BTCUSDT |
+
+### Response Example
+```json
+[
+  {
+    "deliveryTime": 1695945600000,
+    "deliveryPrice": 27103.00000000
+  },
+  {
+    "deliveryTime": 1688083200000,
+    "deliveryPrice": 30733.60000000
+  },
+  {
+    "deliveryTime": 1680220800000,
+    "deliveryPrice": 27814.20000000
+  },
+  {
+    "deliveryTime": 1648166400000,
+    "deliveryPrice": 44066.30000000
+  }
+]
+```
+
+## Open Interest
+
+**API Description:** Get present open interest of a specific symbol.
+
+* **HTTP Request:** `GET /fapi/v1/openInterest`
+* **Request Weight:** 1
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | |
+
+### Response Example
+```json
+{
+  "openInterest": "10659.509", 
+  "symbol": "BTCUSDT",
+  "time": 1589437530011   // Transaction time
+}
+```
+
+## Open Interest Statistics
+
+**API Description:** Open Interest Statistics
+
+* **HTTP Request:** `GET /futures/data/openInterestHist`
+* **Request Weight:** 0
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | |
+| `period` | `ENUM` | YES | `"5m"`,`"15m"`,`"30m"`,`"1h"`,`"2h"`,`"4h"`,`"6h"`,`"12h"`,`"1d"` |
+| `limit` | `LONG` | NO | default 30, max 500 |
+| `startTime` | `LONG` | NO | |
+| `endTime` | `LONG` | NO | |
+
+> **Notes:**
+> * If `startTime` and `endTime` are not sent, the most recent data is returned.
+> * Only the data of the latest 1 month is available.
+> * IP rate limit 1000 requests/5min
+
+### Response Example
+```json
+[
+  { 
+    "symbol":"BTCUSDT",
+    "sumOpenInterest":"20403.63700000",  // total open interest 
+    "sumOpenInterestValue": "150570784.07809979",   // total open interest value
+    "CMCCirculatingSupply": "165880.538", // circulating supply provided by CMC
+    "timestamp":"1583127900000"
+  },     
+  { 
+    "symbol":"BTCUSDT",
+    "sumOpenInterest":"20401.36700000",
+    "sumOpenInterestValue":"149940752.14464448",
+    "CMCCirculatingSupply": "165900.14853",
+    "timestamp":"1583128200000"    
+  }   
+]
+```
+
+## Top Trader Long/Short Ratio (Positions)
+
+**API Description:** The proportion of net long and net short positions to total open positions of the top 20% users with the highest margin balance. 
+* Long Position % = Long positions of top traders / Total open positions of top traders 
+* Short Position % = Short positions of top traders / Total open positions of top traders 
+* Long/Short Ratio (Positions) = Long Position % / Short Position %
+
+* **HTTP Request:** `GET /futures/data/topLongShortPositionRatio`
+* **Request Weight:** 0
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | |
+| `period` | `ENUM` | YES | `"5m"`,`"15m"`,`"30m"`,`"1h"`,`"2h"`,`"4h"`,`"6h"`,`"12h"`,`"1d"` |
+| `limit` | `LONG` | NO | default 30, max 500 |
+| `startTime` | `LONG` | NO | |
+| `endTime` | `LONG` | NO | |
+
+> **Notes:**
+> * If `startTime` and `endTime` are not sent, the most recent data is returned.
+> * Only the data of the latest 30 days is available.
+> * IP rate limit 1000 requests/5min
+
+### Response Example
+```json
+[
+  { 
+    "symbol":"BTCUSDT",
+    "longShortRatio":"1.4342",// long/short position ratio of top traders
+    "longAccount": "0.5891", // long positions ratio of top traders
+    "shortAccount":"0.4108", // short positions ratio of top traders
+    "timestamp":"1583139600000"
+  },
+  {
+    "symbol":"BTCUSDT",
+    "longShortRatio":"1.4337",
+    "longAccount": "0.3583", 
+    "shortAccount":"0.6417", 	                
+    "timestamp":"1583139900000"
+  }   
+]
+```
+
+## Top Trader Long/Short Ratio (Accounts)
+
+**API Description:** The proportion of net long and net short accounts to total accounts of the top 20% users with the highest margin balance. Each account is counted once only. 
+* Long Account % = Accounts of top traders with net long positions / Total accounts of top traders with open positions 
+* Short Account % = Accounts of top traders with net short positions / Total accounts of top traders with open positions 
+* Long/Short Ratio (Accounts) = Long Account % / Short Account %
+
+* **HTTP Request:** `GET /futures/data/topLongShortAccountRatio`
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | |
+| `period` | `ENUM` | YES | `"5m"`,`"15m"`,`"30m"`,`"1h"`,`"2h"`,`"4h"`,`"6h"`,`"12h"`,`"1d"` |
+| `limit` | `LONG` | NO | default 30, max 500 |
+| `startTime` | `LONG` | NO | |
+| `endTime` | `LONG` | NO | |
+
+> **Notes:**
+> * If `startTime` and `endTime` are not sent, the most recent data is returned.
+> * Only the data of the latest 30 days is available.
+> * IP rate limit 1000 requests/5min
+
+### Response Example
+```json
+[
+  { 
+    "symbol":"BTCUSDT",
+    "longShortRatio":"1.8105",  // long/short account num ratio of top traders
+    "longAccount": "0.6442",   // long account num ratio of top traders 
+    "shortAccount":"0.3558",   // long account num ratio of top traders 
+    "timestamp":"1583139600000"
+  }, 
+  {     
+    "symbol":"BTCUSDT",
+    "longShortRatio":"0.5576",
+    "longAccount": "0.3580", 
+    "shortAccount":"0.6420", 	                
+    "timestamp":"1583139900000"         
+  }  
+]
+```
