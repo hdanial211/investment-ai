@@ -1,6 +1,6 @@
 # 🧠 Investment AI — Agent Memory File
 # Baca file ini sebelum buat sebarang perubahan pada projek.
-# Versi semasa: **v5.7.1** | Dikemas kini: 2026-07-05
+# Versi semasa: **v5.7.1** | Dikemas kini: 2026-07-06
 
 ## Lokasi Projek
 `e:\PROJECTS\SEMUA PROJECT\INVESTMENT AI`
@@ -13,6 +13,13 @@ GitHub: https://github.com/hdanial211/investment-ai
 - Coins: BTC, ETH, SOL, XRP, LTC (semua pair dengan MYR)
 - API wrapper: `backend/hata_api.py`
 - 📘 **Full API Reference: [`HATA_API_REFERENCE.md`](../HATA_API_REFERENCE.md)** — Rujuk file ini untuk semua endpoint, auth, WebSocket, request/response format
+
+## Binance (Data Source Sahaja)
+**Binance Spot** — `https://api.binance.com` / `wss://stream.binance.com:9443`
+- Guna: Candle data (1m) untuk AI model features — **BUKAN untuk trading**
+- Endpoints: REST Klines, Ticker Price, WebSocket Kline Stream, CCXT historical
+- Tiada API Key diperlukan (semua public endpoints)
+- 📘 **Full API Reference: [`BINANCE_API_REFERENCE.md`](../BINANCE_API_REFERENCE.md)**
 
 ## Architecture Ringkas
 ```
@@ -164,6 +171,7 @@ File: `backend/live_engine_old_system.py`
 | `backend/live_engine_old_system.py` | Backup sistem lama |
 | `scratch/test_daily_report_direct.py` | ★ Daily PnL report → Telegram |
 | `HATA_API_REFERENCE.md` | 📘 Full Hata API reference (auth, endpoints, WebSocket, formats) |
+| `BINANCE_API_REFERENCE.md` | 📘 Binance Spot API reference (Klines, WS, CCXT — data source sahaja) |
 
 ## Daily Telegram Report
 - **Script**: `scratch/test_daily_report_direct.py`
