@@ -725,8 +725,193 @@ Defines the minimum notional value allowed for an order on a symbol (`price * qu
     "0",                // Ignore
     60,                 // Ignore
     "0",                // Ignore
-    "0",                // Ignore
     "0"                 // Ignore
   ]
+]
+```
+
+## Mark Price Kline/Candlestick Data
+
+**API Description:** Kline/candlestick bars for the mark price of a symbol. Klines are uniquely identified by their open time.
+
+* **HTTP Request:** `GET /fapi/v1/markPriceKlines`
+* **Request Weight:** based on parameter LIMIT
+  * `[1, 100)` = `1`
+  * `[100, 500)` = `2`
+  * `[500, 1000]` = `5`
+  * `> 1000` = `10`
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | After CM migration, accepts both UM and CM symbols. |
+| `interval` | `ENUM` | YES | |
+| `startTime` | `LONG` | NO | |
+| `endTime` | `LONG` | NO | |
+| `limit` | `INT` | NO | Default 500; max 1500. |
+
+> **Note:** If `startTime` and `endTime` are not sent, the most recent klines are returned.
+
+### Response Example
+```json
+[
+  [
+    1591256460000,          // Open time
+    "9653.29201333",        // Open
+    "9654.56401333",        // High
+    "9653.07367333",        // Low
+    "9653.07367333",        // Close (or latest price)
+    "0",                    // Ignore
+    1591256519999,          // Close time
+    "0",                    // Ignore
+    60,                     // Ignore
+    "0",                    // Ignore
+    "0",                    // Ignore
+    "0"                     // Ignore
+  ]
+]
+```
+
+## Premium index Kline Data
+
+**API Description:** Premium index kline bars of a symbol. Klines are uniquely identified by their open time.
+
+* **HTTP Request:** `GET /fapi/v1/premiumIndexKlines`
+* **Request Weight:** based on parameter LIMIT
+  * `[1, 100)` = `1`
+  * `[100, 500)` = `2`
+  * `[500, 1000]` = `5`
+  * `> 1000` = `10`
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | After CM migration, accepts both UM and CM symbols. |
+| `interval` | `ENUM` | YES | |
+| `startTime` | `LONG` | NO | |
+| `endTime` | `LONG` | NO | |
+| `limit` | `INT` | NO | Default 500; max 1500. |
+
+> **Note:** If `startTime` and `endTime` are not sent, the most recent klines are returned.
+
+### Response Example
+```json
+[
+  [
+    1691603820000,          // Open time
+    "-0.00042931",          // Open
+    "-0.00023641",          // High
+    "-0.00059406",          // Low
+    "-0.00043659",          // Close
+    "0",                    // Ignore
+    1691603879999,          // Close time
+    "0",                    // Ignore
+    12,                     // Ignore
+    "0",                    // Ignore
+    "0",                    // Ignore
+    "0"                     // Ignore
+  ]
+]
+```
+
+## Mark Price
+
+**API Description:** Mark Price and Funding Rate
+
+* **HTTP Request:** `GET /fapi/v1/premiumIndex`
+* **Request Weight:** 1 with symbol, 10 without symbol
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | NO | |
+
+### Response Example
+Response (with symbol):
+```json
+{
+  "symbol": "BTCUSDT",
+  "markPrice": "11793.63104562",          // mark price
+  "indexPrice": "11781.80495970",         // index price
+  "estimatedSettlePrice": "11781.16138815", // Estimated Settle Price, only useful in the last hour before the settlement starts.
+  "lastFundingRate": "0.00038246",        // This is the Latest funding rate
+  "interestRate": "0.00010000",
+  "nextFundingTime": 1597392000000,
+  "time": 1597370495002
+}
+```
+
+Response (when symbol not sent):
+```json
+[
+  {
+    "symbol": "BTCUSDT",
+    "markPrice": "11793.63104562",
+    "indexPrice": "11781.80495970",
+    "estimatedSettlePrice": "11781.16138815",
+    "lastFundingRate": "0.00038246",
+    "interestRate": "0.00010000",
+    "nextFundingTime": 1597392000000,
+    "time": 1597370495002
+  }
+]
+```
+
+## Get Funding Rate History
+
+**API Description:** Get Funding Rate History
+
+* **HTTP Request:** `GET /fapi/v1/fundingRate`
+* **Request Weight:** share 500/5min/IP rate limit with `GET /fapi/v1/fundingInfo`
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | NO | |
+| `startTime` | `LONG` | NO | Timestamp in ms to get funding rate from INCLUSIVE. |
+| `endTime` | `LONG` | NO | Timestamp in ms to get funding rate until INCLUSIVE. |
+| `limit` | `INT` | NO | Default 100; max 1000 |
+
+> **Notes:**
+> * If `startTime` and `endTime` are not sent, the most recent 200 records are returned.
+> * If the number of data between `startTime` and `endTime` is larger than limit, return as `startTime + limit`.
+> * In ascending order.
+
+### Response Example
+```json
+[
+  {
+    "symbol": "BTCUSDT",
+    "fundingRate": "-0.03750000",
+    "fundingTime": 1570608000000,
+    "markPrice": "34287.54619963"   // mark price associated with a particular funding fee charge
+  },
+  {
+    "symbol": "BTCUSDT",
+    "fundingRate": "0.00010000",
+    "fundingTime": 1570636800000,
+    "markPrice": "34287.54619963" 
+  }
+]
+```
+
+## Get Funding Rate Info
+
+**API Description:** Query funding rate info for symbols that had FundingRateCap/ FundingRateFloor / fundingIntervalHours adjustment
+
+* **HTTP Request:** `GET /fapi/v1/fundingInfo`
+* **Request Weight:** 0
+  * Share 500/5min/IP rate limit with `GET /fapi/v1/fundingRate`
+
+### Response Example
+```json
+[
+  {
+    "symbol": "BLZUSDT",
+    "adjustedFundingRateCap": "0.02500000",
+    "adjustedFundingRateFloor": "-0.02500000",
+    "fundingIntervalHours": 8,
+    "disclaimer": false   // ignore
+  }
 ]
 ```
