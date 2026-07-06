@@ -273,3 +273,16 @@ Defines the minimum notional value allowed for an order on a symbol (`price * qu
   "notional": "5.0"
 }
 ```
+
+## Test Connectivity
+
+**API Description:** Test connectivity to the Rest API.
+
+* **HTTP Request:** `GET /fapi/v1/ping`
+* **Request Weight:** 1
+* **Request Parameters:** NONE
+
+**Response Example:**
+```json
+{}
+```
