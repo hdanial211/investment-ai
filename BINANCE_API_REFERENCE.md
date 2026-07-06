@@ -301,3 +301,168 @@ Defines the minimum notional value allowed for an order on a symbol (`price * qu
   "serverTime": 1499827319559
 }
 ```
+
+## Exchange Information
+
+**API Description:** Current exchange trading rules and symbol information
+
+* **HTTP Request:** `GET /fapi/v1/exchangeInfo`
+* **Request Weight:** 1
+* **Request Parameters:** NONE
+
+**Response Example:**
+```json
+{
+  "exchangeFilters": [],
+  "rateLimits": [
+    {
+      "interval": "MINUTE",
+      "intervalNum": 1,
+      "limit": 2400,
+      "rateLimitType": "REQUEST_WEIGHT" 
+    },
+    {
+      "interval": "MINUTE",
+      "intervalNum": 1,
+      "limit": 1200,
+      "rateLimitType": "ORDERS"
+    }
+  ],
+  "serverTime": 1565613908500,
+  "assets": [
+    {
+      "asset": "BTC",
+      "marginAvailable": true,
+      "autoAssetExchange": "-0.10"
+    },
+    {
+      "asset": "USDT",
+      "marginAvailable": true,
+      "autoAssetExchange": "0"
+    },
+    {
+      "asset": "BNB",
+      "marginAvailable": false,
+      "autoAssetExchange": null
+    }
+  ],
+  "symbols": [
+    {
+      "symbol": "BLZUSDT",
+      "pair": "BLZUSDT",
+      "contractType": "PERPETUAL",
+      "deliveryDate": 4133404800000,
+      "onboardDate": 1598252400000,
+      "status": "TRADING",
+      "maintMarginPercent": "2.5000",
+      "requiredMarginPercent": "5.0000",
+      "baseAsset": "BLZ", 
+      "quoteAsset": "USDT",
+      "marginAsset": "USDT",
+      "pricePrecision": 5,
+      "quantityPrecision": 0,
+      "baseAssetPrecision": 8,
+      "quotePrecision": 8, 
+      "underlyingType": "COIN",
+      "underlyingSubType": ["STORAGE"],
+      "settlePlan": 0,
+      "triggerProtect": "0.15",
+      "filters": [
+        {
+          "filterType": "PRICE_FILTER",
+          "maxPrice": "300",
+          "minPrice": "0.0001", 
+          "tickSize": "0.0001"
+        },
+        {
+          "filterType": "LOT_SIZE", 
+          "maxQty": "10000000",
+          "minQty": "1",
+          "stepSize": "1"
+        },
+        {
+          "filterType": "MARKET_LOT_SIZE",
+          "maxQty": "590119",
+          "minQty": "1",
+          "stepSize": "1"
+        },
+        {
+          "filterType": "MAX_NUM_ORDERS",
+          "limit": 200
+        },
+        {
+          "filterType": "MIN_NOTIONAL",
+          "notional": "5.0"
+        },
+        {
+          "filterType": "PERCENT_PRICE",
+          "multiplierUp": "1.1500",
+          "multiplierDown": "0.8500",
+          "multiplierDecimal": "4"
+        }
+      ],
+      "orderTypes": [
+        "LIMIT",
+        "MARKET",
+        "STOP",
+        "STOP_MARKET",
+        "TAKE_PROFIT",
+        "TAKE_PROFIT_MARKET",
+        "TRAILING_STOP_MARKET" 
+      ],
+      "timeInForce": [
+        "GTC", 
+        "IOC", 
+        "FOK", 
+        "GTX" 
+      ],
+      "liquidationFee": "0.010000",
+      "marketTakeBound": "0.30"
+    }
+  ],
+  "timezone": "UTC" 
+}
+```
+
+## Delist Schedule
+
+**API Description:** The Futures team will update the `deliveryDate` in the `GET /fapi/v1/exchangeInfo` endpoint to the delisting time after the delisting announcement is published. Please refer to Exchange Info to check the delisting information of contract trading pairs in advance.
+
+## Order Book
+
+**API Description:** Query symbol orderbook
+
+* **HTTP Request:** `GET /fapi/v1/depth`
+* **Note:** Retail Price Improvement (RPI) orders are not visible and excluded in the response message.
+* **Request Weight:** Adjusted based on the limit
+  * Limits: `5, 10, 20, 50` = `2`
+  * Limit: `100` = `5`
+  * Limit: `500` = `10`
+  * Limit: `1000` = `20`
+
+### Request Parameters
+| Name | Type | Mandatory | Description |
+|---|---|---|---|
+| `symbol` | `STRING` | YES | |
+| `limit` | `INT` | NO | Default 500; Valid limits: `[5, 10, 20, 50, 100, 500, 1000]` |
+
+### Response Example
+```json
+{
+  "lastUpdateId": 1027024,
+  "E": 1589436922972,   // Message output time
+  "T": 1589436922959,   // Transaction time
+  "bids": [
+    [
+      "4.00000000",     // PRICE
+      "431.00000000"    // QTY
+    ]
+  ],
+  "asks": [
+    [
+      "4.00000200",
+      "12.00000000"
+    ]
+  ]
+}
+```
