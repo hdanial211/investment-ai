@@ -139,3 +139,137 @@ Example Request:
 * `session.logout`: Forget the API key previously authenticated.
 * Explicit `apiKey` and `signature` on individual requests override the authenticated key (for ad hoc authorization).
 * If the API key becomes invalid, the next request revokes the session.
+
+## Public Endpoints Info
+
+### Terminology
+* **base asset**: refers to the asset that is the quantity of a symbol.
+* **quote asset**: refers to the asset that is the price of a symbol.
+
+### ENUM Definitions
+
+* **Symbol type**: `FUTURE`
+* **Contract type (`contractType`)**: `PERPETUAL`, `CURRENT_MONTH`, `NEXT_MONTH`, `CURRENT_QUARTER`, `NEXT_QUARTER`, `PERPETUAL_DELIVERING`
+* **Contract status (`contractStatus`, `status`)**: `PENDING_TRADING`, `TRADING`, `PRE_DELIVERING`, `DELIVERING`, `DELIVERED`, `PRE_SETTLE`, `SETTLING`, `CLOSE`
+* **Order status (`status`)**: `NEW`, `PARTIALLY_FILLED`, `FILLED`, `CANCELED`, `REJECTED`, `EXPIRED`, `EXPIRED_IN_MATCH`
+* **Order types (`orderTypes`, `type`)**: `LIMIT`, `MARKET`, `STOP`, `STOP_MARKET`, `TAKE_PROFIT`, `TAKE_PROFIT_MARKET`, `TRAILING_STOP_MARKET`
+* **Order side (`side`)**: `BUY`, `SELL`
+* **Position side (`positionSide`)**: `BOTH`, `LONG`, `SHORT`
+* **Time in force (`timeInForce`)**:
+  * `GTC` - Good Till Cancel (validity is 1 year from placement)
+  * `IOC` - Immediate or Cancel
+  * `FOK` - Fill or Kill
+  * `GTX` - Good Till Crossing (Post Only)
+  * `GTD` - Good Till Date
+  * `RPI` - Retail Price Improvement (post only, match with APP/Web only)
+* **Working Type (`workingType`)**: `MARK_PRICE`, `CONTRACT_PRICE`
+* **Response Type (`newOrderRespType`)**: `ACK`, `RESULT`
+* **Kline/Candlestick chart intervals**: `1s`, `1m`, `3m`, `5m`, `15m`, `30m`, `1h`, `2h`, `4h`, `6h`, `8h`, `12h`, `1d`, `3d`, `1w`, `1M`
+  * s = seconds; m = minutes; h = hours; d = days; w = weeks; M = months
+* **STP MODE (`selfTradePreventionMode`)**: `EXPIRE_TAKER`, `EXPIRE_BOTH`, `EXPIRE_MAKER`
+* **Price Match (`priceMatch`)**:
+  * `NONE` (No price match)
+  * `OPPONENT` (counterparty best price)
+  * `OPPONENT_5` (5th best price from the counterparty)
+  * `OPPONENT_10` (10th best price from the counterparty)
+  * `OPPONENT_20` (20th best price from the counterparty)
+  * `QUEUE` (best price on the same side)
+  * `QUEUE_5` (5th best price on the same side)
+  * `QUEUE_10` (10th best price on the same side)
+  * `QUEUE_20` (20th best price on the same side)
+* **Rate limiters (`rateLimitType`)**: `REQUEST_WEIGHT`, `ORDERS`
+* **Rate limit intervals (`interval`)**: `MINUTE`
+
+## Filters
+Filters define trading rules on a symbol or an exchange.
+
+### Symbol Filters
+
+#### `PRICE_FILTER`
+The `PRICE_FILTER` defines the price rules for a symbol.
+```json
+{
+  "filterType": "PRICE_FILTER",
+  "minPrice": "0.00000100",
+  "maxPrice": "100000.00000000",
+  "tickSize": "0.00000100"
+}
+```
+* `minPrice`: minimum price/stopPrice allowed; disabled on 0.
+* `maxPrice`: maximum price/stopPrice allowed; disabled on 0.
+* `tickSize`: intervals that a price/stopPrice can be increased/decreased by; disabled on 0.
+Rules for enabled values:
+* `price >= minPrice`
+* `price <= maxPrice`
+* `(price-minPrice) % tickSize == 0`
+
+#### `LOT_SIZE`
+The `LOT_SIZE` filter defines the quantity (lots) rules for a symbol.
+```json
+{
+  "filterType": "LOT_SIZE",
+  "minQty": "0.00100000",
+  "maxQty": "100000.00000000",
+  "stepSize": "0.00100000"
+}
+```
+* `minQty`: minimum quantity allowed.
+* `maxQty`: maximum quantity allowed.
+* `stepSize`: intervals that a quantity can be increased/decreased by.
+Rules:
+* `quantity >= minQty`
+* `quantity <= maxQty`
+* `(quantity-minQty) % stepSize == 0`
+
+#### `MARKET_LOT_SIZE`
+Defines quantity rules specifically for MARKET orders.
+```json
+{
+  "filterType": "MARKET_LOT_SIZE",
+  "minQty": "0.00100000",
+  "maxQty": "100000.00000000",
+  "stepSize": "0.00100000"
+}
+```
+Same rules as `LOT_SIZE`.
+
+#### `MAX_NUM_ORDERS`
+Defines the maximum number of orders an account is allowed to have open on a symbol (includes algo and normal orders).
+```json
+{
+  "filterType": "MAX_NUM_ORDERS",
+  "limit": 200
+}
+```
+
+#### `MAX_NUM_ALGO_ORDERS`
+Defines the maximum number of all kinds of algo orders open on a symbol. (STOP, STOP_MARKET, TAKE_PROFIT, TAKE_PROFIT_MARKET, TRAILING_STOP_MARKET).
+```json
+{
+  "filterType": "MAX_NUM_ALGO_ORDERS",
+  "limit": 100
+}
+```
+
+#### `PERCENT_PRICE`
+Defines valid range for a price based on the mark price.
+```json
+{
+  "filterType": "PERCENT_PRICE",
+  "multiplierUp": "1.1500",
+  "multiplierDown": "0.8500",
+  "multiplierDecimal": 4
+}
+```
+Rules:
+* BUY: `price <= markPrice * multiplierUp`
+* SELL: `price >= markPrice * multiplierDown`
+
+#### `MIN_NOTIONAL`
+Defines the minimum notional value allowed for an order on a symbol (`price * quantity`). For MARKET orders, the mark price is used.
+```json
+{
+  "filterType": "MIN_NOTIONAL",
+  "notional": "5.0"
+}
+```
