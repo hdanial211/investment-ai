@@ -3364,3 +3364,819 @@ Two access modes are supported:
   * Split connections by traffic type (separate public/market/private sessions) to reduce per-connection load and jitter.
   * For combined subscriptions, prefer stream mode (`?streams=`; private uses `listenKey`/`events`).
 
+## Live Subscribing/Unsubscribing to streams
+
+The following data can be sent through the websocket instance in order to subscribe/unsubscribe from streams. The `id` used in the JSON payloads is an unsigned INT used as an identifier to uniquely identify the messages going back and forth.
+
+### Subscribe to a stream
+**Request**
+```json
+{    
+  "method": "SUBSCRIBE",    
+  "params": [   
+    "btcusdt@aggTrade",    
+    "btcusdt@depth"     
+  ],    
+  "id": 1   
+}
+```
+**Response**
+```json
+{
+  "result": null,
+  "id": 1
+}
+```
+
+### Unsubscribe to a stream
+**Request**
+```json
+{   
+  "method": "UNSUBSCRIBE",    
+  "params": [    
+    "btcusdt@depth"   
+  ],    
+  "id": 312   
+}
+```
+**Response**
+```json
+{
+  "result": null,
+  "id": 312
+}
+```
+
+### Listing Subscriptions
+**Request**
+```json
+{   
+  "method": "LIST_SUBSCRIPTIONS",    
+  "id": 3   
+}     
+```
+**Response**
+```json
+{
+  "result": [
+    "btcusdt@aggTrade"
+  ],
+  "id": 3
+}
+```
+
+### Setting Properties
+Currently, the only property can be set is to set whether combined stream payloads are enabled are not. The combined property is set to false when connecting using `/ws/` ("raw streams") and true when connecting using `/stream/`.
+
+**Request**
+```json
+{    
+  "method": "SET_PROPERTY",    
+  "params": [   
+    "combined",    
+    true   
+  ],    
+  "id": 5   
+}
+```
+**Response**
+```json
+{
+  "result": null,
+  "id": 5
+}
+```
+
+### Retrieving Properties
+**Request**
+```json
+{   
+  "method": "GET_PROPERTY",    
+  "params": [   
+    "combined"   
+  ],    
+  "id": 2   
+}   
+```
+**Response**
+```json
+{
+  "result": true, // Indicates that combined is set to true.
+  "id": 2
+}
+```
+
+### Error Messages
+| Error Message | Description |
+|---|---|
+| `{"code": 0, "msg": "Unknown property"}` | Parameter used in the SET_PROPERTY or GET_PROPERTY was invalid |
+| `{"code": 1, "msg": "Invalid value type: expected Boolean"}` | Value should only be `true` or `false` |
+| `{"code": 2, "msg": "Invalid request: property name must be a string"}` | Property name provided was invalid |
+| `{"code": 2, "msg": "Invalid request: request ID must be an unsigned integer"}` | Parameter id had to be provided or the value provided in the id parameter is an unsupported type |
+| `{"code": 2, "msg": "Invalid request: unknown variant %s, expected one of SUBSCRIBE, UNSUBSCRIBE, LIST_SUBSCRIPTIONS, SET_PROPERTY, GET_PROPERTY at line 1 column 28"}` | Possible typo in the provided method or provided method was neither of the expected values |
+| `{"code": 2, "msg": "Invalid request: too many parameters"}` | Unnecessary parameters provided in the data |
+| `{"code": 2, "msg": "Invalid request: property name must be a string"}` | Property name was not provided |
+| `{"code": 2, "msg": "Invalid request: missing field method at line 1 column 73"}` | `method` was not provided in the data |
+| `{"code": 3, "msg": "Invalid JSON: expected value at line %s column %s"}` | JSON data sent has incorrect syntax. |
+
+## Aggregate Trade Streams
+
+**Stream Description:** The Aggregate Trade Streams push market trade information that is aggregated for fills with same price and taking side every 100 milliseconds. Only market trades will be aggregated, which means the insurance fund trades and ADL trades won't be aggregated.
+
+* **URL PATH:** `/market`
+* **Stream Name:** `<symbol>@aggTrade`
+* **Update Speed:** 100ms
+* **Note:** Retail Price Improvement(RPI) orders are aggregated into field `q` and without special tags to be distinguished.
+
+### Response Example
+```json
+{
+  "e": "aggTrade",  // Event type
+  "E": 123456789,   // Event time
+  "s": "BTCUSDT",   // Symbol
+  "a": 5933014,     // Aggregate trade ID
+  "p": "0.001",     // Price
+  "q": "100",       // Quantity with all the market trades
+  "nq": "100",      // Normal quantity without the trades involving RPI orders
+  "f": 100,         // First trade ID
+  "l": 105,         // Last trade ID
+  "T": 123456785,   // Trade time
+  "m": true,        // Is the buyer the market maker?
+  "st": 1           // (After CM migration) Symbol type: 1 = UM, 2 = CM
+}
+```
+> **Note:** After CM migration, the payload is appended with a new `st` field (1 = UM, 2 = CM).
+
+## Mark Price Stream
+
+**Stream Description:** Mark price and funding rate for a single symbol pushed every 3 seconds or every second.
+
+* **URL PATH:** `/market`
+* **Stream Name:** `<symbol>@markPrice` or `<symbol>@markPrice@1s`
+* **Update Speed:** 3000ms or 1000ms
+
+### Response Example
+```json
+{
+  "e": "markPriceUpdate",     // Event type
+  "E": 1562305380000,         // Event time
+  "s": "BTCUSDT",             // Symbol
+  "p": "11794.15000000",      // Mark price
+  "ap": "11794.15000000",     // Mark price moving average
+  "i": "11784.62659091",      // Index price
+  "P": "11784.25641265",      // Estimated Settle Price, only useful in the last hour before the settlement starts
+  "r": "0.00038167",          // Funding rate
+  "T": 1562306400000,         // Next funding time
+  "st": 1                     // (After CM migration) Symbol type: 1 = UM, 2 = CM
+}
+```
+> **Note:** After CM migration, the payload is appended with a new `st` field (1 = UM, 2 = CM); both fstream and dstream may subscribe to either UM or CM symbols on this stream.
+
+## Mark Price Stream for All market
+
+**Stream Description:** Mark price and funding rate for all symbols pushed every 3 seconds or every second.
+
+* **URL PATH:** `/market`
+* **Stream Name:** `!markPrice@arr` or `!markPrice@arr@1s`
+* **Update Speed:** 3000ms or 1000ms
+* **Note:** TradFi symbols will be pushed through a seperate message.
+
+### Response Example
+```json
+[ 
+  {
+    "e": "markPriceUpdate",     // Event type
+    "E": 1562305380000,         // Event time
+    "s": "BTCUSDT",             // Symbol
+    "p": "11185.87786614",      // Mark price
+    "ap": "11185.87786614",     // Mark price moving average
+    "i": "11784.62659091",      // Index price
+    "P": "11784.25641265",      // Estimated Settle Price, only useful in the last hour before the settlement starts
+    "r": "0.00030000",          // Funding rate
+    "T": 1562306400000,         // Next funding time
+    "st": 1                     // (After CM migration) Symbol type: 1 = UM, 2 = CM
+  }
+]
+```
+> **Note:** After CM migration, the payload is appended with a new `st` field (1 = UM, 2 = CM); both fstream and dstream may subscribe to either UM or CM symbols on this stream.
+
+## Kline/Candlestick Streams
+
+**Stream Description:** The Kline/Candlestick Stream push updates to the current klines/candlestick every 250 milliseconds (if existing).
+Kline/Candlestick chart intervals: `1m`, `3m`, `5m`, `15m`, `30m`, `1h`, `2h`, `4h`, `6h`, `8h`, `12h`, `1d`, `3d`, `1w`, `1M` (m -> minutes; h -> hours; d -> days; w -> weeks; M -> months)
+
+* **URL PATH:** `/market`
+* **Stream Name:** `<symbol>@kline_<interval>`
+* **Update Speed:** 250ms
+
+### Response Example
+```json
+{
+  "e": "kline",     // Event type
+  "E": 1638747660000,   // Event time
+  "s": "BTCUSDT",    // Symbol
+  "k": {
+    "t": 1638747660000, // Kline start time
+    "T": 1638747719999, // Kline close time
+    "s": "BTCUSDT",  // Symbol
+    "i": "1m",      // Interval
+    "f": 100,       // First trade ID
+    "L": 200,       // Last trade ID
+    "o": "0.0010",  // Open price
+    "c": "0.0020",  // Close price
+    "h": "0.0025",  // High price
+    "l": "0.0015",  // Low price
+    "v": "1000",    // Base asset volume
+    "n": 100,       // Number of trades
+    "x": false,     // Is this kline closed?
+    "q": "1.0000",  // Quote asset volume
+    "V": "500",     // Taker buy base asset volume
+    "Q": "0.500",   // Taker buy quote asset volume
+    "B": "123456"   // Ignore
+  }
+}
+```
+> **Note:** After CM migration, both fstream and dstream may subscribe to either UM or CM symbols on this stream.
+
+## Continuous Contract Kline/Candlestick Streams
+
+**Stream Description:** Contract type: `perpetual`, `current_quarter`, `next_quarter`, `tradifi_perpetual`. 
+Kline/Candlestick chart intervals: `1s`, `1m`, `3m`, `5m`, `15m`, `30m`, `1h`, `2h`, `4h`, `6h`, `8h`, `12h`, `1d`, `3d`, `1w`, `1M` (s -> seconds; m -> minutes; h -> hours; d -> days; w -> weeks; M -> months)
+
+* **URL PATH:** `/market`
+* **Stream Name:** `<pair>_<contractType>@continuousKline_<interval>`
+* **Update Speed:** 250ms
+
+### Response Example
+```json
+{
+  "e":"continuous_kline",   // Event type
+  "E":1607443058651,        // Event time
+  "ps":"BTCUSDT",           // Pair
+  "ct":"PERPETUAL",         // Contract type
+  "k":{
+    "t":1607443020000,      // Kline start time
+    "T":1607443079999,      // Kline close time
+    "i":"1m",               // Interval
+    "f":116467658886,       // First updateId
+    "L":116468012423,       // Last updateId
+    "o":"18787.00",         // Open price
+    "c":"18804.04",         // Close price
+    "h":"18804.04",         // High price
+    "l":"18786.54",         // Low price
+    "v":"197.664",          // volume
+    "n": 543,               // Number of trades
+    "x":false,              // Is this kline closed?
+    "q":"3715253.19494",    // Quote asset volume
+    "V":"184.769",          // Taker buy volume
+    "Q":"3472925.84746",    // Taker buy quote asset volume
+    "B":"0"                 // Ignore
+  }
+}
+```
+> **Note:** After CM migration, both fstream and dstream may subscribe to either UM or CM symbols on this stream.
+
+## Individual Symbol Mini Ticker Stream
+
+**Stream Description:** 24hr rolling window mini-ticker statistics for a single symbol. These are NOT the statistics of the UTC day, but a 24hr rolling window from requestTime to 24hrs before.
+
+* **URL PATH:** `/market`
+* **Stream Name:** `<symbol>@miniTicker`
+* **Update Speed:** 2s
+
+### Response Example
+```json
+{
+  "e": "24hrMiniTicker",  // Event type
+  "E": 123456789,         // Event time
+  "s": "BTCUSDT",         // Symbol
+  "c": "0.0025",          // Close price
+  "o": "0.0010",          // Open price
+  "h": "0.0025",          // High price
+  "l": "0.0010",          // Low price
+  "v": "10000",           // Total traded base asset volume
+  "q": "18",              // Total traded quote asset volume
+  "ps": "BTCUSDT",        // (After CM migration) Pair symbol
+  "st": 1                 // (After CM migration) Symbol type: 1 = UM, 2 = CM
+}
+```
+> **Note:** After CM migration, the payload is appended with a new `st` field (1 = UM, 2 = CM) and a new `ps` field (pair symbol).
+
+## All Market Tickers Streams
+
+**Stream Description:** 24hr rolling window ticker statistics for all symbols. These are NOT the statistics of the UTC day, but a 24hr rolling window from requestTime to 24hrs before. Note that only tickers that have changed will be present in the array.
+
+* **URL PATH:** `/market`
+* **Stream Name:** `!ticker@arr`
+* **Update Speed:** 1000ms
+
+### Response Example
+```json
+[
+  {
+    "e": "24hrTicker",  // Event type
+    "E": 123456789,     // Event time
+    "s": "BTCUSDT",     // Symbol
+    "p": "0.0015",      // Price change
+    "P": "250.00",      // Price change percent
+    "w": "0.0018",      // Weighted average price
+    "c": "0.0025",      // Last price
+    "Q": "10",          // Last quantity
+    "o": "0.0010",      // Open price
+    "h": "0.0025",      // High price
+    "l": "0.0010",      // Low price
+    "v": "10000",       // Total traded base asset volume
+    "q": "18",          // Total traded quote asset volume
+    "O": 0,             // Statistics open time
+    "C": 86400000,      // Statistics close time
+    "F": 0,             // First trade ID
+    "L": 18150,         // Last trade Id
+    "n": 18151,         // Total number of trades
+    "ps": "BTCUSDT",    // (After CM migration) Pair symbol
+    "st": 1             // (After CM migration) Symbol type: 1 = UM, 2 = CM
+  }
+]
+```
+> **Note:** After CM migration, this stream pushes the merged UM + CM universe (subscribable on both fstream and dstream); each payload is appended with a new `st` field (1 = UM, 2 = CM) and a new `ps` field (pair symbol).
+
+## Individual Symbol Ticker Streams
+
+**Stream Description:** 24hr rolling window ticker statistics for a single symbol. These are NOT the statistics of the UTC day, but a 24hr rolling window from requestTime to 24hrs before.
+
+* **URL PATH:** `/market`
+* **Stream Name:** `<symbol>@ticker`
+* **Update Speed:** 2000ms
+
+### Response Example
+```json
+{
+  "e": "24hrTicker",  // Event type
+  "E": 123456789,     // Event time
+  "s": "BTCUSDT",     // Symbol
+  "p": "0.0015",      // Price change
+  "P": "250.00",      // Price change percent
+  "w": "0.0018",      // Weighted average price
+  "c": "0.0025",      // Last price
+  "Q": "10",          // Last quantity
+  "o": "0.0010",      // Open price
+  "h": "0.0025",      // High price
+  "l": "0.0010",      // Low price
+  "v": "10000",       // Total traded base asset volume
+  "q": "18",          // Total traded quote asset volume
+  "O": 0,             // Statistics open time
+  "C": 86400000,      // Statistics close time
+  "F": 0,             // First trade ID
+  "L": 18150,         // Last trade Id
+  "n": 18151,         // Total number of trades
+  "ps": "BTCUSDT",    // (After CM migration) Pair symbol
+  "st": 1             // (After CM migration) Symbol type: 1 = UM, 2 = CM
+}
+```
+> **Note:** After CM migration, the payload is appended with a new `st` field (1 = UM, 2 = CM) and a new `ps` field (pair symbol).
+
+## All Market Mini Tickers Stream
+
+**Stream Description:** 24hr rolling window mini-ticker statistics for all symbols. These are NOT the statistics of the UTC day, but a 24hr rolling window from requestTime to 24hrs before. Note that only tickers that have changed will be present in the array.
+
+* **URL PATH:** `/market`
+* **Stream Name:** `!miniTicker@arr`
+* **Update Speed:** 1000ms
+
+### Response Example
+```json
+[  
+  {
+    "e": "24hrMiniTicker",  // Event type
+    "E": 123456789,         // Event time
+    "s": "BTCUSDT",         // Symbol
+    "c": "0.0025",          // Close price
+    "o": "0.0010",          // Open price
+    "h": "0.0025",          // High price
+    "l": "0.0010",          // Low price
+    "v": "10000",           // Total traded base asset volume
+    "q": "18",               // Total traded quote asset volume
+    "ps": "BTCUSDT",              // (After CM migration) Pair symbol
+    "st": 1              // (After CM migration) Symbol type: 1 = UM, 2 = CM
+  }
+]
+```
+> **Note:** After CM migration, this stream pushes the merged UM + CM universe (subscribable on both fstream and dstream); each payload is appended with a new `st` field (1 = UM, 2 = CM) and a new `ps` field (pair symbol).
+
+## Individual Symbol Book Ticker Streams
+
+**Stream Description:** Pushes any update to the best bid or ask's price or quantity in real-time for a specified symbol.
+
+* **URL PATH:** `/public`
+* **Stream Name:** `<symbol>@bookTicker`
+* **Update Speed:** Real-time
+* **Note:** Retail Price Improvement(RPI) orders are not visible and excluded in the response message.
+
+### Response Example
+```json
+{
+  "e":"bookTicker",         // event type
+  "u":400900217,            // order book updateId
+  "s":"BNBUSDT",            // symbol
+  "ps":"BNBUSDT",           // pair (After CM migration)
+  "E": 1568014460893,       // event time
+  "T": 1568014460891,       // transaction time
+  "b":"25.35190000",        // best bid price
+  "B":"31.21000000",        // best bid qty
+  "a":"25.36520000",        // best ask price
+  "A":"40.66000000",        // best ask qty
+  "st": 1                   // (After CM migration) Symbol type: 1 = UM, 2 = CM
+}
+```
+> **Note:** After CM migration, the payload is appended with a new `st` field (1 = UM, 2 = CM).
+
+## All Book Tickers Stream
+
+**Stream Description:** Pushes any update to the best bid or ask's price or quantity in real-time for all symbols.
+
+* **URL PATH:** `/public`
+* **Stream Name:** `!bookTicker`
+* **Update Speed:** 5s
+* **Note:** Retail Price Improvement(RPI) orders are not visible and excluded in the response message.
+
+### Response Example
+```json
+{
+  "e":"bookTicker",         // event type
+  "u":400900217,            // order book updateId
+  "E": 1568014460893,       // event time
+  "T": 1568014460891,       // transaction time
+  "s":"BNBUSDT",            // symbol
+  "b":"25.35190000",        // best bid price
+  "B":"31.21000000",        // best bid qty
+  "a":"25.36520000",        // best ask price
+  "A":"40.66000000",        // best ask qty
+  "ps": "BTCUSDT",          // (After CM migration) Pair symbol
+  "st": 1                   // (After CM migration) Symbol type: 1 = UM, 2 = CM
+}
+```
+> **Note:** After CM migration, this stream pushes the merged UM + CM universe (subscribable on both fstream and dstream); each payload is appended with a new `st` field (1 = UM, 2 = CM) and a new `ps` field (pair symbol).
+
+## Liquidation Order Streams
+
+**Stream Description:** The Liquidation Order Snapshot Streams push force liquidation order information for specific symbol. For each symbol，only the largest one liquidation order within 1000ms will be pushed as the snapshot. If no liquidation happens in the interval of 1000ms, no stream will be pushed.
+
+* **URL PATH:** `/market`
+* **Stream Name:** `<symbol>@forceOrder`
+* **Update Speed:** 1000ms
+
+### Response Example
+```json
+{
+    "e":"forceOrder",                   // Event Type
+    "E":1568014460893,                  // Event Time
+    "o":{
+        "s":"BTCUSDT",                   // Symbol
+        "S":"SELL",                      // Side
+        "o":"LIMIT",                     // Order Type
+        "f":"IOC",                       // Time in Force
+        "q":"0.014",                     // Original Quantity
+        "p":"9910",                      // Price
+        "ap":"9910",                     // Average Price
+        "X":"FILLED",                    // Order Status
+        "l":"0.014",                     // Order Last Filled Quantity
+        "z":"0.014",                     // Order Filled Accumulated Quantity
+        "T":1568014460893                // Order Trade Time
+    }
+}
+```
+
+## All Market Liquidation Order Streams
+
+**Stream Description:** The All Liquidation Order Snapshot Streams push force liquidation order information for all symbols in the market. For each symbol，only the largest one liquidation order within 1000ms will be pushed as the snapshot. If no liquidation happens in the interval of 1000ms, no stream will be pushed.
+
+* **URL PATH:** `/market`
+* **Stream Name:** `!forceOrder@arr`
+* **Update Speed:** 1000ms
+
+### Response Example
+```json
+{
+    "e":"forceOrder",                   // Event Type
+    "E":1568014460893,                  // Event Time
+    "o":{
+        "s":"BTCUSDT",                   // Symbol
+        "S":"SELL",                      // Side
+        "o":"LIMIT",                     // Order Type
+        "f":"IOC",                       // Time in Force
+        "q":"0.014",                     // Original Quantity
+        "p":"9910",                      // Price
+        "ap":"9910",                     // Average Price
+        "X":"FILLED",                    // Order Status
+        "l":"0.014",                     // Order Last Filled Quantity
+        "z":"0.014",                     // Order Filled Accumulated Quantity
+        "T":1568014460893                // Order Trade Time
+    },
+    "ps": "BTCUSDT",              // (After CM migration) Pair symbol
+    "st": 1              // (After CM migration) Symbol type: 1 = UM, 2 = CM
+}
+```
+> **Note:** After CM migration, this stream pushes the merged UM + CM universe (subscribable on both fstream and dstream); each payload is appended with a new `st` field (1 = UM, 2 = CM) and a new `ps` field (pair symbol).
+
+## Partial Book Depth Streams
+
+**Stream Description:** Top `<levels>` bids and asks, Valid `<levels>` are 5, 10, or 20.
+
+* **URL PATH:** `/public`
+* **Stream Name:** `<symbol>@depth<levels>` OR `<symbol>@depth<levels>@500ms` OR `<symbol>@depth<levels>@100ms`.
+* **Update Speed:** 250ms, 500ms or 100ms
+* **Note:** Retail Price Improvement(RPI) orders are not visible and excluded in the response message.
+
+### Response Example
+```json
+{
+  "e": "depthUpdate", // Event type
+  "E": 1571889248277, // Event time
+  "T": 1571889248276, // Transaction time
+  "s": "BTCUSDT",
+  "U": 390497796,     // First update ID in event
+  "u": 390497878,     // Final update ID in event
+  "pu": 390497794,    // Final update Id in last stream(ie `u` in last stream)
+  "b": [              // Bids to be updated
+    [
+      "7403.89",      // Price Level to be updated
+      "0.002"         // Quantity
+    ],
+    [
+      "7403.90",
+      "3.906"
+    ],
+    [
+      "7404.00",
+      "1.428"
+    ],
+    [
+      "7404.85",
+      "5.239"
+    ],
+    [
+      "7405.43",
+      "2.562"
+    ]
+  ],
+  "a": [              // Asks to be updated
+    [
+      "7405.96",      // Price level to be
+      "3.340"         // Quantity
+    ],
+    [
+      "7406.63",
+      "4.525"
+    ],
+    [
+      "7407.08",
+      "2.475"
+    ],
+    [
+      "7407.15",
+      "4.800"
+    ],
+    [
+      "7407.20",
+      "0.175"
+    ]
+  ],
+  "ps": "BTCUSDT",              // (After CM migration) Pair symbol
+  "st": 1              // (After CM migration) Symbol type: 1 = UM, 2 = CM
+}
+```
+> **Note:** After CM migration, the payload is appended with a new `st` field (1 = UM, 2 = CM) and a new `ps` field (pair symbol).
+
+## Diff. Book Depth Streams
+
+**Stream Description:** Bids and asks, pushed every 250 milliseconds, 500 milliseconds, 100 milliseconds (if existing)
+
+* **URL PATH:** `/public`
+* **Stream Name:** `<symbol>@depth` OR `<symbol>@depth@500ms` OR `<symbol>@depth@100ms`
+* **Update Speed:** 250ms, 500ms, 100ms
+* **Note:** Retail Price Improvement(RPI) orders are not visible and excluded in the response message.
+
+### Response Example
+```json
+{
+  "e": "depthUpdate", // Event type
+  "E": 123456789,     // Event time
+  "T": 123456788,     // Transaction time 
+  "s": "BTCUSDT",     // Symbol
+  "U": 157,           // First update ID in event
+  "u": 160,           // Final update ID in event
+  "pu": 149,          // Final update Id in last stream(ie `u` in last stream)
+  "b": [              // Bids to be updated
+    [
+      "0.0024",       // Price level to be updated
+      "10"            // Quantity
+    ]
+  ],
+  "a": [              // Asks to be updated
+    [
+      "0.0026",       // Price level to be updated
+      "100"          // Quantity
+    ]
+  ],
+  "ps": "BTCUSDT",              // (After CM migration) Pair symbol
+  "st": 1              // (After CM migration) Symbol type: 1 = UM, 2 = CM
+}
+```
+> **Note:** After CM migration, the payload is appended with a new `st` field (1 = UM, 2 = CM) and a new `ps` field (pair symbol).
+
+## RPI Diff. Book Depth Streams
+
+**Stream Description:** Bids and asks including RPI orders, pushed every 500 milliseconds.
+
+* **URL PATH:** `/public`
+* **Stream Name:** `<symbol>@rpiDepth@500ms`
+* **Update Speed:** 500ms
+* **Note:** RPI(Retail Price Improvement) orders are included and aggreated in the response message. When the quantity of a price level to be updated is equal to 0, it means either all quotations for this price have been filled/canceled, or the quantity of crossed RPI orders for this price are hidden
+
+### Response Example
+```json
+{
+  "e": "depthUpdate", // Event type
+  "E": 123456789,     // Event time
+  "T": 123456788,     // Transaction time 
+  "s": "BTCUSDT",     // Symbol
+  "U": 157,           // First update ID in event
+  "u": 160,           // Final update ID in event
+  "pu": 149,          // Final update Id in last stream(ie `u` in last stream)
+  "b": [              // Bids to be updated
+    [
+      "0.0024",       // Price level to be updated
+      "10"            // Quantity
+    ]
+  ],
+  "a": [              // Asks to be updated
+    [
+      "0.0026",       // Price level to be updated
+      "100"          // Quantity
+    ]
+  ],
+  "ps": "BTCUSDT",              // (After CM migration) Pair symbol
+  "st": 1              // (After CM migration) Symbol type: 1 = UM, 2 = CM
+}
+```
+> **Note:** After CM migration, the payload is appended with a new `st` field (1 = UM, 2 = CM) and a new `ps` field (pair symbol).
+
+### How to manage a local order book correctly
+1. Open a stream to `wss://fstream.binance.com/public/stream?streams=btcusdt@depth`.
+2. Buffer the events you receive from the stream. For same price, latest received update covers the previous one.
+3. Get a depth snapshot from `https://fapi.binance.com/fapi/v1/depth?symbol=BTCUSDT&limit=1000` .
+4. Drop any event where `u` is < `lastUpdateId` in the snapshot.
+5. The first processed event should have `U` <= `lastUpdateId` AND `u` >= `lastUpdateId`
+   * `U` = `firstUpdateId` (the first update ID) from the WebSocket stream.
+   * `u` = `finalUpdateId` (the last update ID) from the WebSocket stream.
+   * `lastUpdateId` = the update ID you got from the REST depth snapshot.
+6. While listening to the stream, each new event's `pu` should be equal to the previous event's `u`, otherwise initialize the process from step 3.
+7. The data in each event is the absolute quantity for a price level.
+8. If the quantity is 0, remove the price level.
+9. Receiving an event that removes a price level that is not in your local order book can happen and is normal.
+
+## Composite Index Symbol Information Streams
+
+**Stream Description:** Composite index information for index symbols pushed every second.
+
+* **URL PATH:** `/market`
+* **Stream Name:** `<symbol>@compositeIndex`
+* **Update Speed:** 1000ms
+
+### Response Example
+```json
+{
+  "e":"compositeIndex",     // Event type
+  "E":1602310596000,        // Event time
+  "s":"DEFIUSDT",           // Symbol
+  "p":"554.41604065",       // Price
+  "C":"baseAsset",
+  "c":[                     // Composition
+    {
+        "b":"BAL",          // Base asset
+        "q":"USDT",         // Quote asset
+        "w":"1.04884844",   // Weight in quantity
+        "W":"0.01457800",   // Weight in percentage
+        "i":"24.33521021"   // Index price
+    },
+    {
+        "b":"BAND",
+        "q":"USDT" ,
+        "w":"3.53782729",
+        "W":"0.03935200",
+        "i":"7.26420084"
+    }
+  ]
+}
+```
+
+## Contract Info Stream
+
+**Stream Description:** ContractInfo stream pushes when contract info updates(listing/settlement/contract bracket update). `bks` field only shows up when bracket gets updated.
+
+* **URL PATH:** `/market`
+* **Stream Name:** `!contractInfo`
+* **Update Speed:** Real-time
+
+### Response Example
+```json
+{
+    "e":"contractInfo",          // Event Type
+    "E":1669356423908,           // Event Time
+    "s":"IOTAUSDT",              // Symbol
+    "ct":"PERPETUAL",            // Contract type
+    "dt":4133404800000,          // Delivery date time 
+    "ot":1569398400000,          // onboard date time 
+    "cs":"TRADING",              // Contract status 
+    "bks":[
+        {
+            "bs":1,              // Notional bracket
+            "bnf":0,             // Floor notional of this bracket
+            "bnc":5000,          // Cap notional of this bracket
+            "mmr":0.01,          // Maintenance ratio for this bracket
+            "cf":0,              // Auxiliary number for quick calculation 
+            "mi":21,             // Min leverage for this bracket
+            "ma":50              // Max leverage for this bracket
+        },
+        {
+            "bs":2,
+            "bnf":5000,
+            "bnc":25000,
+            "mmr":0.025,
+            "cf":75,
+            "mi":11,
+            "ma":20
+        }
+    ],
+    "st": 1              // (After CM migration) Symbol type: 1 = UM, 2 = CM
+}
+```
+> **Note:** After CM migration, this stream pushes the merged UM + CM universe (subscribable on both fstream and dstream); each payload is appended with a new `st` field (1 = UM, 2 = CM).
+
+## Asset Index
+
+**CM-UM Integration (Effective 2026-06-30):** Renamed from Multi-Assets Mode Asset Index. The stream `!assetIndex@arr` now additionally pushes COIN-M settlement-asset price index entries (e.g., BTCUSD, ETHUSD, BNBUSD). The on-the-wire stream key is unchanged; existing subscriptions continue to work. See Important CM-UM Integration Notice for details.
+
+**Stream Description:** Asset index price.
+
+* **URL PATH:** `/market`
+* **Stream Name:** `!assetIndex@arr` OR `<assetSymbol>@assetIndex`
+* **Update Speed:** 1s
+
+### Response Example
+```json
+[
+    {
+      "e":"assetIndexUpdate",
+      "E":1686749230000,
+      "s":"ADAUSD",           // asset index symbol
+      "i":"0.27462452",       // index price
+      "b":"0.10000000",       // bid buffer
+      "a":"0.10000000",       // ask buffer
+      "B":"0.24716207",       // bid rate
+      "A":"0.30208698",       // ask rate
+      "q":"0.05000000",       // auto exchange bid buffer
+      "g":"0.05000000",       // auto exchange ask buffer 
+      "Q":"0.26089330",       // auto exchange bid rate
+      "G":"0.28835575"        // auto exchange ask rate
+    },
+    {
+      "e":"assetIndexUpdate",
+      "E":1686749230000,
+      "s":"USDTUSD",
+      "i":"0.99987691",  
+      "b":"0.00010000",
+      "a":"0.00010000",
+      "B":"0.99977692",
+      "A":"0.99997689",
+      "q":"0.00010000",
+      "g":"0.00010000",
+      "Q":"0.99977692",
+      "G":"0.99997689"
+    }
+]
+```
+
+## Trading Session Stream
+
+**Stream Description:** Trading session information for the underlying assets of TradFi Perpetual contracts, covering the U.S. equity market, Korean equity market, and the commodity market, is updated every second. Trading session information for different underlying markets is pushed in separate messages.
+
+* **Event type:**
+  * `EquityUpdate`: Session types for the U.S. equity market include "PRE_MARKET", "REGULAR", "AFTER_MARKET", "OVERNIGHT", and "NO_TRADING".
+  * `CommodityUpdate`: Session types for the commodity market include "REGULAR" and "NO_TRADING".
+  * `KR_EquityUpdate`: Session types for the Korean equity market include "REGULAR" and "NO_TRADING".
+
+* **URL PATH:** `/market`
+* **Stream Name:** `tradingSession`
+* **Update Speed:** 1s
+
+### Response Example
+```json
+{
+  "e": "EquityUpdate",      // Event type, can also be CommodityUpdate or KR_EquityUpdate
+  "E": 1765244143062,       // Event time
+  "t": 1765242000000,       // Session start time
+  "T": 1765270800000,       // Session end time
+  "S": "OVERNIGHT"          // Session type
+}
+```
+
