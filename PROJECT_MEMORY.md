@@ -341,6 +341,7 @@ wss://stream.binance.com:9443/stream?streams=btcusdt@kline_1m/ethusdt@kline_1m/s
 | v5.7.1 | Binance Data Source | Add Binance data source section to AGENTS.md |
 | v5.7.2 | Schedule Daily Report | Schedule daily profit report at 11:00 PM via Antigravity cron scheduler and fix utcnow() deprecation warning in test_daily_report_direct.py |
 | v5.7.3 | Auto-Retrain & State Update | Automated state checkpoint and retrained XGBoost model checkpoints updated on 2026-07-07 |
+| v5.7.4 | Auto-Retrain & State Update | Automated state checkpoint and retrained XGBoost model checkpoints updated on 2026-07-08 |
 
 ---
 
