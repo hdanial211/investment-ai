@@ -114,9 +114,20 @@ def _get_strategy(coin_id: str, risk_level: int) -> dict:
 # ─────────────────────────────────────────────
 def _extract_hata_exec_data(coin_id: str, order_data: dict, fallback_qty: float = 0.0) -> dict:
     """Extract actual executed quantity, fees, and cost from Hata API order data.
-    Returns dict with: exec_qty, fee_qty, net_qty, actual_cost_myr, fee_role"""
-    exec_qty = float(order_data.get("exec_qty", fallback_qty))
+    Returns dict with: exec_qty, fee_qty, net_qty, actual_cost_myr, fee_role.
+    ★ v5.8.7: If Hata returns exec_qty=0 for a fulfilled order, use fallback_qty
+    constructed from order price × quantity to prevent corrupted layers."""
+    raw_exec = order_data.get("exec_qty", None)
+    exec_qty = float(raw_exec) if raw_exec is not None else 0.0
     cummul_quote = float(order_data.get("cummul_quote_qty", 0.0))
+    order_price = float(order_data.get("price", 0))
+    
+    # ★ FALLBACK: If Hata returned exec_qty=0 but order is fulfilled, use fallback
+    # This happens with very small orders (e.g. BTC RM15 → 0.0000569 BTC)
+    # where Hata API may not report execution data properly
+    if exec_qty <= 0 and fallback_qty > 0:
+        logger.warning(f"[{coin_id}] exec_qty=0 from Hata API but fallback_qty={fallback_qty:.8f}. Using fallback.")
+        exec_qty = fallback_qty
     
     # Extract fees from trades array (actual from Hata API)
     trades = order_data.get("trades", [])
@@ -150,17 +161,20 @@ def _extract_hata_exec_data(coin_id: str, order_data: dict, fallback_qty: float 
         fee_role = "taker"
         logger.warning(f"[{coin_id}] No trades data — using 0.25% taker fallback fee")
     
+    # ★ SAFETY: If STILL zero after all fallbacks, construct from order price
+    if exec_qty <= 0 and order_price > 0:
+        logger.error(f"[{coin_id}] CRITICAL: exec_qty still 0 after fallbacks. Order price=RM{order_price:.4f}. "
+                     f"Cannot determine execution data — returning zeros (caller must handle).")
+    
     # Actual MYR cost
     if cummul_quote > 0:
         actual_cost_myr = cummul_quote
     else:
         # Fallback: use orig price × exec_qty
-        price = float(order_data.get("price", 0))
-        actual_cost_myr = price * exec_qty if price > 0 else 0.0
+        actual_cost_myr = order_price * exec_qty if order_price > 0 else 0.0
     
     # Calculate fee in MYR terms for display
-    price = float(order_data.get("price", 0))
-    fee_myr = fee_qty * price if price > 0 else 0.0
+    fee_myr = fee_qty * order_price if order_price > 0 else 0.0
     
     return {
         "exec_qty": exec_qty,
@@ -487,6 +501,22 @@ def _check_grid_group(coin_id: str, group: dict) -> bool:
 
         if order_status == "fulfilled":
             exec_info = _extract_hata_exec_data(coin_id, order_data, l.get("quantity", 0))
+            
+            # ★ v5.8.7: VALIDATE exec data — if all zeros, layer is corrupted
+            # This happens when Hata can't report execution for very small orders (e.g. BTC RM15)
+            if exec_info["net_qty"] <= 0 or exec_info["actual_cost_myr"] <= 0:
+                logger.error(f"[{coin_id}] Group {group['id']} Layer {l['id']}: BUY {buy_id} fulfilled but "
+                             f"exec data CORRUPTED — net_qty={exec_info['net_qty']:.8f}, "
+                             f"cost=RM{exec_info['actual_cost_myr']:.4f}. "
+                             f"REMOVING layer to prevent infinite retry loop.")
+                layers_to_delete_pending.append(l["id"])
+                # UNFREEZE
+                amt = l.get("amount_myr", 0.0)
+                shared.global_state["frozen_myr"] = max(0.0, shared.global_state.get("frozen_myr", 0.0) - amt)
+                logger.info(f"[{coin_id}] Unfroze RM{amt:.2f} (corrupted fill). Frozen now: RM{shared.global_state['frozen_myr']:.2f}")
+                state_changed = True
+                continue
+            
             l["exec_qty"] = exec_info["exec_qty"]
             l["fee_qty"] = exec_info["fee_qty"]
             l["net_qty"] = exec_info["net_qty"]
@@ -614,6 +644,18 @@ def _check_grid_group(coin_id: str, group: dict) -> bool:
 
         sell_id = l.get("sell_order_id")
         if not sell_id:
+            # ★ v5.8.7: Check for corrupted layer BEFORE attempting sell
+            # Corrupted = HOLDING but net_qty/actual_cost is 0 (exec data never received)
+            net_qty = l.get("net_qty", 0) or l.get("quantity", 0)
+            actual_cost = l.get("actual_cost_myr", 0) or l.get("amount_myr", 0)
+            if net_qty <= 0 or actual_cost <= 0:
+                logger.error(f"[{coin_id}] Group {group['id']} Layer {l['id']}: CORRUPTED — "
+                             f"HOLDING with net_qty={net_qty}, cost={actual_cost}. "
+                             f"Removing to prevent infinite retry loop.")
+                layers_to_remove.append(l["id"])
+                state_changed = True
+                continue
+            
             logger.info(f"[{coin_id}] Group {group['id']} Layer {l['id']}: HOLDING tapi tiada sell order. Placing...")
             placed_id = _grid_place_layer_sell(coin_id, l)
             if placed_id:
