@@ -129,7 +129,7 @@ def set_grid_gap(req: GridGapRequest):
 
 class MaxLayersRequest(BaseModel):
     coin: str
-    max_layers: int  # 0 = ikut risk_level default, 1-10 = custom
+    max_layers: int  # 0 = ikut risk_level default, 1-99 = custom
 
 @app.post("/api/set-max-layers")
 def set_max_layers(req: MaxLayersRequest):
@@ -137,8 +137,8 @@ def set_max_layers(req: MaxLayersRequest):
     coin = req.coin.upper()
     if coin not in engine_state:
         raise HTTPException(status_code=400, detail="Invalid coin")
-    if not (0 <= req.max_layers <= 10):
-        raise HTTPException(status_code=400, detail="max_layers must be between 0 and 10")
+    if not (0 <= req.max_layers <= 99):
+        raise HTTPException(status_code=400, detail="max_layers must be between 0 and 99")
     engine_state[coin]["max_layers"] = req.max_layers
     shared.save_state()
     label = f"{req.max_layers} layers (custom)" if req.max_layers > 0 else "default (ikut risk level)"
@@ -155,8 +155,8 @@ def set_max_groups(req: MaxGroupsRequest):
     coin = req.coin.upper()
     if coin not in engine_state:
         raise HTTPException(status_code=400, detail="Invalid coin")
-    if not (1 <= req.max_groups <= 10):
-        raise HTTPException(status_code=400, detail="max_groups must be between 1 and 10")
+    if not (1 <= req.max_groups <= 99):
+        raise HTTPException(status_code=400, detail="max_groups must be between 1 and 99")
     engine_state[coin]["max_groups"] = req.max_groups
     shared.save_state()
     logger.info(f"[{coin}] Max groups set to {req.max_groups}")
