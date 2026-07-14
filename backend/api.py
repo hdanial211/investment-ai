@@ -591,3 +591,26 @@ def cancel_order(req: CancelOrderRequest):
     shared.save_state()
     logger.info(f"[{coin}] Order {req.order_id} cancelled via API")
     return {"status": "ok", "coin": coin, "order_id": req.order_id, "hata_result": result}
+
+
+@app.post("/api/cleanup-corrupted")
+def cleanup_corrupted():
+    """Manually trigger sanitization of corrupted layers across all coins.
+    Removes layers that are HOLDING but have net_qty=0 (can never sell).
+    These cause infinite retry loops in the engine."""
+    results = {}
+    for coin_id in engine_state:
+        groups_before = sum(len(g.get("layers", [])) for g in engine_state[coin_id].get("groups", []))
+        engine_state[coin_id] = shared._sanitize_groups(coin_id, engine_state[coin_id])
+        groups_after = sum(len(g.get("layers", [])) for g in engine_state[coin_id].get("groups", []))
+        removed = groups_before - groups_after
+        if removed > 0:
+            results[coin_id] = f"Removed {removed} corrupted layer(s)"
+    
+    if results:
+        shared.save_state()
+    
+    return {
+        "status": "ok",
+        "cleaned": results if results else "No corrupted layers found"
+    }

@@ -116,6 +116,55 @@ def _migrate_coin_state(coin: dict) -> dict:
     return coin
 
 
+def _sanitize_groups(coin_id: str, coin: dict) -> dict:
+    """Auto-detect and remove corrupted layers to prevent infinite retry loops.
+    
+    Corrupted layer = status is HOLDING but net_qty/quantity is 0 (or missing),
+    meaning the buy fill data was never properly extracted. These layers can never
+    have a valid sell placed and will loop forever.
+    
+    Also removes empty groups after cleanup.
+    """
+    groups = coin.get("groups", [])
+    total_removed = 0
+    
+    for group in groups:
+        layers = group.get("layers", [])
+        clean_layers = []
+        for layer in layers:
+            status = layer.get("status", "")
+            net_qty = layer.get("net_qty", 0.0) or 0.0
+            quantity = layer.get("quantity", 0.0) or 0.0
+            
+            # Detect corrupted HOLDING layer: status is HOLDING but no actual quantity
+            if status == "HOLDING" and net_qty <= 0 and quantity <= 0:
+                logger.warning(
+                    f"[{coin_id}] SANITIZE: Removing corrupted layer {layer.get('id')} "
+                    f"(HOLDING but net_qty={net_qty}, qty={quantity}, "
+                    f"buy_order={layer.get('buy_order_id')}). "
+                    f"This layer can never have a valid sell order."
+                )
+                total_removed += 1
+                continue
+            
+            clean_layers.append(layer)
+        
+        group["layers"] = clean_layers
+    
+    # Remove empty groups (no layers left after cleanup)
+    original_group_count = len(groups)
+    coin["groups"] = [g for g in groups if g.get("layers")]
+    removed_groups = original_group_count - len(coin["groups"])
+    
+    if total_removed > 0:
+        logger.warning(
+            f"[{coin_id}] SANITIZE COMPLETE: Removed {total_removed} corrupted layer(s), "
+            f"{removed_groups} empty group(s)"
+        )
+    
+    return coin
+
+
 def load_state():
     if os.path.exists(STATE_FILE):
         try:
@@ -135,6 +184,8 @@ def load_state():
                     default_state[coin].update(saved_state[coin])
                     # Migrate old format to new multi-group format
                     default_state[coin] = _migrate_coin_state(default_state[coin])
+                    # Sanitize corrupted layers (e.g. HOLDING with net_qty=0)
+                    default_state[coin] = _sanitize_groups(coin, default_state[coin])
                 # Apply AI-suggested TP if still at generic default
                 if default_state[coin].get("tp_pct", 0.005) == 0.005 and coin in AI_SUGGESTED_TP:
                     default_state[coin]["tp_pct"] = AI_SUGGESTED_TP[coin]
