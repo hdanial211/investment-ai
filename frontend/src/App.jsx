@@ -131,7 +131,7 @@ function App() {
 
   const setMaxLayers = async (n) => {
     const val = parseInt(n)
-    if (isNaN(val) || val < 0 || val > 10) return
+    if (isNaN(val) || val < 0 || val > 99) return
     try {
       await axios.post('http://localhost:8000/api/set-max-layers', {
         coin: selectedCoin,
@@ -144,7 +144,7 @@ function App() {
 
   const setMaxGroups = async (n) => {
     const val = parseInt(n)
-    if (isNaN(val) || val < 1 || val > 10) return
+    if (isNaN(val) || val < 1 || val > 99) return
     try {
       await axios.post('http://localhost:8000/api/set-max-groups', {
         coin: selectedCoin,
@@ -665,7 +665,7 @@ function App() {
                           if (!isNaN(val)) setMaxGroups(val)
                         }}
                         min="1"
-                        max="10"
+                        max="99"
                         step="1"
                         placeholder="Cth: 3"
                         style={{ flex: 1, fontSize: '1.2rem', padding: '10px' }}
@@ -707,7 +707,7 @@ function App() {
                         value={maxLayers || ''}
                         onChange={(e) => setMaxLayers(e.target.value)}
                         min="1"
-                        max="10"
+                        max="99"
                         step="1"
                         placeholder="Cth: 5"
                         style={{ flex: 1, fontSize: '1.2rem', padding: '10px' }}
