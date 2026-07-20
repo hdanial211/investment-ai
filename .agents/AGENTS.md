@@ -1,6 +1,6 @@
 # 🧠 Investment AI — Agent Memory File
 # Baca file ini sebelum buat sebarang perubahan pada projek.
-# Versi semasa: **v5.8.8** | Dikemas kini: 2026-07-16
+# Versi semasa: **v5.8.9** | Dikemas kini: 2026-07-20
 
 ## Lokasi Projek
 `e:\PROJECTS\SEMUA PROJECT\INVESTMENT AI`
@@ -175,7 +175,7 @@ File: `backend/live_engine_old_system.py`
 
 ## Daily Telegram Report
 - **Script**: `scratch/test_daily_report_direct.py`
-- **Jadual**: 11:00 PM setiap hari (Antigravity scheduled task)
+- **Jadual**: 02:00 AM setiap hari (Antigravity scheduled task - data semalam)
 - **Endpoint Hata**: `GET /orderbook/sapi/trades/history`
   - Params wajib: `pair_name` (e.g. `ETHMYR`), `page`, `rows` (max 100)
   - Params opsional: `start_time`, `end_time` (Unix timestamp dalam saat)

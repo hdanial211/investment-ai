@@ -9,12 +9,13 @@ sys.path.append('e:/PROJECTS/SEMUA PROJECT/INVESTMENT AI/backend')
 import hata_api
 
 def generate_direct_report(target_date_str=None):
-    # If no date provided, default to current local date (Malaysia time UTC+8)
+    # If no date provided, default to yesterday's local date (Malaysia time UTC+8)
     if not target_date_str:
         # Malaysia is UTC+8, get current time and format
         from datetime import timezone
         my_time = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=8)
-        target_date_str = my_time.strftime("%Y-%m-%d")
+        yesterday = my_time - timedelta(days=1)
+        target_date_str = yesterday.strftime("%Y-%m-%d")
         
     target_date = datetime.strptime(target_date_str, "%Y-%m-%d")
     
