@@ -265,7 +265,7 @@ def log_trade_outcome(coin_id: str, entry_price: float, exit_price: float,
 def _update_live_model_stats(session, coin_id: str, outcome: str, pnl_myr: float):
     """Update the active model's live stats with a new trade result."""
     try:
-        from database.ml_models import ModelPerformance
+        from database.ml_models import ModelPerformance, MLTrainingLog
         
         perf = (
             session.query(ModelPerformance)
